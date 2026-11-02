@@ -72,7 +72,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .insert(generationFeedback)
     .values({
       videoGenerationId: body.videoGenerationId,
-      userId: 'anonymous',
+      userId: '00000000-0000-0000-0000-000000000000',
       hookQuality: body.hookQuality ?? null,
       voiceDelivery: body.voiceDelivery ?? null,
       speakingPace: body.speakingPace ?? null,

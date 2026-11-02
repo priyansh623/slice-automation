@@ -16,7 +16,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const inserted = await db
     .insert(analyticsEvents)
     .values({
-      userId: 'anonymous',
+      userId: '00000000-0000-0000-0000-000000000000',
       eventType: body.eventType,
       videoProjectId: body.videoProjectId ?? null,
       payload: body.payload ?? null,

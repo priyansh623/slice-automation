@@ -36,7 +36,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const inserted = await db
       .insert(videoProjects)
       .values({
-        userId: 'anonymous',
+        userId: '00000000-0000-0000-0000-000000000000',
         name: body.name,
         baseImagePath: body.baseImagePath,
         originalScript: body.originalScript,
