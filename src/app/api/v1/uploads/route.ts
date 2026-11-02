@@ -60,8 +60,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json(
     {
+      storedPath: storagePath,
       storagePath,
       previewUrl: signedData?.signedUrl ?? null,
+      filename,
       contentType: file.type,
       size: buffer.length,
     },
