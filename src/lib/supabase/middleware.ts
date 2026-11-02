@@ -29,23 +29,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
-  // Refresh session — do not remove this; it keeps the JWT fresh.
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-
-  // Public routes that don't require auth
-  const isPublic =
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/auth/') ||
-    pathname.startsWith('/api/health') ||
-    pathname === '/favicon.ico';
-
-  if (!isPublic && !user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    return NextResponse.redirect(loginUrl);
-  }
+  // Refresh session to keep JWT fresh (no auth gate).
+  await supabase.auth.getUser();
 
   return supabaseResponse;
 }

@@ -110,7 +110,7 @@ export default function Sidebar() {
             <div className="sidebar-user-name">Priyansh Thakker</div>
             <div className="sidebar-user-email">priyansh@getsoma.ai</div>
           </div>
-          <IconSettings className="nav-icon" />
+          <Link href="/admin/settings" title="Admin Settings"><IconSettings className="nav-icon" /></Link>
         </div>
       </div>
     </aside>

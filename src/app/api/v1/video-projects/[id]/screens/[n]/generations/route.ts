@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoScreens, videoGenerations, screenPromptVersions } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 
 export async function GET(
@@ -14,10 +13,6 @@ export async function GET(
   if (isNaN(projectId) || isNaN(screenNumber)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const screenRows = await db
     .select()

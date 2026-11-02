@@ -17,8 +17,6 @@ export async function GET(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const generationIdParam = searchParams.get('generationId');
@@ -66,6 +64,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to generate signed video URL' }, { status: 500 });
   }
 
-  // Return the signed URL; the client fetches the video directly from Supabase CDN
   return NextResponse.json({ signedUrl: data.signedUrl, generationId: generation.id });
 }
