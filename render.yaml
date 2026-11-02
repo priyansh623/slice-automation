@@ -1,0 +1,25 @@
+services:
+  - type: worker
+    name: soma-slice-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.worker
+    branch: deploy
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://fkrsembrcztrbqwjpjxs.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: USEAPI_TOKEN
+        sync: false
+      - key: GOOGLE_FLOW_EMAIL
+        value: work.ankitmahindru@gmail.com
+      - key: SUPABASE_BUCKET_VIDEOS
+        value: videos
