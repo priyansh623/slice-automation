@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { analyticsEvents } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const body = (await req.json()) as {
     eventType: string;
     videoProjectId?: number | null;
@@ -21,7 +16,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const inserted = await db
     .insert(analyticsEvents)
     .values({
-      userId: user.id,
+      userId: 'anonymous',
       eventType: body.eventType,
       videoProjectId: body.videoProjectId ?? null,
       payload: body.payload ?? null,

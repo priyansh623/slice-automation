@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'node:crypto';
-import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -12,10 +11,6 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -37,8 +32,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const filename = `${crypto.randomUUID()}.${ext}`;
-  // Store under a per-user prefix so RLS path-based checks can be applied if needed
-  const storagePath = `${user.id}/${filename}`;
+  const storagePath = filename;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   // Use service-role client to bypass RLS on the upload itself

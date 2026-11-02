@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { generationFeedback, videoGenerations } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const body = (await req.json()) as {
     videoGenerationId: number;
     hookQuality?: number | null;
@@ -47,16 +42,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const now = Date.now();
 
-  // Upsert: one feedback row per (user, generation)
+  // Upsert: one feedback row per generation
   const existing = await db
     .select({ id: generationFeedback.id })
     .from(generationFeedback)
-    .where(
-      and(
-        eq(generationFeedback.videoGenerationId, body.videoGenerationId),
-        eq(generationFeedback.userId, user.id),
-      ),
-    )
+    .where(eq(generationFeedback.videoGenerationId, body.videoGenerationId))
     .limit(1);
 
   if (existing[0]) {
@@ -82,7 +72,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .insert(generationFeedback)
     .values({
       videoGenerationId: body.videoGenerationId,
-      userId: user.id,
+      userId: 'anonymous',
       hookQuality: body.hookQuality ?? null,
       voiceDelivery: body.voiceDelivery ?? null,
       speakingPace: body.speakingPace ?? null,

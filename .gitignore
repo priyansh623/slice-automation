@@ -9,3 +9,5 @@ scripts/output/
 *.db-wal
 .next/
 next-env.d.ts
+.vercel
+.env*

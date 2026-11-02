@@ -1,10 +1,9 @@
-[app]
-name = "soma-slice-worker"
+app = "soma-slice-worker"
 primary_region = "bom"
 
 [build]
-dockerfile = "Dockerfile.worker"
+  dockerfile = "Dockerfile.worker"
 
 [[vm]]
-size = "shared-cpu-1x"
-memory = "256mb"
+  size = "shared-cpu-1x"
+  memory = "256mb"

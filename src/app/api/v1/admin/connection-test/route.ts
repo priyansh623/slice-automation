@@ -1,20 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { adminSettings } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { sql } from 'drizzle-orm';
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const role = (user.app_metadata as Record<string, unknown>)?.role;
-  return role === 'admin' ? user : null;
-}
-
 export async function GET(): Promise<NextResponse> {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const results: Record<string, { ok: boolean; detail: string }> = {};
 

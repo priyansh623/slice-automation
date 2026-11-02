@@ -1,28 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { adminSettings, videoProjects } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
 import { desc, eq } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const rows = await db
     .select()
     .from(videoProjects)
-    .where(eq(videoProjects.userId, user.id))
     .orderBy(desc(videoProjects.createdAt));
 
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const body = (await req.json()) as {
     name: string;
     originalScript: string;
@@ -46,7 +36,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const inserted = await db
     .insert(videoProjects)
     .values({
-      userId: user.id,
+      userId: 'anonymous',
       name: body.name,
       baseImagePath: body.baseImagePath,
       originalScript: body.originalScript,

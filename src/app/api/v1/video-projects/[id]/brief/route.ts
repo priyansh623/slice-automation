@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
 import { eq } from 'drizzle-orm';
 import type { CreativeBrief } from '@/services/video-workflow';
 import { parseBrief } from '@/services/video-workflow';
@@ -19,10 +18,6 @@ export async function GET(
   const projectId = getId(id);
   if (!projectId) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -36,10 +31,6 @@ export async function PUT(
   const { id } = await params;
   const projectId = getId(id);
   if (!projectId) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];

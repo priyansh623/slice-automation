@@ -13,8 +13,6 @@ export async function GET(
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const projectRows = await db
     .select()
