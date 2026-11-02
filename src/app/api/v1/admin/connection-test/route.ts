@@ -19,10 +19,11 @@ export async function GET(): Promise<NextResponse> {
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.getUser();
-    // getUser() returning null user is fine — it means no session, not a connectivity failure
-    results.supabaseAuth = error
-      ? { ok: false, detail: error.message }
-      : { ok: true, detail: 'Reachable' };
+    // No session is fine — "Auth session missing!" means the endpoint is reachable, not broken
+    const sessionMissing = error?.message?.includes('session') || error?.message?.includes('missing');
+    results.supabaseAuth = (!error || sessionMissing)
+      ? { ok: true, detail: 'Reachable' }
+      : { ok: false, detail: error.message };
   } catch (e: unknown) {
     results.supabaseAuth = { ok: false, detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   }
