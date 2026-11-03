@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Step {
   label: string;
@@ -11,62 +11,145 @@ interface Props {
   projectId: number | string;
   projectName: string;
   steps: Step[];
+  statusLabel?: string;
+  statusBg?: string;
+  statusFg?: string;
 }
 
-export default function ProjectHeader({ projectId, projectName, steps }: Props) {
+const STEP_URLS = (projectId: number | string) => [
+  `/video-projects/${projectId}`,
+  `/video-projects/${projectId}/screens/1`,
+  `/video-projects/${projectId}/compile`,
+];
+
+export default function ProjectHeader({
+  projectId,
+  projectName,
+  steps,
+  statusLabel,
+  statusBg = '#F0F0EC',
+  statusFg = '#111113',
+}: Props) {
+  const router = useRouter();
+  const urls = STEP_URLS(projectId);
+
   return (
-    <div style={{
-      background: 'var(--bg-card)',
-      borderBottom: '1px solid var(--border)',
-      padding: '0 32px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      height: 56,
+    <header style={{
+      height: 64,
       flexShrink: 0,
+      background: '#FFFFFF',
+      borderBottom: '1px solid #ECECE8',
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)',
+      alignItems: 'center',
+      gap: 16,
+      padding: '0 20px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Link href="/video-projects" style={{ fontSize: 13, color: 'var(--text-muted)' }}>Projects</Link>
-        <span style={{ color: 'var(--text-muted)' }}>›</span>
-        <Link href={`/video-projects/${projectId}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-          {projectName}
-        </Link>
+      {/* Left: back button + project name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <button
+          onClick={() => router.push('/video-projects')}
+          title="All projects"
+          style={{
+            width: 32,
+            height: 32,
+            flexShrink: 0,
+            borderRadius: 8,
+            border: '1px solid #E4E4E0',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <i className="icon-arrow-left" style={{ fontSize: 16 }} />
+        </button>
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            font: '700 15px/1.25 Satoshi',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {projectName}
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {steps.map((step, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {i > 0 && (
-              <div style={{ width: 24, height: 1, background: 'var(--border)' }} />
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 700,
-                flexShrink: 0,
-                background: step.status === 'complete' ? '#111113' : step.status === 'active' ? 'var(--brand)' : 'var(--bg-page)',
-                color: step.status === 'pending' ? 'var(--text-muted)' : '#fff',
-                border: step.status === 'pending' ? '1px solid var(--border)' : 'none',
-              }}>
-                {step.status === 'complete' ? '✓' : i + 1}
-              </div>
-              <span style={{
-                fontSize: 12,
-                fontWeight: step.status === 'active' ? 600 : 400,
-                color: step.status === 'pending' ? 'var(--text-muted)' : 'var(--text-primary)',
-              }}>
+      {/* Center: stepper */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {steps.map((step, i) => {
+          const isComplete = step.status === 'complete';
+          const isActive = step.status === 'active';
+          const canClick = isComplete;
+
+          const circleBg = isComplete ? '#111113' : isActive ? '#6C47FF' : '#F0F0EC';
+          const circleFg = isComplete || isActive ? '#fff' : '#9A9AA0';
+          const labelFg = isActive ? '#111113' : isComplete ? '#111113' : '#9A9AA0';
+          const fontWeight = isActive ? '700' : '400';
+
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                onClick={canClick ? () => router.push(urls[i]) : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 8px',
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: 8,
+                  cursor: canClick ? 'pointer' : 'default',
+                  font: `${fontWeight} 13px/1 Satoshi`,
+                  color: labelFg,
+                }}
+              >
+                <span style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: circleBg,
+                  color: circleFg,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  font: '700 11px/1 Satoshi',
+                  flexShrink: 0,
+                }}>
+                  {isComplete
+                    ? <i className="icon-check" style={{ fontSize: 12 }} />
+                    : i + 1}
+                </span>
                 {step.label}
-              </span>
+              </button>
+              {i < steps.length - 1 && (
+                <i className="icon-chevron-right" style={{ fontSize: 14, color: '#C4C4C9' }} />
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+
+      {/* Right: status pill */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+        {statusLabel && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            height: 24,
+            padding: '0 9px',
+            borderRadius: 999,
+            font: '500 12px/1 Satoshi',
+            background: statusBg,
+            color: statusFg,
+            whiteSpace: 'nowrap',
+          }}>
+            {statusLabel}
+          </span>
+        )}
+      </div>
+    </header>
   );
 }

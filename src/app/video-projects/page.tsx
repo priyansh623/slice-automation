@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 
 interface VideoProject {
@@ -15,81 +15,52 @@ interface VideoProject {
   ownerEmail: string | null;
 }
 
-function IconPlus() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
-      <path d="M12 5v14M5 12h14"/>
-    </svg>
-  );
+type FilterKey = 'all' | 'setup' | 'in-progress' | 'complete';
+
+const FILTER_LABELS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'setup', label: 'Setup' },
+  { key: 'in-progress', label: 'In progress' },
+  { key: 'complete', label: 'Complete' },
+];
+
+function getStatus(p: VideoProject): FilterKey {
+  if (!p.breakdownApprovedAt) return 'setup';
+  if (p.totalSceneCount > 0 && p.approvedSceneCount === p.totalSceneCount) return 'complete';
+  return 'in-progress';
 }
 
-function IconFilm() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
-      <rect x="2" y="2" width="20" height="20" rx="3"/>
-      <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>
-    </svg>
-  );
+function getStatusPill(key: FilterKey) {
+  if (key === 'setup') return { label: 'Setup', bg: '#F0F0EC', fg: '#111113' };
+  if (key === 'complete') return { label: 'Complete', bg: '#EFEBFF', fg: '#6C47FF' };
+  return { label: 'In progress', bg: '#EFEBFF', fg: '#6C47FF' };
 }
 
-function StatusPill({ project }: { project: VideoProject }) {
-  const approved = project.approvedSceneCount;
-  const total = project.totalSceneCount;
-
-  if (!project.breakdownApprovedAt) {
-    return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '3px 10px', borderRadius: 999,
-        fontSize: 12, fontWeight: 500,
-        color: '#111113', background: '#F0F0EC',
-      }}>
-        Setup
-      </span>
-    );
-  }
-  if (total > 0 && approved === total) {
-    return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '3px 10px', borderRadius: 999,
-        fontSize: 12, fontWeight: 500,
-        color: '#6C47FF', background: '#EFEBFF',
-      }}>
-        Complete
-      </span>
-    );
-  }
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 10px', borderRadius: 999,
-      fontSize: 12, fontWeight: 500,
-      color: '#6C47FF', background: '#EFEBFF',
-    }}>
-      In progress
-    </span>
-  );
+function initials(email: string | null): string {
+  if (!email) return '?';
+  const name = email.split('@')[0];
+  const parts = name.split(/[._-]/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 }
 
-function ProgressBar({ approved, total }: { approved: number; total: number }) {
-  if (total === 0) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>;
-  const pct = Math.round((approved / total) * 100);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', maxWidth: 80 }}>
-        <div style={{ height: '100%', background: 'var(--brand)', borderRadius: 2, width: `${pct}%`, transition: 'width 0.3s' }} />
-      </div>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-        {approved}/{total}
-      </span>
-    </div>
-  );
+function ownerName(email: string | null): string {
+  if (!email) return '—';
+  return email.split('@')[0];
+}
+
+// Deterministic tone color per project id
+function toneColor(id: number): string {
+  const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
+  return tones[id % tones.length];
 }
 
 export default function VideoProjectsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<VideoProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   useEffect(() => {
     fetch('/api/v1/video-projects')
@@ -98,128 +69,212 @@ export default function VideoProjectsPage() {
       .catch(() => setLoading(false));
   }, []);
 
+  const filtered = projects.filter((p) => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.ownerEmail || '').toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === 'all' || getStatus(p) === filter;
+    return matchSearch && matchFilter;
+  });
+
+  const countFor = (key: FilterKey) => key === 'all' ? projects.length : projects.filter(p => getStatus(p) === key).length;
+
   return (
     <AppShell>
-      <div className="page-header">
-        <div className="page-header-left">
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>
-            Projects
-          </h1>
-        </div>
-        <Link href="/video-projects/new">
-          <button className="btn btn-primary">
-            <IconPlus />
-            New Project
-          </button>
-        </Link>
-      </div>
-
-      <div className="page-body" style={{ maxWidth: 1160 }}>
-        {loading && (
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{ padding: '16px 24px', borderBottom: i < 3 ? '1px solid var(--border-row)' : 'none', display: 'flex', gap: 24 }}>
-                <div className="skeleton" style={{ height: 14, width: '30%' }} />
-                <div className="skeleton" style={{ height: 14, width: '12%', marginLeft: 'auto' }} />
-                <div className="skeleton" style={{ height: 14, width: '10%' }} />
-                <div className="skeleton" style={{ height: 14, width: '10%' }} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && projects.length === 0 && (
-          <div className="card">
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <IconFilm />
-              </div>
-              <p className="empty-state-title">No video projects yet</p>
-              <p className="empty-state-desc">Create your first project to start producing UGC video scripts with AI.</p>
-              <Link href="/video-projects/new">
-                <button className="btn btn-primary">
-                  <IconPlus /> New Project
-                </button>
-              </Link>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ maxWidth: 1160, margin: '0 auto', padding: '44px 40px 80px' }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+            <div>
+              <h1 style={{ margin: 0, font: '700 30px/1.1 Satoshi', letterSpacing: '-0.025em' }}>Projects</h1>
+              <p style={{ margin: '8px 0 0', color: '#75757C', font: '400 15px/1.4 Satoshi' }}>
+                Start a new UGC video or pick up where you left off.
+              </p>
             </div>
+            <button
+              onClick={() => router.push('/video-projects/new')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer', flexShrink: 0 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#5A36E8')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#6C47FF')}
+            >
+              <i className="icon-plus" style={{ fontSize: 16 }} />
+              New project
+            </button>
           </div>
-        )}
 
-        {!loading && projects.length > 0 && (
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {/* Table header */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '2.4fr 1.2fr 1.4fr 1.2fr 1.2fr',
-              padding: '12px 24px',
-              borderBottom: '1px solid var(--border)',
-              gap: 16,
-            }}>
-              {['Project', 'Owner', 'Created', 'Progress', 'Status'].map((label) => (
-                <span key={label} style={{
-                  fontSize: 11,
-                  fontWeight: 500,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                }}>
-                  {label}
-                </span>
+          {loading ? (
+            <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, overflow: 'hidden' }}>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.3fr) minmax(0,1.5fr) minmax(0,1.6fr) 110px', gap: 20, alignItems: 'center', padding: 20, borderBottom: i < 4 ? '1px solid #F3F3F1' : 'none', animation: 'pulse 1.4s ease-in-out infinite' }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                    <div style={{ width: 34, height: 50, borderRadius: 6, background: '#EFEFEC', flexShrink: 0 }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ height: 12, width: '70%', borderRadius: 4, background: '#EFEFEC' }} />
+                    </div>
+                  </div>
+                  <div style={{ height: 10, borderRadius: 4, background: '#EFEFEC' }} />
+                  <div style={{ height: 20, width: 110, borderRadius: 999, background: '#EFEFEC' }} />
+                  <div style={{ height: 10, width: 70, borderRadius: 4, background: '#F3F3F1' }} />
+                </div>
               ))}
             </div>
-
-            {/* Table rows */}
-            {projects.map((p, i) => (
-              <Link key={p.id} href={`/video-projects/${p.id}`} style={{ display: 'block', textDecoration: 'none' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2.4fr 1.2fr 1.4fr 1.2fr 1.2fr',
-                  padding: '14px 24px',
-                  gap: 16,
-                  alignItems: 'center',
-                  borderBottom: i < projects.length - 1 ? '1px solid var(--border-row)' : 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAF8')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
-                      {p.originalScript.slice(0, 60).replace(/\n/g, ' ')}…
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {p.ownerEmail ? (
-                      <>
-                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--brand)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {p.ownerEmail[0].toUpperCase()}
-                        </div>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {p.ownerEmail.split('@')[0]}
-                        </span>
-                      </>
-                    ) : (
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                  <div>
-                    <ProgressBar approved={p.approvedSceneCount} total={p.totalSceneCount} />
-                  </div>
-                  <div>
-                    <StatusPill project={p} />
-                  </div>
+          ) : projects.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '72px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F0F0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <i className="icon-clapperboard" style={{ fontSize: 22 }} />
+              </div>
+              <h2 style={{ margin: 0, font: '700 20px/1.3 Satoshi' }}>Create your first project</h2>
+              <p style={{ margin: '8px 0 28px', maxWidth: 440, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
+                Upload a creator reference and paste a UGC script. Soma breaks it into scenes, writes the prompts and generates clips, you review and approve every one.
+              </p>
+              <button
+                onClick={() => router.push('/video-projects/new')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}
+              >
+                <i className="icon-plus" style={{ fontSize: 16 }} />
+                New project
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Search + filter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ position: 'relative', width: 300 }}>
+                  <i className="icon-search" style={{ position: 'absolute', left: 12, top: 10, fontSize: 15, color: '#A3A3A9' }} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search projects or creators"
+                    style={{ width: '100%', height: 36, border: '1px solid #E4E4E0', borderRadius: 9, padding: '0 12px 0 34px', font: '400 14px/1 Satoshi', background: '#fff', outline: 'none' }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
+                  />
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
+                <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 10, background: '#EFEFEC' }}>
+                  {FILTER_LABELS.map((f) => {
+                    const active = filter === f.key;
+                    const count = countFor(f.key);
+                    return (
+                      <button
+                        key={f.key}
+                        onClick={() => setFilter(f.key)}
+                        style={{
+                          height: 30, padding: '0 12px', border: 'none', borderRadius: 7,
+                          background: active ? '#fff' : 'transparent',
+                          color: active ? '#111113' : '#75757C',
+                          font: '500 13px/1 Satoshi', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        }}
+                      >
+                        {f.label}
+                        <span style={{ color: active ? '#9A9AA0' : '#A3A3A9' }}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, overflow: 'hidden' }}>
+                {/* Header row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px', gap: 20, padding: '12px 20px', borderBottom: '1px solid #F0F0EE', font: '500 12px/1 Satoshi', color: '#9A9AA0' }}>
+                  <span>Project</span>
+                  <span>Owner</span>
+                  <span>Progress</span>
+                  <span>Status</span>
+                  <span />
+                </div>
+
+                {/* Data rows */}
+                {filtered.length === 0 ? (
+                  <div style={{ padding: '48px 20px', textAlign: 'center', color: '#75757C', font: '400 14px/1.5 Satoshi' }}>
+                    No projects match your search or filter.
+                  </div>
+                ) : (
+                  filtered.map((p, i) => {
+                    const statusKey = getStatus(p);
+                    const pill = getStatusPill(statusKey);
+                    const pct = p.totalSceneCount > 0 ? Math.round((p.approvedSceneCount / p.totalSceneCount) * 100) : 0;
+                    const barColor = statusKey === 'complete' ? '#6C47FF' : '#111113';
+
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => router.push(`/video-projects/${p.id}`)}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px',
+                          gap: 20,
+                          alignItems: 'center',
+                          padding: '16px 20px',
+                          borderBottom: i < filtered.length - 1 ? '1px solid #F3F3F1' : 'none',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAF8')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {/* Project col: thumbnail + name */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                          <div style={{
+                            width: 34, height: 50, flexShrink: 0, borderRadius: 6,
+                            backgroundColor: toneColor(p.id),
+                            backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,0.06) 0 1px,transparent 1px 7px)',
+                          }} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ font: '700 15px/1.3 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.name}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Owner col */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span style={{
+                            width: 24, height: 24, flexShrink: 0, borderRadius: '50%',
+                            background: '#F0F0EC',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            font: '700 10px/1 Satoshi', color: '#3A3A3F',
+                          }}>
+                            {initials(p.ownerEmail)}
+                          </span>
+                          <span style={{ font: '500 13px/1.3 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {ownerName(p.ownerEmail)}
+                          </span>
+                        </div>
+
+                        {/* Progress col: text + bar */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          <div style={{ font: '500 13px/1 Satoshi' }}>
+                            {p.totalSceneCount > 0 ? `${p.approvedSceneCount} / ${p.totalSceneCount} approved` : '—'}
+                          </div>
+                          {p.totalSceneCount > 0 && (
+                            <div style={{ height: 4, borderRadius: 2, background: '#EFEFEC', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 2 }} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Status col */}
+                        <div>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            height: 22, padding: '0 9px', borderRadius: 999,
+                            font: '500 12px/1 Satoshi',
+                            background: pill.bg, color: pill.fg,
+                          }}>
+                            {pill.label}
+                          </span>
+                        </div>
+
+                        {/* Chevron */}
+                        <i className="icon-chevron-right" style={{ fontSize: 16, color: '#A3A3A9' }} />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </AppShell>
   );

@@ -73,123 +73,160 @@ export default function ReviewPage() {
     };
   }, [compilation?.status]);
 
+  const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
+
   if (!project || !cid) {
     return (
       <AppShell>
-        <div className="page-body">
-          <div className="skeleton" style={{ height: 28, width: '40%', marginBottom: 16 }} />
-          <div className="skeleton" style={{ height: 400 }} />
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 32px 80px' }}>
+            <div className="skeleton" style={{ height: 28, width: '40%', marginBottom: 16 }} />
+            <div className="skeleton" style={{ height: 400, borderRadius: 14 }} />
+          </div>
         </div>
       </AppShell>
     );
   }
 
-  const allApproved = project.screens.length > 0 && project.screens.every((s) => !!s.approvedGenerationId);
   const projectSteps = [
     { label: 'Breakdown', status: 'complete' as const },
     { label: 'Scenes', status: 'complete' as const },
     { label: 'Compile', status: 'active' as const },
   ];
 
+  const isProcessing = compilation?.status === 'pending' || compilation?.status === 'processing';
+  const isFailed = compilation?.status === 'failed';
+  const isCompleted = compilation?.status === 'completed';
+
   return (
     <AppShell>
       <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
 
-      <div className="page-body" style={{ maxWidth: 900 }}>
-        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', marginBottom: 4 }}>
-              Full video review
-            </h2>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              Review your compiled video. Compilation #{cid}.
-            </p>
-          </div>
-          <Link href={`/video-projects/${id}/compile`}>
-            <button className="btn btn-secondary btn-sm">← Back to compile</button>
-          </Link>
-        </div>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 80px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {error && (
+            <div className="alert alert-error">{error}</div>
+          )}
 
-        {error && (
-          <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>
-        )}
-
-        <div className="card">
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {compilation?.status === 'pending' || compilation?.status === 'processing' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '40px 0' }}>
-                <div className="pulse-dots">
-                  <div className="pulse-dot" />
-                  <div className="pulse-dot" />
-                  <div className="pulse-dot" />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Compiling your video…
-                </div>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 360 }}>
-                  This usually takes a few minutes. The page will update automatically when it's ready.
-                </p>
+          {/* Video player */}
+          <div style={{
+            position: 'relative',
+            background: '#000',
+            borderRadius: 14,
+            overflow: 'hidden',
+            height: 'min(62vh, 640px)',
+            aspectRatio: '9/16',
+            margin: '0 auto',
+          }}>
+            {isProcessing ? (
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.2)', borderTop: '3px solid #fff', animation: 'spin 1s linear infinite' }} />
+                <div style={{ font: '500 13px/1 Satoshi', color: 'rgba(255,255,255,0.7)' }}>Compiling your video…</div>
               </div>
-            ) : compilation?.status === 'failed' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="alert alert-error">Compilation failed. Please try again.</div>
-                <Link href={`/video-projects/${id}/compile`}>
-                  <button style={{ padding: '10px 20px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                    Try again
+            ) : isFailed ? (
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <div style={{ font: '400 14px/1.4 Satoshi', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>Compilation failed</div>
+              </div>
+            ) : signedUrl ? (
+              <video
+                src={signedUrl}
+                controls
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', background: '#1A1A1C' }} />
+            )}
+          </div>
+
+          {/* Scene strip */}
+          {project.screens.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+              {project.screens.map((s, i) => (
+                <Link key={s.id} href={`/video-projects/${id}/screens/${s.screenNumber}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
+                  <div style={{
+                    width: 44,
+                    height: 66,
+                    borderRadius: 8,
+                    background: tones[i % tones.length],
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    font: '700 11px/1 Satoshi',
+                    color: 'rgba(0,0,0,0.5)',
+                    border: '1.5px solid transparent',
+                    cursor: 'pointer',
+                  }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'transparent')}
+                  >
+                    {i + 1}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {downloadError && (
+            <div className="alert alert-error" style={{ fontSize: 13 }}>{downloadError}</div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {isFailed ? (
+              <Link href={`/video-projects/${id}/compile`} style={{ textDecoration: 'none' }}>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 13px/1 Satoshi', cursor: 'pointer' }}>
+                  <i className="icon-rotate-ccw" style={{ fontSize: 14 }} />
+                  Try again
+                </button>
+              </Link>
+            ) : (
+              <>
+                <Link href={`/video-projects/${id}/screens/1`} style={{ textDecoration: 'none', flex: 1 }}>
+                  <button style={{ width: '100%', height: 40, borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113' }}>
+                    Fix this scene
                   </button>
                 </Link>
-              </div>
-            ) : compilation?.status === 'completed' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {signedUrl ? (
-                  <div className="video-result" style={{ borderRadius: 12 }}>
-                    <video src={signedUrl} controls style={{ width: '100%', display: 'block', maxHeight: 560 }} />
-                  </div>
-                ) : (
-                  <div className="skeleton" style={{ height: 320, borderRadius: 12 }} />
-                )}
-                {downloadError && (
-                  <div className="alert alert-error" style={{ marginBottom: 8, fontSize: 13 }}>
-                    {downloadError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    disabled={downloading}
-                    onClick={async () => {
-                      setDownloading(true);
-                      setDownloadError('');
-                      try {
-                        const res = await fetch(`/api/v1/video-projects/${id}/compilations/${cid}/download`);
-                        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-                        const blob = await res.blob();
-                        const objectUrl = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = objectUrl;
-                        a.download = `compilation-${cid}.mp4`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-                      } catch {
-                        setDownloadError('Download failed — please try again.');
-                      } finally {
-                        setDownloading(false);
-                      }
-                    }}
-                    style={{ padding: '10px 20px', background: downloading ? 'var(--border)' : '#111113', color: downloading ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: downloading ? 'not-allowed' : 'pointer' }}
-                  >
-                    {downloading ? 'Downloading…' : 'Download video'}
-                  </button>
-                  <Link href={`/video-projects/${id}/compile`}>
-                    <button className="btn btn-secondary">Compile another version</button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                Loading compilation…
-              </div>
+                <button
+                  disabled={downloading || !isCompleted}
+                  onClick={async () => {
+                    setDownloading(true);
+                    setDownloadError('');
+                    try {
+                      const res = await fetch(`/api/v1/video-projects/${id}/compilations/${cid}/download`);
+                      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                      const blob = await res.blob();
+                      const objectUrl = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = objectUrl;
+                      a.download = `compilation-${cid}.mp4`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                    } catch {
+                      setDownloadError('Download failed — please try again.');
+                    } finally {
+                      setDownloading(false);
+                    }
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    height: 40,
+                    padding: '0 18px',
+                    borderRadius: 9,
+                    background: downloading || !isCompleted ? '#E4E4E0' : '#6C47FF',
+                    color: downloading || !isCompleted ? '#A3A3A9' : '#fff',
+                    border: 'none',
+                    font: '700 13px/1 Satoshi',
+                    cursor: downloading || !isCompleted ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <i className="icon-download" style={{ fontSize: 14 }} />
+                  {downloading ? 'Downloading…' : 'Download'}
+                </button>
+              </>
             )}
           </div>
         </div>
