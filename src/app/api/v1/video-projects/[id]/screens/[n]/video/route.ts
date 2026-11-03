@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, videoGenerations } from '@/db/schema.pg';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 
 export async function GET(
@@ -62,7 +62,11 @@ export async function GET(
   }
 
   const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  const { data, error } = await supabase.storage
+  // Use service role for signed URL creation — the videos bucket is private
+  // and the anon client can't generate signed URLs without special policies.
+  // Auth + ownership checks above ensure only the rightful owner reaches here.
+  const serviceSupabase = createServiceClient();
+  const { data, error } = await serviceSupabase.storage
     .from(bucket)
     .createSignedUrl(generation.videoStoragePath, 3600);
 
