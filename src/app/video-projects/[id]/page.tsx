@@ -152,6 +152,7 @@ export default function VideoProjectPage() {
   const [generatingAllPrompts, setGeneratingAllPrompts] = useState(false);
   const [showGenerateAllConfirm, setShowGenerateAllConfirm] = useState(false);
   const [showReanalyzeConfirm, setShowReanalyzeConfirm] = useState(false);
+  const [infoMsg, setInfoMsg] = useState('');
 
   async function load() {
     const res = await fetch(`/api/v1/video-projects/${id}`);
@@ -273,6 +274,10 @@ export default function VideoProjectPage() {
       setError(body.error ?? 'Failed to queue prompt generation');
       setGeneratingAllPrompts(false);
       return;
+    }
+    const body = await res.json().catch(() => ({}));
+    if (body.tasksQueued === 0 && body.alreadyPending > 0) {
+      setInfoMsg(`Prompts are already queued (${body.alreadyPending} task${body.alreadyPending !== 1 ? 's' : ''} pending). The worker will process them shortly.`);
     }
     await load();
     setGeneratingAllPrompts(false);
@@ -409,6 +414,12 @@ export default function VideoProjectPage() {
             <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span>{error}</span>
               <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+            </div>
+          )}
+          {infoMsg && (
+            <div className="alert alert-success" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{infoMsg}</span>
+              <button onClick={() => setInfoMsg('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
             </div>
           )}
 
