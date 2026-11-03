@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+// provider.ts uses STORAGE_DIR ?? './storage'; Vercel/GH Actions cwd is read-only so we default to /tmp
+process.env.STORAGE_DIR ??= '/tmp';
 
 import { acquireLock, releaseLock, closeLockConnection } from './lock';
 import { processPendingCompilation, recoverStaleCompilations } from './compilation';
@@ -229,7 +231,14 @@ async function pollInFlightGenerations(): Promise<void> {
             outputMediaGenerationId: result.outputMediaGenerationId ?? null,
             jobCompletedAt: now,
           });
-          const storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, gen.id);
+          let storagePath: string;
+          try {
+            storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, gen.id);
+          } catch (uploadErr: unknown) {
+            const fsP = await import('node:fs/promises');
+            await fsP.unlink(downloaded.tempPath).catch(() => {});
+            throw uploadErr;
+          }
           await db
             .update(videoGenerations)
             .set({ status: 'completed', videoStoragePath: storagePath, claimedAt: null, updatedAt: now })

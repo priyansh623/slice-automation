@@ -1,5 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+// provider.ts uses STORAGE_DIR ?? './storage'; Vercel cwd is read-only so we default to /tmp
+process.env.STORAGE_DIR ??= '/tmp';
 import { db } from '@/db';
 import {
   videoProjects,
@@ -714,8 +716,13 @@ export async function submitQueuedGeneration(
         outputMediaGenerationId: result.mediaGenerationId ?? null,
         jobCompletedAt: now,
       });
-      // Upload downloaded file to Supabase Storage
-      const storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, generationId);
+      let storagePath: string;
+      try {
+        storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, generationId);
+      } catch (uploadErr: unknown) {
+        fs.unlink(downloaded.tempPath, () => {});
+        throw uploadErr;
+      }
       await db
         .update(videoGenerations)
         .set({ jobId: result.jobId, status: 'completed', videoStoragePath: storagePath, updatedAt: now })
@@ -900,7 +907,13 @@ export async function submitVideoGeneration(
       outputMediaGenerationId: result.mediaGenerationId ?? null,
       jobCompletedAt: now,
     });
-    const storagePath = await uploadVideoToStorage(downloaded.tempPath, videoScreenId, 0);
+    let storagePath: string;
+    try {
+      storagePath = await uploadVideoToStorage(downloaded.tempPath, videoScreenId, 0);
+    } catch (uploadErr: unknown) {
+      fs.unlink(downloaded.tempPath, () => {});
+      throw uploadErr;
+    }
     const inserted = await db
       .insert(videoGenerations)
       .values({
