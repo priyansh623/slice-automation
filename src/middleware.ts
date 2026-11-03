@@ -4,9 +4,8 @@ import { createServerClient } from '@supabase/ssr';
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
-  // API routes and static assets handle their own auth
+  // Skip middleware entirely for static assets and the login page itself.
   if (
-    pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     pathname === '/login'
@@ -14,7 +13,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  let response = NextResponse.next({ request });
+  // Always refresh the session so the route handler (or next page render) sees
+  // a valid, non-expired JWT.  Without this, API routes skip the refresh and
+  // getUser() in the route handler returns null for an expired-but-refreshable
+  // token, producing a spurious 401 Unauthorized.
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,9 +29,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            supabaseResponse.cookies.set(name, value, options),
           );
         },
       },
@@ -37,13 +40,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  // For API routes: return the (possibly token-refreshed) response without
+  // redirecting — the route handler owns its own 401 response.
+  if (pathname.startsWith('/api/')) {
+    return supabaseResponse;
+  }
+
+  // For page routes: redirect to login when not authenticated.
   if (!user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {
