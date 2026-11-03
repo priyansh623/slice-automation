@@ -23,7 +23,13 @@ jobs:
       - run: npm ci
 
       - name: Run worker (4 min max)
-        run: timeout 240 npx tsx src/worker/index.ts || true
+        run: |
+          timeout 240 npx tsx src/worker/index.ts
+          code=$?
+          # exit 0: normal run or "another worker holds lock"
+          # exit 124: timeout killed the process (expected after 4 min)
+          # any other exit code: fatal worker error → fail the CI step
+          if [ $code -eq 0 ] || [ $code -eq 124 ]; then exit 0; else exit $code; fi
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

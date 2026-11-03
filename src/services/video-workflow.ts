@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 // provider.ts uses STORAGE_DIR ?? './storage'; Vercel cwd is read-only so we default to /tmp
@@ -26,7 +27,7 @@ async function downloadImageToTmp(storagePath: string, bucket: string): Promise<
   const { data, error } = await supabase.storage.from(bucket).download(storagePath);
   if (error || !data) throw new Error(`Failed to download image ${storagePath}: ${error?.message}`);
   const buffer = Buffer.from(await data.arrayBuffer());
-  const tmpPath = path.join('/tmp', path.basename(storagePath));
+  const tmpPath = path.join('/tmp', `${crypto.randomBytes(8).toString('hex')}-${path.basename(storagePath)}`);
   fs.writeFileSync(tmpPath, buffer);
   return tmpPath;
 }
