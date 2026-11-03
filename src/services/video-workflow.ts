@@ -362,10 +362,10 @@ export async function generateScreen1Prompt(
       ? `\n\nCreator description: ${project.creatorDescription}`
       : '';
 
-    // Inject scene1 hook snapshot if available (lower-priority creative seed)
-    const hookBlock = project.scene1HookSnapshot
-      ? `\n\n[SCENE 1 HOOK — DEFAULT STARTING DIRECTION]\nThis is a creative seed. Apply it to dimensions not addressed by feedback below. If you have prior revision feedback, that takes priority.\n${project.scene1HookSnapshot}`
-      : '';
+    // Inject scene1 hook — use project snapshot if set, otherwise fall back to default
+    const DEFAULT_SCENE1_HOOK = `Treat Scene 1 as the hook. Deliver it with high energy, strong curiosity, an engaging influencer-style tone, and expressive but natural facial expressions and gestures. Make the opening immediately attention-grabbing and give the viewer a reason to keep watching.`;
+    const hookText = project.scene1HookSnapshot ?? DEFAULT_SCENE1_HOOK;
+    const hookBlock = `\n\n[SCENE 1 HOOK — PERFORMANCE DIRECTION ONLY]\nThis is a direction for how the creator performs and delivers the scene — not dialogue to add or change. Do not alter the script. Apply it to energy, tone, expression, and body language only. If you have prior revision feedback, that takes priority over this direction.\n${hookText}`;
 
     userMessage =
       `Here is the original video script and the reference image of the creator.` +
