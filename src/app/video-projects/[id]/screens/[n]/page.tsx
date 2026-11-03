@@ -164,6 +164,15 @@ export default function ScreenPage() {
     };
   }, [generations.map((g) => `${g.generation.id}:${g.generation.status}`).join(',')]);
 
+  async function handleUnapprove() {
+    setApproving(true);
+    setError('');
+    const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/unapprove`, { method: 'POST' });
+    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Failed to unapprove'); setApproving(false); return; }
+    await loadAll();
+    setApproving(false);
+  }
+
   async function handleWritePrompt() {
     // If feedback looks project-wide, show confirmation before sending
     if (feedback.trim() && isProjectScopeFeedback(feedback) && !projectScopePending) {
@@ -267,7 +276,9 @@ export default function ScreenPage() {
   // ─── Derived state ────────────────────────────────────────────────────────
   const latestVersion = promptHistory[0];
   const hasUnsavedPromptEdits = latestVersion != null && currentPrompt !== latestVersion.promptText;
+  const isSaveDisabled = !currentPrompt.trim() || savingPrompt || currentPrompt === latestVersion?.promptText;
   const screen = project?.screens.find((s) => s.screenNumber === parseInt(n, 10));
+  const prevScreen = project?.screens.find((s) => s.screenNumber === parseInt(n, 10) - 1);
   const nextScreen = project?.screens.find((s) => s.screenNumber === parseInt(n, 10) + 1);
   const isApproved = !!(screen?.approvedGenerationId);
   const approvedGen = isApproved ? generations.find((g) => g.generation.id === screen?.approvedGenerationId) : null;
@@ -301,22 +312,32 @@ export default function ScreenPage() {
           </div>
           <h1 className="page-title">Scene {n}</h1>
         </div>
-        {isApproved && nextScreen && (
-          <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-            <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Next scene →
-            </button>
-          </Link>
-        )}
-        {isApproved && !nextScreen && (
-          <Link href={`/video-projects/${id}`}>
-            <button className="btn btn-primary btn-sm">All scenes →</button>
-          </Link>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {prevScreen && (
+            <Link href={`/video-projects/${id}/screens/${prevScreen.screenNumber}`}>
+              <button className="btn btn-secondary btn-sm">← Scene {prevScreen.screenNumber}</button>
+            </Link>
+          )}
+          {nextScreen && (
+            <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
+              <button className="btn btn-secondary btn-sm">Scene {nextScreen.screenNumber} →</button>
+            </Link>
+          )}
+          {!nextScreen && (
+            <Link href={`/video-projects/${id}`}>
+              <button className="btn btn-secondary btn-sm">All scenes →</button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="page-body">
-        {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <span>{error}</span>
+            <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+          </div>
+        )}
 
         <div className="screen-workspace">
           {/* ── Left context panel ─────────────────────────────────────────── */}
@@ -400,7 +421,7 @@ export default function ScreenPage() {
                 {isApproved && (
                   <div className="stage-banner stage-banner-green">
                     <div className="stage-banner-icon"><IconCheck /></div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div className="stage-banner-title">Scene {n} is approved</div>
                       <div className="stage-banner-desc">
                         {nextScreen
@@ -408,13 +429,23 @@ export default function ScreenPage() {
                           : 'This is the last scene and it\'s approved. Your video project is complete.'}
                       </div>
                     </div>
-                    {nextScreen && (
-                      <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-                        <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>
-                          Scene {nextScreen.screenNumber} →
-                        </button>
-                      </Link>
-                    )}
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleUnapprove}
+                        disabled={approving}
+                        title="Revoke approval — keeps all generated clips and history"
+                      >
+                        {approving ? 'Updating…' : 'Unapprove'}
+                      </button>
+                      {nextScreen && (
+                        <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
+                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>
+                            Scene {nextScreen.screenNumber} →
+                          </button>
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -437,7 +468,8 @@ export default function ScreenPage() {
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={handleSaveManualEdit}
-                      disabled={!currentPrompt.trim() || savingPrompt}
+                      disabled={isSaveDisabled}
+                      title={currentPrompt === latestVersion?.promptText ? 'No changes to save' : undefined}
                     >
                       {savingPrompt ? 'Saving…' : 'Save edit'}
                     </button>
@@ -623,7 +655,7 @@ export default function ScreenPage() {
                                     ? 'Approving locks in Scene 1 and lets you move on to the remaining scenes. You can always come back to review it.'
                                     : 'Approving this clip marks Scene ' + n + ' as done. You can still regenerate if you change your mind before the full project is complete.'}
                                 </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                                   <button
                                     className="btn btn-primary"
                                     onClick={() => handleApprove(g.id)}
@@ -637,10 +669,12 @@ export default function ScreenPage() {
                                     className="btn btn-secondary"
                                     onClick={handleGenerateVideo}
                                     disabled={submitting || hasUnsavedPromptEdits}
-                                    title={hasUnsavedPromptEdits ? 'Save your prompt edits first' : undefined}
                                   >
                                     {submitting ? 'Generating…' : 'Generate another'}
                                   </button>
+                                  {hasUnsavedPromptEdits && (
+                                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save your prompt edits first</span>
+                                  )}
                                   {SUPPORTED_DURATIONS.filter(
                                     (d) => d !== (g.durationSeconds ?? screen?.durationSeconds),
                                   ).map((d) => (
@@ -700,16 +734,22 @@ export default function ScreenPage() {
                         ? 'The prompt is ready. Click below to send it to the video generator. It usually takes 1–3 minutes to return a clip.'
                         : 'The previous generation failed. Click below to try again.'}
                     </div>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleGenerateVideo}
-                      disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits}
-                      title={hasUnsavedPromptEdits ? 'Save your prompt edits first' : undefined}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                    >
-                      <IconVideo />
-                      {submitting ? 'Submitting…' : 'Generate video clip'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleGenerateVideo}
+                        disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                      >
+                        <IconVideo />
+                        {submitting ? 'Submitting…' : 'Generate video clip'}
+                      </button>
+                      {hasUnsavedPromptEdits && (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          Save your prompt edits first
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 

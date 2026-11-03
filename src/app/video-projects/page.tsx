@@ -10,6 +10,8 @@ interface VideoProject {
   originalScript: string;
   breakdownApprovedAt: number | null;
   createdAt: number;
+  approvedSceneCount: number;
+  totalSceneCount: number;
 }
 
 function IconFilm() {
@@ -116,6 +118,12 @@ export default function VideoProjectsPage() {
                       <span className="badge badge-green"><span className="dot dot-green" />Breakdown approved</span>
                     ) : (
                       <span className="badge badge-yellow">Breakdown pending</span>
+                    )}
+                    {p.totalSceneCount > 0 && (
+                      <span className="badge badge-gray" style={{ marginLeft: 6 }}>
+                        {p.approvedSceneCount}/{p.totalSceneCount} scenes
+                        {p.approvedSceneCount === p.totalSceneCount ? ' ✓' : ''}
+                      </span>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

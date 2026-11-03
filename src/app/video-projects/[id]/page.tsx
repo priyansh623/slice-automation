@@ -150,6 +150,8 @@ export default function VideoProjectPage() {
   const [promptTasks, setPromptTasks] = useState<PromptTask[]>([]);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingAllPrompts, setGeneratingAllPrompts] = useState(false);
+  const [showGenerateAllConfirm, setShowGenerateAllConfirm] = useState(false);
+  const [showReanalyzeConfirm, setShowReanalyzeConfirm] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/v1/video-projects/${id}`);
@@ -196,6 +198,12 @@ export default function VideoProjectPage() {
   }, [promptTasks, project, id]);
 
   async function handleAnalyze() {
+    // Loss aversion: warn before discarding unsaved manual edits
+    if (dirty && !showReanalyzeConfirm) {
+      setShowReanalyzeConfirm(true);
+      return;
+    }
+    setShowReanalyzeConfirm(false);
     setAnalyzing(true);
     setError('');
     setPossibleTypos([]);
@@ -266,6 +274,11 @@ export default function VideoProjectPage() {
   }
 
   async function handleGenerateAll() {
+    if (!showGenerateAllConfirm) {
+      setShowGenerateAllConfirm(true);
+      return;
+    }
+    setShowGenerateAllConfirm(false);
     setGeneratingAll(true);
     setError('');
     const res = await fetch(`/api/v1/video-projects/${id}/generate-all`, { method: 'POST' });
@@ -358,6 +371,13 @@ export default function VideoProjectPage() {
 
   const approvedCount = editedScreens.filter((s) => s.approvedGenerationId).length;
   const nextIncompleteScreen = editedScreens.find((s) => !s.approvedGenerationId);
+  const generateAllEligible = editedScreens.filter((s) => {
+    if (s.approvedGenerationId) return false;
+    if (!s.hasPrompt) return false;
+    const g = s.latestGen;
+    if (g && (g.status === 'pending' || g.status === 'processing' || g.status === 'queued')) return false;
+    return true;
+  }).length;
 
   // Phase 3: Breakdown approved - show screen progress grid
   if (project.breakdownApprovedAt) {
@@ -378,7 +398,12 @@ export default function VideoProjectPage() {
         </div>
 
         <div className="page-body" style={{ maxWidth: 900 }}>
-          {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+          {error && (
+            <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{error}</span>
+              <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+            </div>
+          )}
 
           {/* Progress summary */}
           <div className="card" style={{ marginBottom: 20 }}>
@@ -498,25 +523,39 @@ export default function VideoProjectPage() {
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="card-title">All Scenes</div>
               {editedScreens.some((s) => !s.approvedGenerationId) && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleGenerateAllPrompts}
-                    disabled={generatingAllPrompts}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <IconSparkle />
-                    {generatingAllPrompts ? 'Queuing…' : 'Generate All Prompts'}
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleGenerateAll}
-                    disabled={generatingAll}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <IconSparkle />
-                    {generatingAll ? 'Queuing…' : 'Generate All Videos'}
-                  </button>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                  {showGenerateAllConfirm && (
+                    <div style={{ padding: '12px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 280 }}>
+                      <strong>Queue {generateAllEligible} video generation{generateAllEligible !== 1 ? 's' : ''}?</strong>
+                      <span style={{ color: 'var(--text-secondary)' }}>This consumes API credits. Already-approved and actively-generating scenes will be skipped.</span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-primary btn-sm" onClick={handleGenerateAll} disabled={generatingAll || generateAllEligible === 0}>
+                          {generatingAll ? 'Queuing…' : `Queue ${generateAllEligible} generation${generateAllEligible !== 1 ? 's' : ''}`}
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setShowGenerateAllConfirm(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleGenerateAllPrompts}
+                      disabled={generatingAllPrompts}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <IconSparkle />
+                      {generatingAllPrompts ? 'Queuing…' : 'Generate All Prompts'}
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleGenerateAll}
+                      disabled={generatingAll}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <IconSparkle />
+                      {generatingAll ? 'Queuing…' : 'Generate All Videos'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -585,7 +624,12 @@ export default function VideoProjectPage() {
         </div>
 
         <div className="page-body" style={{ maxWidth: 720 }}>
-          {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+          {error && (
+            <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{error}</span>
+              <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+            </div>
+          )}
 
           {/* Step banner */}
           <div className="stage-banner stage-banner-purple">
@@ -657,7 +701,12 @@ export default function VideoProjectPage() {
       </div>
 
       <div className="page-body" style={{ maxWidth: 720 }}>
-        {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <span>{error}</span>
+            <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+          </div>
+        )}
 
         {/* Step banner */}
         <div className="stage-banner stage-banner-purple">
@@ -717,15 +766,27 @@ export default function VideoProjectPage() {
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header">
             <div className="card-title">Scenes</div>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <IconSparkle />
-              {analyzing ? 'Re-analysing…' : 'Re-analyse'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              {showReanalyzeConfirm && (
+                <div style={{ padding: '10px 14px', background: 'var(--warning-bg, #fffbeb)', border: '1px solid var(--warning, #f59e0b)', borderRadius: 8, fontSize: 13, color: '#78350F', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 260 }}>
+                  <strong>Unsaved edits will be lost</strong>
+                  <span>Re-analysing rewrites the scene breakdown from scratch. Your manual changes won't be preserved.</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={analyzing}>Re-analyse anyway</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setShowReanalyzeConfirm(false)}>Keep my edits</button>
+                  </div>
+                </div>
+              )}
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <IconSparkle />
+                {analyzing ? 'Re-analysing…' : 'Re-analyse'}
+              </button>
+            </div>
           </div>
           <div className="card-body" style={{ padding: '0 20px' }}>
             <div className="scene-list">

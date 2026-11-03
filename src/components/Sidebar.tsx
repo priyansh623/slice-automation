@@ -38,14 +38,6 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
-function IconChevronLeft({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  );
-}
-
 interface NavItem {
   label: string;
   href: string;
@@ -80,9 +72,6 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="sidebar-logo">
         <span className="sidebar-wordmark">soma<span>slice</span></span>
-        <button className="sidebar-collapse-btn" title="Collapse sidebar">
-          <IconChevronLeft />
-        </button>
       </div>
 
       {/* Nav */}
@@ -105,10 +94,9 @@ export default function Sidebar() {
       {/* Bottom */}
       <div className="sidebar-bottom">
         <div className="sidebar-user">
-          <div className="sidebar-avatar">PT</div>
+          <div className="sidebar-avatar" style={{ fontSize: 11, letterSpacing: 0 }}>S</div>
           <div className="sidebar-user-info">
-            <div className="sidebar-user-name">Priyansh Thakker</div>
-            <div className="sidebar-user-email">priyansh@getsoma.ai</div>
+            <div className="sidebar-user-name">Soma Slice</div>
           </div>
           <Link href="/admin/settings" title="Admin Settings"><IconSettings className="nav-icon" /></Link>
         </div>

@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { adminSettings, videoProjects } from '@/db/schema.pg';
+import { adminSettings, videoProjects, videoScreens } from '@/db/schema.pg';
 import { desc, eq } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
-  const rows = await db
-    .select()
-    .from(videoProjects)
-    .orderBy(desc(videoProjects.createdAt));
+  const [rows, allScreens] = await Promise.all([
+    db.select().from(videoProjects).orderBy(desc(videoProjects.createdAt)),
+    db.select({ videoProjectId: videoScreens.videoProjectId, approvedGenerationId: videoScreens.approvedGenerationId }).from(videoScreens),
+  ]);
 
-  return NextResponse.json(rows);
+  const screensByProject = new Map<number, { total: number; approved: number }>();
+  for (const s of allScreens) {
+    const existing = screensByProject.get(s.videoProjectId) ?? { total: 0, approved: 0 };
+    screensByProject.set(s.videoProjectId, {
+      total: existing.total + 1,
+      approved: existing.approved + (s.approvedGenerationId ? 1 : 0),
+    });
+  }
+
+  return NextResponse.json(rows.map((p) => ({
+    ...p,
+    approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
+    totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
+  })));
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
