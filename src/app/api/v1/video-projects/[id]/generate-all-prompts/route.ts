@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { videoProjects, videoScreens } from '@/db/schema.pg';
+import { videoProjects, videoScreens, promptGenerationTasks } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { enqueueScreen1ApprovalTasks } from '@/services/video-workflow';
 
 export async function POST(
@@ -26,6 +26,26 @@ export async function POST(
   const screen1 = allScreens.sort((a, b) => a.position - b.position)[0];
 
   if (!screen1) return NextResponse.json({ error: 'No screens found' }, { status: 400 });
+
+  // Scene 1 must be approved before we can extract a brief for the other scenes.
+  if (!screen1.approvedGenerationId) {
+    return NextResponse.json(
+      { error: 'Scene 1 must be approved before generating prompts for other scenes' },
+      { status: 400 },
+    );
+  }
+
+  // Skip if tasks are already pending/processing to avoid duplicate work.
+  const existingTasks = await db
+    .select()
+    .from(promptGenerationTasks)
+    .where(and(
+      eq(promptGenerationTasks.videoProjectId, projectId),
+      eq(promptGenerationTasks.status, 'pending'),
+    ));
+  if (existingTasks.length > 0) {
+    return NextResponse.json({ tasksQueued: 0, alreadyPending: existingTasks.length });
+  }
 
   const result = await enqueueScreen1ApprovalTasks(projectId, screen1.id);
 

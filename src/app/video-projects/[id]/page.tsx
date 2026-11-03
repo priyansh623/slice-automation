@@ -268,7 +268,12 @@ export default function VideoProjectPage() {
     setGeneratingAllPrompts(true);
     setError('');
     const res = await fetch(`/api/v1/video-projects/${id}/generate-all-prompts`, { method: 'POST' });
-    if (!res.ok) { setError('Failed to queue prompt generation'); setGeneratingAllPrompts(false); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? 'Failed to queue prompt generation');
+      setGeneratingAllPrompts(false);
+      return;
+    }
     await load();
     setGeneratingAllPrompts(false);
   }
@@ -549,11 +554,12 @@ export default function VideoProjectPage() {
                     <button
                       className="btn btn-primary btn-sm"
                       onClick={handleGenerateAll}
-                      disabled={generatingAll}
+                      disabled={generatingAll || generateAllEligible === 0}
+                      title={generateAllEligible === 0 ? 'No scenes have a prompt ready yet' : undefined}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
                       <IconSparkle />
-                      {generatingAll ? 'Queuing…' : 'Generate All Videos'}
+                      {generatingAll ? 'Queuing…' : `Generate All Videos${generateAllEligible > 0 ? ` (${generateAllEligible})` : ''}`}
                     </button>
                   </div>
                 </div>
