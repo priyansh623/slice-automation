@@ -45,8 +45,9 @@ export async function POST(
       console.error(`[generate] Unexpected provider error (HTTP ${err.httpStatus}):`, err.message);
       return NextResponse.json({ error: `Video provider returned an unexpected error (${err.httpStatus}).` }, { status: 502 });
     }
-    console.error('[generate] Unhandled error:', err instanceof Error ? err.message : String(err));
-    return NextResponse.json({ error: 'An unexpected error occurred during video generation.' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[generate] Unhandled error:', msg);
+    return NextResponse.json({ error: `Video generation failed: ${msg.slice(0, 300)}` }, { status: 500 });
   }
 
   if (body.creatorFeedback) {
