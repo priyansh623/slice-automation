@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { db } from '@/db';
 import {
   videoProjects,
@@ -11,6 +13,21 @@ import { callClaude, encodeImageFromStorage, loadConversation } from './anthropi
 import { getSkillContent } from '@/lib/ugc-skill';
 import { useapiProvider } from '@/providers/useapi/provider';
 import type { VideoGenerationProvider } from '@/providers/useapi/interface';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+
+async function downloadImageToTmp(storagePath: string, bucket: string): Promise<string> {
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+  if (error || !data) throw new Error(`Failed to download image ${storagePath}: ${error?.message}`);
+  const buffer = Buffer.from(await data.arrayBuffer());
+  const tmpPath = path.join('/tmp', path.basename(storagePath));
+  fs.writeFileSync(tmpPath, buffer);
+  return tmpPath;
+}
 
 const DEFAULT_MODEL = () => process.env.VIDEO_DEFAULT_MODEL ?? 'omni-flash';
 const DEFAULT_DURATION = () => parseInt(process.env.VIDEO_DEFAULT_DURATION ?? '8', 10);
@@ -621,12 +638,17 @@ export async function submitQueuedGeneration(
       if (process.env.MOCK_USEAPI === 'true') {
         referenceImageMediaId = 'mock-media-id';
       } else {
-        const uploaded = await provider.uploadReferenceImage({
-          imagePath: project.baseImagePath,
-          contentType: guessContentType(project.baseImagePath),
-          email: process.env.GOOGLE_FLOW_EMAIL!,
-        });
-        referenceImageMediaId = uploaded.mediaGenerationId ?? null;
+        const tmpPath = await downloadImageToTmp(project.baseImagePath, UPLOADS_BUCKET());
+        try {
+          const uploaded = await provider.uploadReferenceImage({
+            imagePath: tmpPath,
+            contentType: guessContentType(project.baseImagePath),
+            email: process.env.GOOGLE_FLOW_EMAIL!,
+          });
+          referenceImageMediaId = uploaded.mediaGenerationId ?? null;
+        } finally {
+          fs.unlink(tmpPath, () => {});
+        }
         if (referenceImageMediaId) {
           await db
             .update(videoProjects)
@@ -791,12 +813,17 @@ export async function submitVideoGeneration(
     if (process.env.MOCK_USEAPI === 'true') {
       referenceImageMediaId = 'mock-media-id';
     } else {
-      const uploaded = await provider.uploadReferenceImage({
-        imagePath: project.baseImagePath,
-        contentType: guessContentType(project.baseImagePath),
-        email: process.env.GOOGLE_FLOW_EMAIL!,
-      });
-      referenceImageMediaId = uploaded.mediaGenerationId ?? null;
+      const tmpPath = await downloadImageToTmp(project.baseImagePath, UPLOADS_BUCKET());
+      try {
+        const uploaded = await provider.uploadReferenceImage({
+          imagePath: tmpPath,
+          contentType: guessContentType(project.baseImagePath),
+          email: process.env.GOOGLE_FLOW_EMAIL!,
+        });
+        referenceImageMediaId = uploaded.mediaGenerationId ?? null;
+      } finally {
+        fs.unlink(tmpPath, () => {});
+      }
       if (referenceImageMediaId) {
         await db
           .update(videoProjects)
