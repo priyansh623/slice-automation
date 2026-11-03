@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { adminSettings, videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
@@ -32,11 +33,27 @@ export async function GET(): Promise<NextResponse> {
     });
   }
 
+  // Generate signed preview URLs for all base images in one batch call
+  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+  const paths = rows.map((p) => p.baseImagePath).filter(Boolean) as string[];
+  const { data: signedUrlsData } = paths.length > 0
+    ? await serviceClient.storage.from(bucket).createSignedUrls(paths, 3600)
+    : { data: [] };
+  const signedUrlMap = new Map(
+    (signedUrlsData ?? []).map((item) => [item.path, item.signedUrl]),
+  );
+
   return NextResponse.json(rows.map((p) => ({
     ...p,
     approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
     totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
     ownerEmail: user.email ?? null,
+    baseImagePreviewUrl: signedUrlMap.get(p.baseImagePath) ?? null,
   })));
 }
 

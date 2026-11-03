@@ -13,6 +13,7 @@ interface VideoProject {
   approvedSceneCount: number;
   totalSceneCount: number;
   ownerEmail: string | null;
+  baseImagePreviewUrl?: string | null;
 }
 
 type StatusKey = 'breakdown-review' | 'in-production' | 'ready-to-compile';
@@ -223,8 +224,16 @@ export default function VideoProjectsPage() {
                           <div style={{
                             width: 34, height: 50, flexShrink: 0, borderRadius: 6,
                             backgroundColor: toneColor(p.id),
-                            backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,0.06) 0 1px,transparent 1px 7px)',
-                          }} />
+                            overflow: 'hidden',
+                          }}>
+                            {p.baseImagePreviewUrl && (
+                              <img
+                                src={p.baseImagePreviewUrl}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                              />
+                            )}
+                          </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ font: '700 15px/1.3 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {p.name}
