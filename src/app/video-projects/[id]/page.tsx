@@ -376,6 +376,8 @@ export default function VideoProjectPage() {
 
   const approvedCount = editedScreens.filter((s) => s.approvedGenerationId).length;
   const nextIncompleteScreen = editedScreens.find((s) => !s.approvedGenerationId);
+  const screen1 = editedScreens.find((s) => s.screenNumber === 1);
+  const screen1Approved = !!screen1?.approvedGenerationId;
   const generateAllEligible = editedScreens.filter((s) => {
     if (s.approvedGenerationId) return false;
     if (!s.hasPrompt) return false;
@@ -545,7 +547,8 @@ export default function VideoProjectPage() {
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={handleGenerateAllPrompts}
-                      disabled={generatingAllPrompts}
+                      disabled={generatingAllPrompts || !screen1Approved}
+                      title={!screen1Approved ? 'Go to Scene 1, generate a video, and approve it first' : undefined}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
                       <IconSparkle />
