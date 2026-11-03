@@ -102,8 +102,27 @@ async function processPromptTasks(): Promise<void> {
     .from(promptGenerationTasks)
     .where(eq(promptGenerationTasks.status, 'pending'));
 
-  const tasks = allPending.sort((a, b) => a.id - b.id);
-  if (tasks.length === 0) return;
+  if (allPending.length === 0) return;
+
+  // Round-robin by project so one project's backlog can't starve newer ones.
+  // Within each project, tasks still run oldest-first (ID order).
+  const byProject = new Map<number, typeof allPending>();
+  for (const t of allPending) {
+    if (!byProject.has(t.videoProjectId)) byProject.set(t.videoProjectId, []);
+    byProject.get(t.videoProjectId)!.push(t);
+  }
+  for (const group of byProject.values()) group.sort((a, b) => a.id - b.id);
+  const projectOrder = [...byProject.keys()].sort(
+    (a, b) => byProject.get(a)![0].id - byProject.get(b)![0].id,
+  );
+  const tasks: typeof allPending = [];
+  let i = 0;
+  while (tasks.length < allPending.length) {
+    const pid = projectOrder[i % projectOrder.length];
+    const group = byProject.get(pid)!;
+    if (group.length > 0) tasks.push(group.shift()!);
+    i++;
+  }
 
   for (const task of tasks) {
     if (task.taskType === 'generate_prompt') {

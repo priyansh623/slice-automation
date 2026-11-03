@@ -1,9 +1,11 @@
 name: Worker
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 minutes
-  workflow_dispatch:          # manual trigger
+  # Schedule disabled — worker now runs as a Render background service.
+  # Re-enable the cron below if Render is unavailable.
+  # schedule:
+  #   - cron: '*/5 * * * *'
+  workflow_dispatch:          # manual trigger still works if needed
 
 jobs:
   run-worker:
