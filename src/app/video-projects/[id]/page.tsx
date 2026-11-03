@@ -8,7 +8,7 @@ import AppShell from '@/components/AppShell';
 interface GenSummary {
   id: number;
   status: string;
-  videoLocalPath: string | null;
+  videoStoragePath: string | null;
   updatedAt: number;
 }
 
@@ -23,7 +23,7 @@ interface Screen {
   // Enriched by project API
   hasPrompt: boolean;
   latestGen: GenSummary | null;
-  latestCompletedLocalGen: { id: number; videoLocalPath: string } | null;
+  latestCompletedGen: { id: number; videoStoragePath: string } | null;
 }
 
 interface PromptTask {
@@ -125,10 +125,10 @@ function sceneStatus(s: Screen, promptTask: PromptTask | undefined, isNext: bool
   if (promptTask?.status === 'pending') return { kind: 'queued-prompt' };
   // Failures
   if (promptTask?.status === 'failed') return { kind: 'failed-prompt' };
-  if (g?.status === 'failed') return { kind: 'failed-video', hasPrior: !!s.latestCompletedLocalGen };
+  if (g?.status === 'failed') return { kind: 'failed-video', hasPrior: !!s.latestCompletedGen };
   // Terminal states
   if (s.approvedGenerationId) return { kind: 'approved' };
-  if (g?.status === 'completed' && g.videoLocalPath) return { kind: 'generated' };
+  if (g?.status === 'completed' && g.videoStoragePath) return { kind: 'generated' };
   if (s.hasPrompt) return { kind: 'prompt-ready' };
   if (isNext) return { kind: 'up-next' };
   return { kind: 'not-started' };
@@ -322,7 +322,7 @@ export default function VideoProjectPage() {
       durationNote: null,
       hasPrompt: false,
       latestGen: null,
-      latestCompletedLocalGen: null,
+      latestCompletedGen: null,
     };
     setEditedScreens((prev) => [...prev, newScreen]);
     setDirty(true);
