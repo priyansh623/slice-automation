@@ -31,7 +31,7 @@ export async function GET(
 
   const compilation = rows[0];
   if (!compilation) return NextResponse.json({ error: 'Compilation not found' }, { status: 404 });
-  if (!compilation.outputStoragePath) {
+  if (compilation.status !== 'completed' || !compilation.outputStoragePath) {
     return NextResponse.json({ error: 'Compilation video not yet available' }, { status: 404 });
   }
 
