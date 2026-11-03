@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
+import ProjectHeader from '@/components/ProjectHeader';
 
 interface GenSummary {
   id: number;
@@ -396,18 +397,16 @@ export default function VideoProjectPage() {
     const total = editedScreens.length;
     const pct = total > 0 ? Math.round((approvedCount / total) * 100) : 0;
 
+    const allScenesApproved = approvedCount === total && total > 0;
+    const projectSteps = [
+      { label: 'Breakdown', status: 'complete' as const },
+      { label: 'Scenes', status: allScenesApproved ? ('complete' as const) : ('active' as const) },
+      { label: 'Compile', status: allScenesApproved ? ('active' as const) : ('pending' as const) },
+    ];
+
     return (
       <AppShell>
-        <div className="page-header">
-          <div className="page-header-left">
-            <div className="page-breadcrumb">
-              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
-              <span>›</span>
-              <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
-            </div>
-            <h1 className="page-title">{project.name}</h1>
-          </div>
-        </div>
+        <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
 
         <div className="page-body" style={{ maxWidth: 900 }}>
           {error && (
@@ -433,11 +432,20 @@ export default function VideoProjectPage() {
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     {approvedCount === total
-                      ? 'Your video is ready to export.'
+                      ? 'Ready to compile into a full video.'
                       : `${total - approvedCount} scene${total - approvedCount !== 1 ? 's' : ''} still need a video clip.`}
                   </div>
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--brand)' }}>{pct}%</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {approvedCount === total && total > 0 && (
+                    <Link href={`/video-projects/${id}/compile`}>
+                      <button style={{ padding: '8px 16px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        Compile video →
+                      </button>
+                    </Link>
+                  )}
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--brand)' }}>{pct}%</div>
+                </div>
               </div>
               <div className="progress-bar-wrap">
                 <div className="progress-bar-fill" style={{ width: `${pct}%` }} />

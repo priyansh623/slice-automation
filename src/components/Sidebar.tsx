@@ -86,32 +86,38 @@ export default function Sidebar() {
         <Link href="/video-projects" title="Projects" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
           <span style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 44,
-            height: 44,
+            gap: 3,
+            width: 52,
+            padding: '6px 0',
             borderRadius: 10,
             background: projectsActive ? '#F0F0EC' : 'transparent',
             cursor: 'pointer',
             transition: 'background 0.12s',
           }}>
             <IconGrid active={projectsActive} />
+            <span style={{ fontSize: 10, fontWeight: 500, color: projectsActive ? '#111113' : '#75757C', letterSpacing: '0.01em' }}>Projects</span>
           </span>
         </Link>
 
         <Link href="/admin/settings" title="Settings" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
           <span style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 44,
-            height: 44,
+            gap: 3,
+            width: 52,
+            padding: '6px 0',
             borderRadius: 10,
             background: settingsActive ? '#F0F0EC' : 'transparent',
             cursor: 'pointer',
             transition: 'background 0.12s',
           }}>
             <IconSettings active={settingsActive} />
+            <span style={{ fontSize: 10, fontWeight: 500, color: settingsActive ? '#111113' : '#75757C', letterSpacing: '0.01em' }}>Settings</span>
           </span>
         </Link>
       </nav>

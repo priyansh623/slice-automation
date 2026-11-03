@@ -12,6 +12,7 @@ interface VideoProject {
   createdAt: number;
   approvedSceneCount: number;
   totalSceneCount: number;
+  ownerEmail: string | null;
 }
 
 function IconPlus() {
@@ -149,12 +150,12 @@ export default function VideoProjectsPage() {
             {/* Table header */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '2.4fr 1.2fr 1.5fr 1.3fr',
+              gridTemplateColumns: '2.4fr 1.2fr 1.4fr 1.2fr 1.2fr',
               padding: '12px 24px',
               borderBottom: '1px solid var(--border)',
               gap: 16,
             }}>
-              {['Project', 'Created', 'Progress', 'Status'].map((label) => (
+              {['Project', 'Owner', 'Created', 'Progress', 'Status'].map((label) => (
                 <span key={label} style={{
                   fontSize: 11,
                   fontWeight: 500,
@@ -172,7 +173,7 @@ export default function VideoProjectsPage() {
               <Link key={p.id} href={`/video-projects/${p.id}`} style={{ display: 'block', textDecoration: 'none' }}>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '2.4fr 1.2fr 1.5fr 1.3fr',
+                  gridTemplateColumns: '2.4fr 1.2fr 1.4fr 1.2fr 1.2fr',
                   padding: '14px 24px',
                   gap: 16,
                   alignItems: 'center',
@@ -190,6 +191,20 @@ export default function VideoProjectsPage() {
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
                       {p.originalScript.slice(0, 60).replace(/\n/g, ' ')}…
                     </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {p.ownerEmail ? (
+                      <>
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--brand)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {p.ownerEmail[0].toUpperCase()}
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.ownerEmail.split('@')[0]}
+                        </span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}

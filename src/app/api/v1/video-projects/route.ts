@@ -27,6 +27,7 @@ export async function GET(): Promise<NextResponse> {
     ...p,
     approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
     totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
+    ownerEmail: user.email ?? null,
   })));
 }
 

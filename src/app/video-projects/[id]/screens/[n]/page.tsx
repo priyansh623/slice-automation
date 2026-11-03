@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import FeedbackModal from '@/components/FeedbackModal';
+import ProjectHeader from '@/components/ProjectHeader';
 
 interface PromptVersion {
   id: number;
@@ -288,89 +289,84 @@ export default function ScreenPage() {
   );
   const hasReadyVideo = generations.some((g) => g.generation.status === 'completed');
 
+  const currentScreenNum = parseInt(n, 10);
+
   if (!project) {
     return (
-      <AppShell>
-        <div className="page-body" style={{ maxWidth: 960 }}>
-          <div className="skeleton" style={{ height: 28, width: '50%', marginBottom: 16 }} />
-          <div className="skeleton" style={{ height: 320 }} />
+      <AppShell fullscreen>
+        <div className="page-header">
+          <div className="skeleton" style={{ height: 20, width: 200 }} />
+        </div>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <div style={{ width: 252, borderRight: '1px solid var(--border)', flexShrink: 0 }} />
+          <div style={{ flex: 1, padding: '24px 32px' }}>
+            <div className="skeleton" style={{ height: 28, width: '50%', marginBottom: 16 }} />
+            <div className="skeleton" style={{ height: 320 }} />
+          </div>
         </div>
       </AppShell>
     );
   }
 
-  return (
-    <AppShell>
-      <div className="page-header">
-        <div className="page-header-left">
-          <div className="page-breadcrumb">
-            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
-            <span>›</span>
-            <Link href={`/video-projects/${id}`} style={{ color: 'var(--text-muted)' }}>{project.name}</Link>
-            <span>›</span>
-            <span style={{ color: 'var(--text-primary)' }}>Scene {n}</span>
-          </div>
-          <h1 className="page-title">Scene {n}</h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {prevScreen && (
-            <Link href={`/video-projects/${id}/screens/${prevScreen.screenNumber}`}>
-              <button className="btn btn-secondary btn-sm">← Scene {prevScreen.screenNumber}</button>
-            </Link>
-          )}
-          {nextScreen && (
-            <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-              <button className="btn btn-secondary btn-sm">Scene {nextScreen.screenNumber} →</button>
-            </Link>
-          )}
-          {!nextScreen && (
-            <Link href={`/video-projects/${id}`}>
-              <button className="btn btn-secondary btn-sm">All scenes →</button>
-            </Link>
-          )}
-        </div>
-      </div>
+  const allScenesApproved = project.screens.length > 0 && project.screens.every((s) => !!s.approvedGenerationId);
+  const projectSteps = [
+    { label: 'Breakdown', status: 'complete' as const },
+    { label: 'Scenes', status: allScenesApproved ? ('complete' as const) : ('active' as const) },
+    { label: 'Compile', status: allScenesApproved ? ('active' as const) : ('pending' as const) },
+  ];
 
-      <div className="page-body">
+  return (
+    <AppShell fullscreen>
+      {/* ── Project header with step indicator ───────────────────────────── */}
+      <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
+
+      {/* ── Full-height workspace ───────────────────────────────────────────── */}
+      <div className="workspace-shell">
+
+        {/* ── Scene list navigator ───────────────────────────────────────── */}
+        <nav className="scene-nav">
+          <div className="scene-nav-header">Scenes</div>
+          {project.screens.map((s) => {
+            const isActive = s.screenNumber === currentScreenNum;
+            return (
+              <Link
+                key={s.id}
+                href={`/video-projects/${id}/screens/${s.screenNumber}`}
+                className={`scene-nav-item${isActive ? ' scene-nav-item--active' : ''}`}
+              >
+                <div className="scene-nav-item-top">
+                  <span className="scene-nav-item-number">Scene {s.screenNumber}</span>
+                  {s.approvedGenerationId ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, color: '#15803D' }}>
+                      <IconCheck /> Done
+                    </span>
+                  ) : null}
+                </div>
+                {s.dialogue ? (
+                  <div className="scene-nav-item-dialogue">{s.dialogue}</div>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* ── Main work area ─────────────────────────────────────────────── */}
+        <div className="workspace-main">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Scene {n}</h1>
+            {screen?.dialogue && (
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>· {screen.dialogue.slice(0, 60)}{screen.dialogue.length > 60 ? '…' : ''}</span>
+            )}
+          </div>
+
         {error && (
-          <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div className="alert alert-error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span>{error}</span>
             <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
           </div>
         )}
 
-        <div className="screen-workspace">
-          {/* ── Left context panel ─────────────────────────────────────────── */}
-          <div className="screen-context-panel">
-            {project.baseImagePreviewUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={project.baseImagePreviewUrl} alt="Character reference" className="ref-image" />
-            ) : (
-              <div className="ref-image-placeholder">
-                <span style={{ fontSize: 12 }}>No reference image</span>
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>Character reference image</div>
-
-            {screen?.dialogue && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  Scene {n} dialogue
-                </div>
-                <div className="dialogue-box">{screen.dialogue}</div>
-              </div>
-            )}
-
-            {isApproved && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0' }}>
-                <IconCheck />
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#15803D' }}>Scene approved</span>
-              </div>
-            )}
-          </div>
-
-          {/* ── Main work area ─────────────────────────────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* ── Phase 1: No prompt yet ──── */}
             {promptHistory.length === 0 && (
@@ -464,18 +460,23 @@ export default function ScreenPage() {
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <textarea
-                          className="form-textarea"
-                          placeholder="Tell Claude what to change…"
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Request a change…"
                           value={feedback}
                           onChange={(e) => { setFeedback(e.target.value); setProjectScopePending(false); }}
-                          rows={2}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !writingPrompt) handleWritePrompt(); }}
                           style={{ flex: 1, marginBottom: 0 }}
                         />
-                        <button className="btn btn-secondary" onClick={handleWritePrompt} disabled={writingPrompt} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          onClick={handleWritePrompt}
+                          disabled={writingPrompt}
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 13, fontWeight: 500, cursor: writingPrompt ? 'not-allowed' : 'pointer', opacity: writingPrompt ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                        >
                           <IconSparkle />
-                          {writingPrompt ? 'Revising…' : 'Revise with Claude'}
+                          {writingPrompt ? 'Revising…' : 'Revise'}
                         </button>
                       </div>
 
@@ -584,7 +585,7 @@ export default function ScreenPage() {
                                     : 'Approving this clip marks Scene ' + n + ' as done.'}
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <button className="btn btn-primary" onClick={() => handleApprove(g.id)} disabled={approving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <button onClick={() => handleApprove(g.id)} disabled={approving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 500, cursor: approving ? 'not-allowed' : 'pointer', opacity: approving ? 0.6 : 1 }}>
                                     <IconCheck />
                                     {approving ? 'Approving…' : 'Approve this clip'}
                                   </button>
