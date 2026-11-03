@@ -29,6 +29,7 @@ export default function ReviewPage() {
   const [compilation, setCompilation] = useState<Compilation | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const [error, setError] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -147,29 +148,39 @@ export default function ReviewPage() {
                 ) : (
                   <div className="skeleton" style={{ height: 320, borderRadius: 12 }} />
                 )}
+                {downloadError && (
+                  <div className="alert alert-error" style={{ marginBottom: 8, fontSize: 13 }}>
+                    {downloadError}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
-                  {signedUrl && (
-                    <button
-                      disabled={downloading}
-                      onClick={async () => {
-                        setDownloading(true);
-                        try {
-                          const blob = await fetch(signedUrl).then((r) => r.blob());
-                          const objectUrl = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = objectUrl;
-                          a.download = `compilation-${cid}.mp4`;
-                          a.click();
-                          URL.revokeObjectURL(objectUrl);
-                        } finally {
-                          setDownloading(false);
-                        }
-                      }}
-                      style={{ padding: '10px 20px', background: downloading ? 'var(--border)' : '#111113', color: downloading ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: downloading ? 'not-allowed' : 'pointer' }}
-                    >
-                      {downloading ? 'Downloading…' : 'Download video'}
-                    </button>
-                  )}
+                  <button
+                    disabled={downloading}
+                    onClick={async () => {
+                      setDownloading(true);
+                      setDownloadError('');
+                      try {
+                        const res = await fetch(`/api/v1/video-projects/${id}/compilations/${cid}/download`);
+                        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                        const blob = await res.blob();
+                        const objectUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = objectUrl;
+                        a.download = `compilation-${cid}.mp4`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                      } catch {
+                        setDownloadError('Download failed — please try again.');
+                      } finally {
+                        setDownloading(false);
+                      }
+                    }}
+                    style={{ padding: '10px 20px', background: downloading ? 'var(--border)' : '#111113', color: downloading ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: downloading ? 'not-allowed' : 'pointer' }}
+                  >
+                    {downloading ? 'Downloading…' : 'Download video'}
+                  </button>
                   <Link href={`/video-projects/${id}/compile`}>
                     <button className="btn btn-secondary">Compile another version</button>
                   </Link>
