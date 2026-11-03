@@ -20,6 +20,12 @@ interface Compilation {
   outputStoragePath?: string | null;
 }
 
+function formatTime(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -31,6 +37,10 @@ export default function ReviewPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [error, setError] = useState('');
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function fetchSignedUrl(compilationId: string) {
@@ -60,7 +70,6 @@ export default function ReviewPage() {
     loadCompilation();
   }, [id, cid]);
 
-  // Poll while pending/processing
   useEffect(() => {
     if (!compilation) return;
     if (compilation.status === 'pending' || compilation.status === 'processing') {
@@ -74,6 +83,21 @@ export default function ReviewPage() {
   }, [compilation?.status]);
 
   const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
+  const tone = tones[(project?.id ?? 0) % tones.length];
+
+  const numScenes = project?.screens.length ?? 0;
+  const activeSegment = duration > 0 && numScenes > 0
+    ? Math.min(Math.floor((currentTime / duration) * numScenes), numScenes - 1)
+    : 0;
+
+  const currentScene = project?.screens[activeSegment] ?? null;
+
+  function togglePlay() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play(); setIsPlaying(true); }
+    else { v.pause(); setIsPlaying(false); }
+  }
 
   if (!project || !cid) {
     return (
@@ -88,147 +112,228 @@ export default function ReviewPage() {
     );
   }
 
-  const projectSteps = [
-    { label: 'Breakdown', status: 'complete' as const },
-    { label: 'Scenes', status: 'complete' as const },
-    { label: 'Compile', status: 'active' as const },
-  ];
-
   const isProcessing = compilation?.status === 'pending' || compilation?.status === 'processing';
   const isFailed = compilation?.status === 'failed';
   const isCompleted = compilation?.status === 'completed';
+
+  const projectSteps = [
+    { label: 'Script', status: 'complete' as const },
+    { label: 'Breakdown', status: 'complete' as const },
+    { label: 'Scenes', status: 'complete' as const },
+    { label: 'Compile', status: 'complete' as const },
+    { label: 'Review', status: 'active' as const },
+  ];
 
   return (
     <AppShell>
       <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
 
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 80px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 18,
+          padding: '24px 32px',
+        }}>
           {error && (
-            <div className="alert alert-error">{error}</div>
+            <div className="alert alert-error" style={{ width: '100%', maxWidth: 360 }}>{error}</div>
           )}
 
           {/* Video player */}
           <div style={{
             position: 'relative',
-            background: '#000',
-            borderRadius: 14,
-            overflow: 'hidden',
             height: 'min(62vh, 640px)',
             aspectRatio: '9/16',
-            margin: '0 auto',
+            borderRadius: 14,
+            overflow: 'hidden',
+            backgroundColor: tone,
+            flexShrink: 0,
           }}>
+            {/* Scene badge */}
+            {isCompleted && currentScene && (
+              <div style={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                zIndex: 10,
+                background: 'rgba(0,0,0,0.55)',
+                backdropFilter: 'blur(6px)',
+                borderRadius: 8,
+                padding: '5px 10px',
+                font: '500 12px/1.3 Satoshi',
+                color: '#fff',
+                pointerEvents: 'none',
+              }}>
+                Scene {currentScene.screenNumber}
+                {currentScene.approvedGenerationId ? ` · Gen ${currentScene.approvedGenerationId}` : ''}
+              </div>
+            )}
+
             {isProcessing ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.2)', borderTop: '3px solid #fff', animation: 'spin 1s linear infinite' }} />
-                <div style={{ font: '500 13px/1 Satoshi', color: 'rgba(255,255,255,0.7)' }}>Compiling your video…</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(0,0,0,0.12)', borderTop: '3px solid rgba(0,0,0,0.5)', animation: 'spin 1s linear infinite' }} />
+                <div style={{ font: '500 13px/1 Satoshi', color: 'rgba(0,0,0,0.6)' }}>Compiling your video…</div>
               </div>
             ) : isFailed ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <div style={{ font: '400 14px/1.4 Satoshi', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>Compilation failed</div>
+                <div style={{ font: '400 14px/1.4 Satoshi', color: 'rgba(0,0,0,0.5)', textAlign: 'center' }}>Compilation failed</div>
               </div>
             ) : signedUrl ? (
               <video
+                ref={videoRef}
                 src={signedUrl}
-                controls
                 style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: '#1A1A1C' }} />
+              <div style={{ width: '100%', height: '100%' }} />
             )}
           </div>
 
-          {/* Scene strip */}
-          {project.screens.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-              {project.screens.map((s, i) => (
-                <Link key={s.id} href={`/video-projects/${id}/screens/${s.screenNumber}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
-                  <div style={{
-                    width: 44,
-                    height: 66,
-                    borderRadius: 8,
-                    background: tones[i % tones.length],
+          {/* Segment strip */}
+          {numScenes > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: 2,
+              height: 28,
+              width: 'min(calc(62vh * 9/16), 360px)',
+              flexShrink: 0,
+            }}>
+              {project.screens.map((s, i) => {
+                const isActive = i === activeSegment && isCompleted;
+                return (
+                  <div key={s.id} style={{
+                    flex: 1,
+                    borderRadius: 4,
+                    background: isActive ? '#6C47FF' : '#D6D6D1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    font: '700 11px/1 Satoshi',
-                    color: 'rgba(0,0,0,0.5)',
-                    border: '1.5px solid transparent',
-                    cursor: 'pointer',
-                  }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'transparent')}
-                  >
+                    font: '500 11px/1 Satoshi',
+                    color: isActive ? '#fff' : '#5E5E65',
+                    cursor: 'default',
+                    transition: 'background 0.2s',
+                  }}>
                     {i + 1}
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {downloadError && (
-            <div className="alert alert-error" style={{ fontSize: 13 }}>{downloadError}</div>
-          )}
+          {/* Control row */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            width: 'min(calc(62vh * 9/16), 360px)',
+            flexShrink: 0,
+          }}>
+            {/* Play/pause button */}
+            <button
+              onClick={togglePlay}
+              disabled={!signedUrl}
+              style={{
+                width: 38,
+                height: 38,
+                flexShrink: 0,
+                borderRadius: '50%',
+                background: signedUrl ? '#6C47FF' : '#E4E4E0',
+                color: signedUrl ? '#fff' : '#A3A3A9',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: signedUrl ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <i className={isPlaying ? 'icon-pause' : 'icon-play'} style={{ fontSize: 16 }} />
+            </button>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 8 }}>
+            {/* Time */}
+            <span style={{ font: '500 13px/1 Satoshi', color: '#5E5E65', whiteSpace: 'nowrap' }}>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+
+            <div style={{ flex: 1 }} />
+
+            {/* Fix this scene */}
             {isFailed ? (
               <Link href={`/video-projects/${id}/compile`} style={{ textDecoration: 'none' }}>
-                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 13px/1 Satoshi', cursor: 'pointer' }}>
-                  <i className="icon-rotate-ccw" style={{ fontSize: 14 }} />
+                <button style={{
+                  height: 36, padding: '0 14px', borderRadius: 9,
+                  background: 'transparent', border: '1px solid #D0D0CC',
+                  font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113',
+                }}>
+                  <i className="icon-rotate-ccw" style={{ fontSize: 13, marginRight: 6 }} />
                   Try again
                 </button>
               </Link>
             ) : (
-              <>
-                <Link href={`/video-projects/${id}/screens/1`} style={{ textDecoration: 'none', flex: 1 }}>
-                  <button style={{ width: '100%', height: 40, borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113' }}>
-                    Fix this scene
-                  </button>
-                </Link>
-                <button
-                  disabled={downloading || !isCompleted}
-                  onClick={async () => {
-                    setDownloading(true);
-                    setDownloadError('');
-                    try {
-                      const res = await fetch(`/api/v1/video-projects/${id}/compilations/${cid}/download`);
-                      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-                      const blob = await res.blob();
-                      const objectUrl = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = objectUrl;
-                      a.download = `compilation-${cid}.mp4`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-                    } catch {
-                      setDownloadError('Download failed — please try again.');
-                    } finally {
-                      setDownloading(false);
-                    }
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    height: 40,
-                    padding: '0 18px',
-                    borderRadius: 9,
-                    background: downloading || !isCompleted ? '#E4E4E0' : '#6C47FF',
-                    color: downloading || !isCompleted ? '#A3A3A9' : '#fff',
-                    border: 'none',
-                    font: '700 13px/1 Satoshi',
-                    cursor: downloading || !isCompleted ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  <i className="icon-download" style={{ fontSize: 14 }} />
-                  {downloading ? 'Downloading…' : 'Download'}
+              <Link href={`/video-projects/${id}/screens/1`} style={{ textDecoration: 'none' }}>
+                <button style={{
+                  height: 36, padding: '0 14px', borderRadius: 9,
+                  background: 'transparent', border: '1px solid #D0D0CC',
+                  font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113',
+                }}>
+                  Fix this scene
                 </button>
-              </>
+              </Link>
             )}
+
+            {/* Download */}
+            <button
+              disabled={downloading || !isCompleted}
+              onClick={async () => {
+                setDownloading(true);
+                setDownloadError('');
+                try {
+                  const res = await fetch(`/api/v1/video-projects/${id}/compilations/${cid}/download`);
+                  if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                  const blob = await res.blob();
+                  const objectUrl = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = objectUrl;
+                  a.download = `compilation-${cid}.mp4`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                } catch {
+                  setDownloadError('Download failed — please try again.');
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                height: 36,
+                padding: '0 14px',
+                borderRadius: 9,
+                background: downloading || !isCompleted ? '#E4E4E0' : '#6C47FF',
+                color: downloading || !isCompleted ? '#A3A3A9' : '#fff',
+                border: 'none',
+                font: '700 13px/1 Satoshi',
+                cursor: downloading || !isCompleted ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <i className="icon-download" style={{ fontSize: 14 }} />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
           </div>
+
+          {downloadError && (
+            <div className="alert alert-error" style={{ width: '100%', maxWidth: 360, fontSize: 13 }}>{downloadError}</div>
+          )}
         </div>
       </div>
     </AppShell>

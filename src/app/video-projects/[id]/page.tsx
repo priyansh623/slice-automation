@@ -399,9 +399,11 @@ export default function VideoProjectPage() {
 
     const allScenesApproved = approvedCount === total && total > 0;
     const projectSteps = [
-      { label: 'Breakdown', status: 'complete' as const },
-      { label: 'Scenes', status: allScenesApproved ? ('complete' as const) : ('active' as const) },
-      { label: 'Compile', status: allScenesApproved ? ('active' as const) : ('pending' as const) },
+      { label: 'Script', status: 'complete' as const },
+      { label: 'Breakdown', status: 'active' as const },
+      { label: 'Scenes', status: allScenesApproved ? ('complete' as const) : ('pending' as const) },
+      { label: 'Compile', status: 'pending' as const },
+      { label: 'Review', status: 'pending' as const },
     ];
 
     return (

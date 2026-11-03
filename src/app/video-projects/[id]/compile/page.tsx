@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
@@ -11,6 +11,7 @@ interface Screen {
   screenNumber: number;
   dialogue: string;
   approvedGenerationId: number | null;
+  durationSeconds: number | null;
 }
 
 interface VideoProject {
@@ -29,27 +30,55 @@ interface Compilation {
 
 export default function CompilePage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [compilations, setCompilations] = useState<Compilation[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function loadData() {
+    const [projRes, compsRes] = await Promise.all([
+      fetch(`/api/v1/video-projects/${id}`),
+      fetch(`/api/v1/video-projects/${id}/compilations`),
+    ]);
+    if (projRes.ok) setProject(await projRes.json());
+    if (compsRes.ok) {
+      const comps = await compsRes.json();
+      setCompilations(Array.isArray(comps) ? comps : []);
+    }
+  }
+
+  useEffect(() => { loadData(); }, [id]);
+
+  const latestComp = compilations[0] ?? null;
+  const isRunning = latestComp?.status === 'pending' || latestComp?.status === 'processing';
+  const isDone = latestComp?.status === 'completed';
+  const isFailed = latestComp?.status === 'failed';
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/v1/video-projects/${id}`).then((r) => r.json()),
-      fetch(`/api/v1/video-projects/${id}/compilations`).then((r) => r.json()),
-    ]).then(([proj, comps]) => {
-      setProject(proj);
-      setCompilations(Array.isArray(comps) ? comps : []);
-    });
-  }, [id]);
+    if (!isRunning) {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      return;
+    }
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/v1/video-projects/${id}/compilations`);
+      if (res.ok) {
+        const comps = await res.json();
+        setCompilations(Array.isArray(comps) ? comps : []);
+      }
+    }, 5000);
+    return () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+  }, [isRunning, id]);
 
   async function handleCompile() {
     if (!project) return;
     const approvedScenes = project.screens.filter((s) => s.approvedGenerationId);
     if (approvedScenes.length === 0) {
       setError('No approved scenes to compile.');
+      setShowModal(false);
       return;
     }
     setSubmitting(true);
@@ -64,14 +93,16 @@ export default function CompilePage() {
         })),
       }),
     });
+    setShowModal(false);
     if (!res.ok) {
       const d = await res.json();
       setError(d.error ?? 'Failed to start compilation');
       setSubmitting(false);
       return;
     }
-    const compilation: Compilation = await res.json();
-    router.push(`/video-projects/${id}/review?cid=${compilation.id}`);
+    const newComp: Compilation = await res.json();
+    setCompilations((prev) => [newComp, ...prev]);
+    setSubmitting(false);
   }
 
   if (!project) {
@@ -88,10 +119,22 @@ export default function CompilePage() {
   const totalCount = project.screens.length;
   const allApproved = approvedCount === totalCount && totalCount > 0;
 
+  const pageTitle = isRunning
+    ? 'Compiling your video'
+    : isDone
+    ? 'Video ready'
+    : !allApproved
+    ? 'Approve every scene to compile'
+    : 'Compile video';
+
+  const unapprovedScenes = project.screens.filter((s) => !s.approvedGenerationId);
+
   const projectSteps = [
+    { label: 'Script', status: 'complete' as const },
     { label: 'Breakdown', status: 'complete' as const },
     { label: 'Scenes', status: allApproved ? ('complete' as const) : ('active' as const) },
     { label: 'Compile', status: 'active' as const },
+    { label: 'Review', status: 'pending' as const },
   ];
 
   const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
@@ -105,10 +148,10 @@ export default function CompilePage() {
           {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 44 }}>
             <h1 style={{ margin: 0, font: '700 26px/1.2 Satoshi', letterSpacing: '-0.02em' }}>
-              Compile video
+              {pageTitle}
             </h1>
-            {compilations.some((c) => c.status === 'completed') && (
-              <Link href={`/video-projects/${id}/review?cid=${compilations.find(c => c.status === 'completed')!.id}`} style={{ textDecoration: 'none' }}>
+            {isDone && latestComp && (
+              <Link href={`/video-projects/${id}/review?cid=${latestComp.id}`} style={{ textDecoration: 'none' }}>
                 <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}>
                   <i className="icon-play" style={{ fontSize: 14 }} />
                   Review video
@@ -117,73 +160,124 @@ export default function CompilePage() {
             )}
           </div>
 
+          {!allApproved && unapprovedScenes.length > 0 && (
+            <div style={{ marginTop: 12, font: '400 14px/1.5 Satoshi', color: '#5E5E65' }}>
+              Waiting on Scene {unapprovedScenes.map(s => s.screenNumber).join(', ')}.
+            </div>
+          )}
+
           {error && (
             <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>
           )}
 
-          {/* Scene list */}
-          <div style={{ marginTop: 32, borderTop: '1px solid #ECECE8' }}>
-            {project.screens.map((s, i) => (
-              <div key={s.id} style={{
-                display: 'grid',
-                gridTemplateColumns: '26px minmax(0,1fr) auto',
-                gap: 16,
-                alignItems: 'center',
-                padding: '12px 0',
-                borderBottom: '1px solid #F0F0EE',
-              }}>
-                <span style={{
-                  width: 26,
-                  height: 42,
-                  borderRadius: 5,
-                  backgroundColor: tones[i % tones.length],
-                  display: 'block',
-                  flexShrink: 0,
-                }} />
-                <div>
-                  <div style={{ font: '700 14px/1.3 Satoshi' }}>Scene {s.screenNumber}</div>
-                  <div style={{ font: '400 13px/1.4 Satoshi', color: '#75757C', marginTop: 2 }}>
-                    {s.approvedGenerationId ? 'Generation approved' : 'No approved generation'}
-                    {s.dialogue ? ` · ${s.dialogue.slice(0, 50)}${s.dialogue.length > 50 ? '…' : ''}` : ''}
-                  </div>
-                </div>
-                <Link href={`/video-projects/${id}/screens/${s.screenNumber}`} style={{ textDecoration: 'none' }}>
-                  <button style={{ height: 30, padding: '0 12px', borderRadius: 8, background: '#fff', border: '1px solid #E4E4E0', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>
-                    {s.approvedGenerationId ? 'Change' : 'Approve'}
-                  </button>
-                </Link>
+          {/* Running state: progress bar */}
+          {isRunning && (
+            <div style={{ marginTop: 24, padding: '16px 20px', background: '#fff', border: '1px solid #ECECE8', borderRadius: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ font: '500 13px/1 Satoshi', color: '#111113' }}>
+                  {latestComp?.status === 'processing' ? 'Processing…' : 'Queued…'}
+                </span>
               </div>
-            ))}
-          </div>
-
-          {!allApproved && (
-            <div style={{ marginTop: 16, font: '400 14px/1.5 Satoshi', color: '#5E5E65' }}>
-              {approvedCount}/{totalCount} scenes approved. Approve all scenes before compiling.
+              <div style={{ height: 6, borderRadius: 3, background: '#EFEFEC', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: '60%',
+                  background: '#6C47FF',
+                  borderRadius: 3,
+                  animation: 'indeterminate 1.5s ease-in-out infinite',
+                }} />
+              </div>
+              <style>{`
+                @keyframes indeterminate {
+                  0% { transform: translateX(-100%); width: 50%; }
+                  50% { transform: translateX(100%); width: 70%; }
+                  100% { transform: translateX(200%); width: 50%; }
+                }
+              `}</style>
             </div>
           )}
 
-          {/* Compile button */}
-          <div style={{ marginTop: 28, display: 'flex', gap: 10 }}>
-            <button
-              onClick={handleCompile}
-              disabled={submitting || !allApproved}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                height: 40,
-                padding: '0 18px',
-                borderRadius: 9,
-                background: allApproved && !submitting ? '#6C47FF' : '#E4E4E0',
-                color: allApproved && !submitting ? '#fff' : '#A3A3A9',
-                border: 'none',
-                font: '700 14px/1 Satoshi',
-                cursor: allApproved && !submitting ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {submitting ? 'Starting…' : 'Compile all scenes'}
-            </button>
+          {/* Scene list */}
+          <div style={{ marginTop: 32, borderTop: '1px solid #ECECE8' }}>
+            {project.screens.map((s, i) => {
+              const approved = !!s.approvedGenerationId;
+              const thumbBg = approved ? 'oklch(0.240 0 0)' : '#E9E9E5';
+              const subtitle = approved
+                ? `Gen ${s.approvedGenerationId}${s.durationSeconds ? ` · ${s.durationSeconds}s` : ''}`
+                : 'Pending approval';
+
+              return (
+                <div key={s.id} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '26px minmax(0,1fr) auto',
+                  gap: 16,
+                  alignItems: 'center',
+                  padding: '12px 0',
+                  borderBottom: '1px solid #F0F0EE',
+                }}>
+                  <span style={{
+                    width: 26,
+                    height: 42,
+                    borderRadius: 5,
+                    background: thumbBg,
+                    display: 'block',
+                    flexShrink: 0,
+                  }} />
+                  <div>
+                    <div style={{ font: '700 14px/1.3 Satoshi' }}>Scene {s.screenNumber}</div>
+                    <div style={{ font: '400 13px/1.4 Satoshi', color: '#75757C', marginTop: 2 }}>
+                      {subtitle}
+                    </div>
+                  </div>
+                  <Link href={`/video-projects/${id}/screens/${s.screenNumber}`} style={{ textDecoration: 'none' }}>
+                    <button style={{ height: 30, padding: '0 12px', borderRadius: 8, background: '#fff', border: '1px solid #E4E4E0', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>
+                      {approved ? 'Change' : 'Approve'}
+                    </button>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
+
+          {/* Compile button (only when all approved and no active compilation) */}
+          {allApproved && !isRunning && !isDone && (
+            <div style={{ marginTop: 28 }}>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 40,
+                  padding: '0 18px',
+                  borderRadius: 9,
+                  background: '#6C47FF',
+                  color: '#fff',
+                  border: 'none',
+                  font: '700 14px/1 Satoshi',
+                  cursor: 'pointer',
+                }}
+              >
+                Compile all scenes
+              </button>
+            </div>
+          )}
+
+          {/* Failed state */}
+          {isFailed && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ font: '400 14px/1.5 Satoshi', color: '#DC2626', marginBottom: 12 }}>
+                Compilation failed. Please try again.
+              </div>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: 'pointer' }}
+              >
+                <i className="icon-rotate-ccw" style={{ fontSize: 14 }} />
+                Try again
+              </button>
+            </div>
+          )}
 
           {/* Previous compilations */}
           {compilations.length > 0 && (
@@ -230,6 +324,53 @@ export default function CompilePage() {
           )}
         </div>
       </div>
+
+      {/* Compile confirm modal */}
+      {showModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24,
+        }}
+          onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
+        >
+          <div style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: '28px 28px 24px',
+            width: '100%',
+            maxWidth: 400,
+            boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+          }}>
+            <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>Compile the full video?</div>
+            <div style={{ font: '400 14px/1.55 Satoshi', color: '#5E5E65', marginBottom: 24 }}>
+              This will stitch your {approvedCount} approved scene{approvedCount !== 1 ? 's' : ''} into a single video. This may take a few minutes.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{ height: 38, padding: '0 16px', borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', font: '500 14px/1 Satoshi', cursor: 'pointer', color: '#111113' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCompile}
+                disabled={submitting}
+                style={{
+                  height: 38, padding: '0 16px', borderRadius: 9,
+                  background: submitting ? '#E4E4E0' : '#6C47FF',
+                  color: submitting ? '#A3A3A9' : '#fff',
+                  border: 'none', font: '700 14px/1 Satoshi',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {submitting ? 'Starting…' : 'Start compiling'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

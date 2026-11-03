@@ -15,25 +15,31 @@ interface VideoProject {
   ownerEmail: string | null;
 }
 
-type FilterKey = 'all' | 'setup' | 'in-progress' | 'complete';
+type StatusKey = 'breakdown-review' | 'in-production' | 'ready-to-compile';
+type FilterKey = 'all' | 'needs-attention' | 'in-production' | 'compiled';
 
 const FILTER_LABELS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'setup', label: 'Setup' },
-  { key: 'in-progress', label: 'In progress' },
-  { key: 'complete', label: 'Complete' },
+  { key: 'needs-attention', label: 'Needs attention' },
+  { key: 'in-production', label: 'In production' },
+  { key: 'compiled', label: 'Compiled' },
 ];
 
-function getStatus(p: VideoProject): FilterKey {
-  if (!p.breakdownApprovedAt) return 'setup';
-  if (p.totalSceneCount > 0 && p.approvedSceneCount === p.totalSceneCount) return 'complete';
-  return 'in-progress';
+function getStatus(p: VideoProject): StatusKey {
+  if (!p.breakdownApprovedAt) return 'breakdown-review';
+  if (p.totalSceneCount > 0 && p.approvedSceneCount === p.totalSceneCount) return 'ready-to-compile';
+  return 'in-production';
 }
 
-function getStatusPill(key: FilterKey) {
-  if (key === 'setup') return { label: 'Setup', bg: '#F0F0EC', fg: '#111113' };
-  if (key === 'complete') return { label: 'Complete', bg: '#EFEBFF', fg: '#6C47FF' };
-  return { label: 'In progress', bg: '#EFEBFF', fg: '#6C47FF' };
+function getFilterKey(status: StatusKey): FilterKey {
+  if (status === 'breakdown-review' || status === 'ready-to-compile') return 'needs-attention';
+  return 'in-production';
+}
+
+function getStatusPill(key: StatusKey) {
+  if (key === 'breakdown-review') return { label: 'Breakdown review', bg: '#F0F0EC', fg: '#111113' };
+  if (key === 'ready-to-compile') return { label: 'Ready to compile', bg: '#6C47FF', fg: '#FFFFFF' };
+  return { label: 'In production', bg: '#EFEFEC', fg: '#5E5E65' };
 }
 
 function initials(email: string | null): string {
@@ -71,11 +77,11 @@ export default function VideoProjectsPage() {
 
   const filtered = projects.filter((p) => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.ownerEmail || '').toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'all' || getStatus(p) === filter;
+    const matchFilter = filter === 'all' || getFilterKey(getStatus(p)) === filter;
     return matchSearch && matchFilter;
   });
 
-  const countFor = (key: FilterKey) => key === 'all' ? projects.length : projects.filter(p => getStatus(p) === key).length;
+  const countFor = (key: FilterKey) => key === 'all' ? projects.length : projects.filter(p => getFilterKey(getStatus(p)) === key).length;
 
   return (
     <AppShell>
@@ -194,7 +200,7 @@ export default function VideoProjectsPage() {
                     const statusKey = getStatus(p);
                     const pill = getStatusPill(statusKey);
                     const pct = p.totalSceneCount > 0 ? Math.round((p.approvedSceneCount / p.totalSceneCount) * 100) : 0;
-                    const barColor = statusKey === 'complete' ? '#6C47FF' : '#111113';
+                    const barColor = statusKey === 'ready-to-compile' ? '#6C47FF' : '#111113';
 
                     return (
                       <div

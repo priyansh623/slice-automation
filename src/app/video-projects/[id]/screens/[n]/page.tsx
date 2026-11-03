@@ -310,9 +310,11 @@ export default function ScreenPage() {
 
   const allScenesApproved = project.screens.length > 0 && project.screens.every((s) => !!s.approvedGenerationId);
   const projectSteps = [
+    { label: 'Script', status: 'complete' as const },
     { label: 'Breakdown', status: 'complete' as const },
     { label: 'Scenes', status: allScenesApproved ? ('complete' as const) : ('active' as const) },
     { label: 'Compile', status: allScenesApproved ? ('active' as const) : ('pending' as const) },
+    { label: 'Review', status: 'pending' as const },
   ];
 
   return (

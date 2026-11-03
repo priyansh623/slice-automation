@@ -10,6 +10,7 @@ interface Step {
 interface Props {
   projectId: number | string;
   projectName: string;
+  creatorName?: string;
   steps: Step[];
   statusLabel?: string;
   statusBg?: string;
@@ -18,13 +19,16 @@ interface Props {
 
 const STEP_URLS = (projectId: number | string) => [
   `/video-projects/${projectId}`,
+  `/video-projects/${projectId}`,
   `/video-projects/${projectId}/screens/1`,
   `/video-projects/${projectId}/compile`,
+  '',
 ];
 
 export default function ProjectHeader({
   projectId,
   projectName,
+  creatorName,
   steps,
   statusLabel,
   statusBg = '#F0F0EC',
@@ -45,7 +49,7 @@ export default function ProjectHeader({
       gap: 16,
       padding: '0 20px',
     }}>
-      {/* Left: back button + project name */}
+      {/* Left: back button + project name + creator subtitle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         <button
           onClick={() => router.push('/video-projects')}
@@ -74,6 +78,18 @@ export default function ProjectHeader({
           }}>
             {projectName}
           </div>
+          {creatorName && (
+            <div style={{
+              font: '400 12px/1.3 Satoshi',
+              color: '#75757C',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              marginTop: 2,
+            }}>
+              {creatorName}
+            </div>
+          )}
         </div>
       </div>
 
@@ -82,12 +98,12 @@ export default function ProjectHeader({
         {steps.map((step, i) => {
           const isComplete = step.status === 'complete';
           const isActive = step.status === 'active';
-          const canClick = isComplete;
+          const canClick = isComplete && !!urls[i];
 
-          const circleBg = isComplete ? '#111113' : isActive ? '#6C47FF' : '#F0F0EC';
-          const circleFg = isComplete || isActive ? '#fff' : '#9A9AA0';
+          const circleBg = isComplete ? '#EFEBFF' : isActive ? '#6C47FF' : '#EFEFEC';
+          const circleFg = isComplete ? '#6C47FF' : isActive ? '#fff' : '#9A9AA0';
           const labelFg = isActive ? '#111113' : isComplete ? '#111113' : '#9A9AA0';
-          const fontWeight = isActive ? '700' : '400';
+          const fontWeight = isActive ? '700' : isComplete ? '500' : '400';
 
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
