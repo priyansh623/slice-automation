@@ -35,8 +35,8 @@ export async function PUT(
     })
     .where(eq(videoProjects.id, projectId));
 
-  for (const s of body.screens) {
-    await db.insert(videoScreens).values({
+  await db.insert(videoScreens).values(
+    body.screens.map((s) => ({
       videoProjectId: projectId,
       screenNumber: s.screenNumber,
       dialogue: s.dialogue,
@@ -45,8 +45,8 @@ export async function PUT(
       durationNote: s.durationNote ?? null,
       createdAt: now,
       updatedAt: now,
-    });
-  }
+    })),
+  );
 
   const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
   const screens = allScreens.sort((a, b) => a.position - b.position);
