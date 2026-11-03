@@ -43,6 +43,9 @@ export async function POST(
     }
     if (err instanceof UnexpectedProviderError) {
       console.error(`[generate] Unexpected provider error (HTTP ${err.httpStatus}):`, err.message);
+      if (err.httpStatus === 429) {
+        return NextResponse.json({ error: 'Google Flow is rate-limited right now. Wait 30–60 seconds and try again.' }, { status: 429 });
+      }
       return NextResponse.json({ error: `Video provider returned an unexpected error (${err.httpStatus}).` }, { status: 502 });
     }
     const msg = err instanceof Error ? err.message : String(err);
