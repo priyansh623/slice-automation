@@ -156,15 +156,16 @@ export default function VideoProjectPage() {
   const [infoMsg, setInfoMsg] = useState('');
 
   async function load() {
-    const res = await fetch(`/api/v1/video-projects/${id}`);
+    const [res, tasksRes] = await Promise.all([
+      fetch(`/api/v1/video-projects/${id}`),
+      fetch(`/api/v1/video-projects/${id}/prompt-tasks`),
+    ]);
     const data = await res.json();
     setProject(data);
     setEditedScreens(data.screens ?? []);
     setApprovedScript(data.approvedScript ?? null);
     setLoading(false);
     setDirty(false);
-    // Also load prompt task statuses
-    const tasksRes = await fetch(`/api/v1/video-projects/${id}/prompt-tasks`);
     if (tasksRes.ok) {
       const tasksData = await tasksRes.json();
       setPromptTasks(tasksData.tasks ?? []);

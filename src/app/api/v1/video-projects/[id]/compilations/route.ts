@@ -6,7 +6,7 @@ import {
   videoScreens,
   videoGenerations,
 } from '@/db/schema.pg';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { requireUser, requireProjectOwner } from '@/lib/api-auth';
 
 export async function GET(
@@ -57,31 +57,32 @@ export async function POST(
     return NextResponse.json({ error: 'scenes array required' }, { status: 400 });
   }
 
-  // Validate all referenced screens + generations belong to this project
-  for (const scene of body.scenes) {
-    const screenRows = await db
-      .select({ videoProjectId: videoScreens.videoProjectId })
+  // Validate all referenced screens + generations belong to this project (batched)
+  const sceneScreenIds = body.scenes.map((s) => s.videoScreenId);
+  const sceneGenIds = body.scenes.map((s) => s.videoGenerationId);
+
+  const [validScreenRows, validGenRows] = await Promise.all([
+    db
+      .select({ id: videoScreens.id, videoProjectId: videoScreens.videoProjectId })
       .from(videoScreens)
-      .where(eq(videoScreens.id, scene.videoScreenId))
-      .limit(1);
-    if (!screenRows[0] || screenRows[0].videoProjectId !== projectId) {
+      .where(inArray(videoScreens.id, sceneScreenIds)),
+    db
+      .select({ id: videoGenerations.id, videoScreenId: videoGenerations.videoScreenId })
+      .from(videoGenerations)
+      .where(inArray(videoGenerations.id, sceneGenIds)),
+  ]);
+
+  const screenProjectMap = new Map(validScreenRows.map((s) => [s.id, s.videoProjectId]));
+  const genScreenMap = new Map(validGenRows.map((g) => [g.id, g.videoScreenId]));
+
+  for (const scene of body.scenes) {
+    if (screenProjectMap.get(scene.videoScreenId) !== projectId) {
       return NextResponse.json(
         { error: `Screen ${scene.videoScreenId} not found in this project` },
         { status: 422 },
       );
     }
-
-    const genRows = await db
-      .select({ videoScreenId: videoGenerations.videoScreenId })
-      .from(videoGenerations)
-      .where(
-        and(
-          eq(videoGenerations.id, scene.videoGenerationId),
-          eq(videoGenerations.videoScreenId, scene.videoScreenId),
-        ),
-      )
-      .limit(1);
-    if (!genRows[0]) {
+    if (genScreenMap.get(scene.videoGenerationId) !== scene.videoScreenId) {
       return NextResponse.json(
         { error: `Generation ${scene.videoGenerationId} not found for screen ${scene.videoScreenId}` },
         { status: 422 },

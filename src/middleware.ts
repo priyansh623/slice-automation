@@ -13,10 +13,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Always refresh the session so the route handler (or next page render) sees
-  // a valid, non-expired JWT.  Without this, API routes skip the refresh and
-  // getUser() in the route handler returns null for an expired-but-refreshable
-  // token, producing a spurious 401 Unauthorized.
+  // API routes own their own auth via requireUser() / getUser() in the route
+  // handler. The route handler's createClient() (using Next.js cookies()) handles
+  // token refresh on its own — no middleware getUser() round-trip needed.
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next({ request });
+  }
+
+  // For page routes: refresh the session and redirect to login if unauthenticated.
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -40,13 +44,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // For API routes: return the (possibly token-refreshed) response without
-  // redirecting — the route handler owns its own 401 response.
-  if (pathname.startsWith('/api/')) {
-    return supabaseResponse;
-  }
-
-  // For page routes: redirect to login when not authenticated.
   if (!user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';

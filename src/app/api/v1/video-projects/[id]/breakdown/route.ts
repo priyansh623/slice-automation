@@ -126,33 +126,42 @@ export async function PUT(
       );
   }
 
-  // Upsert screens: update existing, insert new
-  for (const s of body.screens) {
-    const existing = existingByNumber.get(s.screenNumber);
-    if (existing) {
-      await db
-        .update(videoScreens)
-        .set({
-          dialogue: s.dialogue,
-          position: s.position ?? s.screenNumber,
-          durationSeconds: s.durationSeconds ?? null,
-          durationNote: s.durationNote ?? null,
-          updatedAt: now,
-        })
-        .where(eq(videoScreens.id, existing.id));
-    } else {
-      await db.insert(videoScreens).values({
-        videoProjectId: projectId,
-        screenNumber: s.screenNumber,
+  // Upsert screens: parallel updates + single batch insert for new rows
+  const toUpdate = body.screens.filter((s) => existingByNumber.has(s.screenNumber));
+  const toInsert = body.screens.filter((s) => !existingByNumber.has(s.screenNumber));
+
+  const ops: Promise<unknown>[] = toUpdate.map((s) => {
+    const existing = existingByNumber.get(s.screenNumber)!;
+    return db
+      .update(videoScreens)
+      .set({
         dialogue: s.dialogue,
         position: s.position ?? s.screenNumber,
         durationSeconds: s.durationSeconds ?? null,
         durationNote: s.durationNote ?? null,
-        createdAt: now,
         updatedAt: now,
-      });
-    }
+      })
+      .where(eq(videoScreens.id, existing.id));
+  });
+
+  if (toInsert.length > 0) {
+    ops.push(
+      db.insert(videoScreens).values(
+        toInsert.map((s) => ({
+          videoProjectId: projectId,
+          screenNumber: s.screenNumber,
+          dialogue: s.dialogue,
+          position: s.position ?? s.screenNumber,
+          durationSeconds: s.durationSeconds ?? null,
+          durationNote: s.durationNote ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      ),
+    );
   }
+
+  await Promise.all(ops);
 
   await db
     .update(videoProjects)
