@@ -401,7 +401,7 @@ export default function VideoProjectPage() {
         <div className="page-header">
           <div className="page-header-left">
             <div className="page-breadcrumb">
-              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Video Projects</Link>
+              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
               <span>›</span>
               <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
             </div>
@@ -635,7 +635,7 @@ export default function VideoProjectPage() {
         <div className="page-header">
           <div className="page-header-left">
             <div className="page-breadcrumb">
-              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Video Projects</Link>
+              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
               <span>›</span>
               <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
             </div>
@@ -712,7 +712,7 @@ export default function VideoProjectPage() {
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-breadcrumb">
-            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Video Projects</Link>
+            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
             <span>›</span>
             <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
           </div>

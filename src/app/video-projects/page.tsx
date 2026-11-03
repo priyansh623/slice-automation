@@ -14,6 +14,14 @@ interface VideoProject {
   totalSceneCount: number;
 }
 
+function IconPlus() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+  );
+}
+
 function IconFilm() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="40" height="40">
@@ -23,27 +31,58 @@ function IconFilm() {
   );
 }
 
-function IconPlus() {
+function StatusPill({ project }: { project: VideoProject }) {
+  const approved = project.approvedSceneCount;
+  const total = project.totalSceneCount;
+
+  if (!project.breakdownApprovedAt) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 10px', borderRadius: 999,
+        fontSize: 12, fontWeight: 500,
+        color: '#111113', background: '#F0F0EC',
+      }}>
+        Setup
+      </span>
+    );
+  }
+  if (total > 0 && approved === total) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 10px', borderRadius: 999,
+        fontSize: 12, fontWeight: 500,
+        color: '#6C47FF', background: '#EFEBFF',
+      }}>
+        Complete
+      </span>
+    );
+  }
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
-      <path d="M12 5v14M5 12h14"/>
-    </svg>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 999,
+      fontSize: 12, fontWeight: 500,
+      color: '#6C47FF', background: '#EFEBFF',
+    }}>
+      In progress
+    </span>
   );
 }
 
-function IconClock() {
+function ProgressBar({ approved, total }: { approved: number; total: number }) {
+  if (total === 0) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>;
+  const pct = Math.round((approved / total) * 100);
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
-      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-    </svg>
-  );
-}
-
-function IconArrow() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
-      <path d="M5 12h14M12 5l7 7-7 7"/>
-    </svg>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', maxWidth: 80 }}>
+        <div style={{ height: '100%', background: 'var(--brand)', borderRadius: 2, width: `${pct}%`, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+        {approved}/{total}
+      </span>
+    </div>
   );
 }
 
@@ -62,7 +101,9 @@ export default function VideoProjectsPage() {
     <AppShell>
       <div className="page-header">
         <div className="page-header-left">
-          <h1 className="page-title">Video Projects</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>
+            Projects
+          </h1>
         </div>
         <Link href="/video-projects/new">
           <button className="btn btn-primary">
@@ -72,14 +113,15 @@ export default function VideoProjectsPage() {
         </Link>
       </div>
 
-      <div className="page-body">
+      <div className="page-body" style={{ maxWidth: 1160 }}>
         {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div className="card" style={{ overflow: 'hidden' }}>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="card" style={{ padding: 20, height: 120 }}>
-                <div className="skeleton" style={{ height: 16, width: '60%', marginBottom: 12 }} />
-                <div className="skeleton" style={{ height: 12, width: '40%', marginBottom: 8 }} />
-                <div className="skeleton" style={{ height: 12, width: '30%' }} />
+              <div key={i} style={{ padding: '16px 24px', borderBottom: i < 3 ? '1px solid var(--border-row)' : 'none', display: 'flex', gap: 24 }}>
+                <div className="skeleton" style={{ height: 14, width: '30%' }} />
+                <div className="skeleton" style={{ height: 14, width: '12%', marginLeft: 'auto' }} />
+                <div className="skeleton" style={{ height: 14, width: '10%' }} />
+                <div className="skeleton" style={{ height: 14, width: '10%' }} />
               </div>
             ))}
           </div>
@@ -103,34 +145,60 @@ export default function VideoProjectsPage() {
         )}
 
         {!loading && projects.length > 0 && (
-          <div className="project-grid">
-            {projects.map((p) => (
-              <Link key={p.id} href={`/video-projects/${p.id}`}>
-                <div className="project-card">
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {/* Table header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '2.4fr 1.2fr 1.5fr 1.3fr',
+              padding: '12px 24px',
+              borderBottom: '1px solid var(--border)',
+              gap: 16,
+            }}>
+              {['Project', 'Created', 'Progress', 'Status'].map((label) => (
+                <span key={label} style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-muted)',
+                }}>
+                  {label}
+                </span>
+              ))}
+            </div>
+
+            {/* Table rows */}
+            {projects.map((p, i) => (
+              <Link key={p.id} href={`/video-projects/${p.id}`} style={{ display: 'block', textDecoration: 'none' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2.4fr 1.2fr 1.5fr 1.3fr',
+                  padding: '14px 24px',
+                  gap: 16,
+                  alignItems: 'center',
+                  borderBottom: i < projects.length - 1 ? '1px solid var(--border-row)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAF8')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
                   <div>
-                    <div className="project-card-name">{p.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {p.originalScript.slice(0, 72).replace(/\n/g, ' ')}…
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
+                      {p.originalScript.slice(0, 60).replace(/\n/g, ' ')}…
                     </div>
                   </div>
-                  <div className="project-card-meta">
-                    {p.breakdownApprovedAt ? (
-                      <span className="badge badge-green"><span className="dot dot-green" />Breakdown approved</span>
-                    ) : (
-                      <span className="badge badge-yellow">Breakdown pending</span>
-                    )}
-                    {p.totalSceneCount > 0 && (
-                      <span className="badge badge-gray" style={{ marginLeft: 6 }}>
-                        {p.approvedSceneCount}/{p.totalSceneCount} scenes
-                        {p.approvedSceneCount === p.totalSceneCount ? ' ✓' : ''}
-                      </span>
-                    )}
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-                      <IconClock /> {new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                    <span style={{ color: 'var(--brand)' }}><IconArrow /></span>
+                  <div>
+                    <ProgressBar approved={p.approvedSceneCount} total={p.totalSceneCount} />
+                  </div>
+                  <div>
+                    <StatusPill project={p} />
                   </div>
                 </div>
               </Link>

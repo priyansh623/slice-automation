@@ -304,7 +304,7 @@ export default function ScreenPage() {
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-breadcrumb">
-            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Video Projects</Link>
+            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
             <span>›</span>
             <Link href={`/video-projects/${id}`} style={{ color: 'var(--text-muted)' }}>{project.name}</Link>
             <span>›</span>
@@ -342,24 +342,16 @@ export default function ScreenPage() {
         <div className="screen-workspace">
           {/* ── Left context panel ─────────────────────────────────────────── */}
           <div className="screen-context-panel">
-            {/* Reference image */}
             {project.baseImagePreviewUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={project.baseImagePreviewUrl}
-                alt="Character reference"
-                className="ref-image"
-              />
+              <img src={project.baseImagePreviewUrl} alt="Character reference" className="ref-image" />
             ) : (
               <div className="ref-image-placeholder">
                 <span style={{ fontSize: 12 }}>No reference image</span>
               </div>
             )}
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-              Character reference image
-            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>Character reference image</div>
 
-            {/* Dialogue */}
             {screen?.dialogue && (
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
@@ -369,7 +361,6 @@ export default function ScreenPage() {
               </div>
             )}
 
-            {/* Approval status */}
             {isApproved && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0' }}>
                 <IconCheck />
@@ -385,9 +376,7 @@ export default function ScreenPage() {
             {promptHistory.length === 0 && (
               <>
                 <div className="stage-banner stage-banner-purple">
-                  <div className="stage-banner-icon">
-                    <IconSparkle />
-                  </div>
+                  <div className="stage-banner-icon"><IconSparkle /></div>
                   <div>
                     <div className="stage-banner-title">Step 3: Write the video prompt</div>
                     <div className="stage-banner-desc">
@@ -395,18 +384,12 @@ export default function ScreenPage() {
                     </div>
                   </div>
                 </div>
-
                 <div className="action-well">
                   <div className="action-well-title">Ready to write the prompt</div>
                   <div className="action-well-desc">
                     Click <strong>Write prompt</strong> and Claude will create a prompt for this scene. Nothing is sent to the video API yet. You review and generate separately.
                   </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleWritePrompt}
-                    disabled={writingPrompt}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-                  >
+                  <button className="btn btn-primary" onClick={handleWritePrompt} disabled={writingPrompt} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <IconSparkle />
                     {writingPrompt ? 'Writing prompt…' : 'Write prompt'}
                   </button>
@@ -417,7 +400,7 @@ export default function ScreenPage() {
             {/* ── Phase 2+: Has a prompt ─── */}
             {promptHistory.length > 0 && (
               <>
-                {/* Approved banner */}
+                {/* Approved banner - full width */}
                 {isApproved && (
                   <div className="stage-banner stage-banner-green">
                     <div className="stage-banner-icon"><IconCheck /></div>
@@ -430,194 +413,141 @@ export default function ScreenPage() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={handleUnapprove}
-                        disabled={approving}
-                        title="Revoke approval — keeps all generated clips and history"
-                      >
+                      <button className="btn btn-secondary btn-sm" onClick={handleUnapprove} disabled={approving} title="Revoke approval — keeps all generated clips and history">
                         {approving ? 'Updating…' : 'Unapprove'}
                       </button>
                       {nextScreen && (
                         <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>
-                            Scene {nextScreen.screenNumber} →
-                          </button>
+                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>Scene {nextScreen.screenNumber} →</button>
                         </Link>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Prompt editor */}
-                <div className="card">
-                  <div className="card-header">
-                    <div>
-                      <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        Prompt being sent to Google Flow
-                        {latestVersion && (
-                          <span className="badge badge-purple">v{latestVersion.version}</span>
-                        )}
-                      </div>
-                      <div className="card-subtitle">
-                        {latestVersion && currentPrompt !== latestVersion.promptText
-                          ? <span style={{ color: 'var(--warning-text, #92400e)', fontWeight: 500 }}>Unsaved changes - save before generating</span>
-                          : 'Exactly what will be sent to Google Flow'}
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={handleSaveManualEdit}
-                      disabled={isSaveDisabled}
-                      title={currentPrompt === latestVersion?.promptText ? 'No changes to save' : undefined}
-                    >
-                      {savingPrompt ? 'Saving…' : 'Save edit'}
-                    </button>
-                  </div>
-                  <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <textarea
-                      className="form-textarea"
-                      value={currentPrompt}
-                      onChange={(e) => setCurrentPrompt(e.target.value)}
-                      rows={9}
-                    />
+                {/* ── Side-by-side: prompt panel + video panel ─── */}
+                <div className="screen-panels">
 
-                    {/* Validation results */}
-                    {validation && (validation.issues.length > 0 || validation.warnings.length > 0) && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {validation.issues.map((issue, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, fontSize: 13, color: '#991B1B' }}>
-                            <span style={{ flexShrink: 0 }}>!</span>
-                            <span>{issue}</span>
-                          </div>
-                        ))}
-                        {validation.warnings.map((warn, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 13, color: '#92400E' }}>
-                            <span style={{ flexShrink: 0 }}>~</span>
-                            <span>{warn}</span>
-                          </div>
-                        ))}
+                  {/* Prompt panel */}
+                  <div className="card">
+                    <div className="card-header">
+                      <div>
+                        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          Prompt
+                          {latestVersion && <span className="badge badge-purple">v{latestVersion.version}</span>}
+                        </div>
+                        <div className="card-subtitle">
+                          {latestVersion && currentPrompt !== latestVersion.promptText
+                            ? <span style={{ color: 'var(--warning-text, #92400e)', fontWeight: 500 }}>Unsaved changes — save before generating</span>
+                            : 'Exactly what will be sent to Google Flow'}
+                        </div>
                       </div>
-                    )}
-
-                    {/* Revise with Claude */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <textarea
-                        className="form-textarea"
-                        placeholder="Tell Claude what to change (e.g. make it more energetic, show the product more clearly)..."
-                        value={feedback}
-                        onChange={(e) => { setFeedback(e.target.value); setProjectScopePending(false); }}
-                        rows={2}
-                        style={{ flex: 1, marginBottom: 0 }}
-                      />
-                      <button
-                        className="btn btn-secondary"
-                        onClick={handleWritePrompt}
-                        disabled={writingPrompt}
-                        style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
-                      >
-                        <IconSparkle />
-                        {writingPrompt ? 'Revising…' : 'Revise with Claude'}
+                      <button className="btn btn-secondary btn-sm" onClick={handleSaveManualEdit} disabled={isSaveDisabled} title={currentPrompt === latestVersion?.promptText ? 'No changes to save' : undefined}>
+                        {savingPrompt ? 'Saving…' : 'Save edit'}
                       </button>
                     </div>
+                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <textarea className="form-textarea" value={currentPrompt} onChange={(e) => setCurrentPrompt(e.target.value)} rows={9} />
 
-                    {/* Project-scope confirmation */}
-                    {projectScopePending && (
-                      <div style={{ padding: '12px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <p style={{ margin: 0, fontSize: 13, color: '#78350F', fontWeight: 500 }}>
-                          This looks like a project-wide change. Applying it will update the creative brief and may affect prompts for all scenes.
-                        </p>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={handleWritePrompt}
-                            disabled={writingPrompt}
-                          >
-                            Apply project-wide
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setProjectScopePending(false)}
-                          >
-                            Cancel
-                          </button>
+                      {validation && (validation.issues.length > 0 || validation.warnings.length > 0) && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {validation.issues.map((issue, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, fontSize: 13, color: '#991B1B' }}>
+                              <span style={{ flexShrink: 0 }}>!</span><span>{issue}</span>
+                            </div>
+                          ))}
+                          {validation.warnings.map((warn, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 13, color: '#92400E' }}>
+                              <span style={{ flexShrink: 0 }}>~</span><span>{warn}</span>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Version history toggle */}
-                    {promptHistory.length > 1 && (
-                      <div>
-                        <button
-                          className="collapsible-trigger"
-                          onClick={() => setShowHistory((v) => !v)}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-                            <polyline points="9 18 15 12 9 6"/>
-                          </svg>
-                          {promptHistory.length} prompt versions
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <textarea
+                          className="form-textarea"
+                          placeholder="Tell Claude what to change…"
+                          value={feedback}
+                          onChange={(e) => { setFeedback(e.target.value); setProjectScopePending(false); }}
+                          rows={2}
+                          style={{ flex: 1, marginBottom: 0 }}
+                        />
+                        <button className="btn btn-secondary" onClick={handleWritePrompt} disabled={writingPrompt} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <IconSparkle />
+                          {writingPrompt ? 'Revising…' : 'Revise with Claude'}
                         </button>
-                        {showHistory && (
-                          <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                            {promptHistory.map((v, idx) => (
-                              <div
-                                key={v.id}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 8,
-                                  borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
-                                  padding: '9px 14px',
-                                  background: activePromptVersionId === v.id ? 'var(--brand-light)' : 'transparent',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => { setCurrentPrompt(v.promptText); setActivePromptVersionId(v.id); }}
-                              >
-                                <span className="badge badge-purple">v{v.version}</span>
-                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                  {v.source === 'claude' ? 'Written by Claude' : 'Manual edit'}
-                                </span>
-                                {v.nlFeedback && (
-                                  <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-                                    · {v.nlFeedback}
-                                  </span>
-                                )}
-                                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
-                                  {new Date(v.createdAt).toLocaleString()}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* ── Phase 3: Generating ─── */}
-                {hasPending && (
-                  <div className="card">
-                    <div className="card-body">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                        <div className="pulse-dots">
-                          <div className="pulse-dot" />
-                          <div className="pulse-dot" />
-                          <div className="pulse-dot" />
+                      {projectScopePending && (
+                        <div style={{ padding: '12px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: '#78350F', fontWeight: 500 }}>
+                            This looks like a project-wide change. Applying it will update the creative brief and may affect prompts for all scenes.
+                          </p>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-primary btn-sm" onClick={handleWritePrompt} disabled={writingPrompt}>Apply project-wide</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setProjectScopePending(false)}>Cancel</button>
+                          </div>
                         </div>
-                        <span style={{ fontSize: 14, fontWeight: 600 }}>Generating your video clip…</span>
-                      </div>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-                        This usually takes 1–3 minutes. The page will update automatically when it's ready.
-                      </p>
+                      )}
+
+                      {promptHistory.length > 1 && (
+                        <div>
+                          <button className="collapsible-trigger" onClick={() => setShowHistory((v) => !v)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+                              <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                            {promptHistory.length} prompt versions
+                          </button>
+                          {showHistory && (
+                            <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                              {promptHistory.map((v, idx) => (
+                                <div
+                                  key={v.id}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: idx > 0 ? '1px solid var(--border)' : 'none', padding: '9px 14px', background: activePromptVersionId === v.id ? 'var(--brand-light)' : 'transparent', cursor: 'pointer' }}
+                                  onClick={() => { setCurrentPrompt(v.promptText); setActivePromptVersionId(v.id); }}
+                                >
+                                  <span className="badge badge-purple">v{v.version}</span>
+                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{v.source === 'claude' ? 'Written by Claude' : 'Manual edit'}</span>
+                                  {v.nlFeedback && (
+                                    <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>· {v.nlFeedback}</span>
+                                  )}
+                                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{new Date(v.createdAt).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {/* ── Phase 4+: Video ready / approved ─── */}
-                {!hasPending && hasReadyVideo && (
+                  {/* Video panel */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {generations.map(({ generation: g, promptVersion: pv }, idx) => {
+
+                    {/* Generating spinner */}
+                    {hasPending && (
+                      <div className="card">
+                        <div className="card-body">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                            <div className="pulse-dots">
+                              <div className="pulse-dot" />
+                              <div className="pulse-dot" />
+                              <div className="pulse-dot" />
+                            </div>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>Generating your video clip…</span>
+                          </div>
+                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                            This usually takes 1–3 minutes. The page will update automatically when it's ready.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Video ready / approved */}
+                    {!hasPending && hasReadyVideo && generations.map(({ generation: g, promptVersion: pv }, idx) => {
                       if (g.status !== 'completed' || !g.videoStoragePath) return null;
                       const thisIsApproved = g.id === screen?.approvedGenerationId;
-                      // Kick off signed URL fetch on first render of this generation
                       if (!signedVideoUrls[g.id]) { void fetchSignedUrl(g.id); }
                       return (
                         <div key={g.id} className="card">
@@ -625,7 +555,7 @@ export default function ScreenPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <IconVideo />
-                                Video clip {idx + 1 < generations.filter((g2) => g2.generation.status === 'completed').length ? `(earlier)` : '(latest)'}
+                                {idx + 1 < generations.filter((g2) => g2.generation.status === 'completed').length ? 'Earlier clip' : 'Latest clip'}
                               </div>
                               <span className="badge badge-purple">Prompt v{pv.version}</span>
                               {(g.durationSeconds ?? screen?.durationSeconds) && (
@@ -635,9 +565,7 @@ export default function ScreenPage() {
                               )}
                               {thisIsApproved && <span className="badge badge-green"><span className="dot dot-green" />Approved</span>}
                             </div>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {new Date(g.createdAt).toLocaleString()}
-                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleString()}</span>
                           </div>
                           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div className="video-result">
@@ -652,119 +580,75 @@ export default function ScreenPage() {
                                 <div className="action-well-title">Approve this clip?</div>
                                 <div className="action-well-desc">
                                   {parseInt(n, 10) === 1
-                                    ? 'Approving locks in Scene 1 and lets you move on to the remaining scenes. You can always come back to review it.'
-                                    : 'Approving this clip marks Scene ' + n + ' as done. You can still regenerate if you change your mind before the full project is complete.'}
+                                    ? 'Approving locks in Scene 1 and lets you move on to the remaining scenes.'
+                                    : 'Approving this clip marks Scene ' + n + ' as done.'}
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <button
-                                    className="btn btn-primary"
-                                    onClick={() => handleApprove(g.id)}
-                                    disabled={approving}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                                  >
+                                  <button className="btn btn-primary" onClick={() => handleApprove(g.id)} disabled={approving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <IconCheck />
                                     {approving ? 'Approving…' : 'Approve this clip'}
                                   </button>
-                                  <button
-                                    className="btn btn-secondary"
-                                    onClick={handleGenerateVideo}
-                                    disabled={submitting || hasUnsavedPromptEdits}
-                                  >
+                                  <button className="btn btn-secondary" onClick={handleGenerateVideo} disabled={submitting || hasUnsavedPromptEdits}>
                                     {submitting ? 'Generating…' : 'Generate another'}
                                   </button>
-                                  {hasUnsavedPromptEdits && (
-                                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save your prompt edits first</span>
-                                  )}
-                                  {SUPPORTED_DURATIONS.filter(
-                                    (d) => d !== (g.durationSeconds ?? screen?.durationSeconds),
-                                  ).map((d) => (
-                                    <button
-                                      key={d}
-                                      className="btn btn-secondary"
-                                      onClick={() => handleGenerateWithDuration(d)}
-                                      disabled={submitting || hasUnsavedPromptEdits}
-                                      title={hasUnsavedPromptEdits ? 'Save your prompt edits first' : `Regenerate this scene at ${d}s`}
-                                    >
-                                      {submitting ? 'Generating…' : `Regenerate at ${d}s`}
+                                  {hasUnsavedPromptEdits && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save prompt first</span>}
+                                  {SUPPORTED_DURATIONS.filter((d) => d !== (g.durationSeconds ?? screen?.durationSeconds)).map((d) => (
+                                    <button key={d} className="btn btn-secondary" onClick={() => handleGenerateWithDuration(d)} disabled={submitting || hasUnsavedPromptEdits} title={hasUnsavedPromptEdits ? 'Save your prompt edits first' : `Regenerate at ${d}s`}>
+                                      {submitting ? 'Generating…' : `${d}s`}
                                     </button>
                                   ))}
-                                  <button
-                                    className="btn btn-secondary"
-                                    onClick={() => setFeedbackGenId(g.id)}
-                                  >
-                                    Rate this clip
-                                  </button>
+                                  <button className="btn btn-secondary" onClick={() => setFeedbackGenId(g.id)}>Rate this clip</button>
                                 </div>
                               </div>
                             )}
                             {thisIsApproved && (
-                              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => setFeedbackGenId(g.id)}
-                                >
-                                  Rate this clip
-                                </button>
-                              </div>
-                            )}
-                            {thisIsApproved && nextScreen && (
-                              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-                                  <button className="btn btn-primary">
-                                    Continue to Scene {nextScreen.screenNumber} →
-                                  </button>
-                                </Link>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <button className="btn btn-secondary btn-sm" onClick={() => setFeedbackGenId(g.id)}>Rate this clip</button>
+                                {nextScreen && (
+                                  <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
+                                    <button className="btn btn-primary btn-sm">Continue to Scene {nextScreen.screenNumber} →</button>
+                                  </Link>
+                                )}
                               </div>
                             )}
                           </div>
                         </div>
                       );
                     })}
-                  </div>
-                )}
 
-                {/* ── Generate action (when no gens or all failed) ─── */}
-                {!hasPending && !hasReadyVideo && (
-                  <div className="action-well">
-                    <div className="action-well-title">
-                      {generations.length === 0 ? 'Generate the video clip' : 'Try again'}
-                    </div>
-                    <div className="action-well-desc">
-                      {generations.length === 0
-                        ? 'The prompt is ready. Click below to send it to the video generator. It usually takes 1–3 minutes to return a clip.'
-                        : 'The previous generation failed. Click below to try again.'}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <button
-                        className="btn btn-primary"
-                        onClick={handleGenerateVideo}
-                        disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                      >
-                        <IconVideo />
-                        {submitting ? 'Submitting…' : 'Generate video clip'}
-                      </button>
-                      {hasUnsavedPromptEdits && (
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Save your prompt edits first
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Failed generations */}
-                {generations.some((g) => g.generation.status === 'failed') && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {generations
-                      .filter((g) => g.generation.status === 'failed')
-                      .map(({ generation: g }) => (
-                        <div key={g.id} className="alert alert-error" style={{ fontSize: 13 }}>
-                          A generation attempt failed at {new Date(g.createdAt).toLocaleTimeString()}.
+                    {/* Generate action (when no gens or all failed) */}
+                    {!hasPending && !hasReadyVideo && (
+                      <div className="action-well">
+                        <div className="action-well-title">
+                          {generations.length === 0 ? 'Generate the video clip' : 'Try again'}
                         </div>
-                      ))}
+                        <div className="action-well-desc">
+                          {generations.length === 0
+                            ? 'The prompt is ready. Click below to send it to the video generator. Usually takes 1–3 minutes.'
+                            : 'The previous generation failed. Click below to try again.'}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <button className="btn btn-primary" onClick={handleGenerateVideo} disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <IconVideo />
+                            {submitting ? 'Submitting…' : 'Generate video clip'}
+                          </button>
+                          {hasUnsavedPromptEdits && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save your prompt edits first</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Failed generations */}
+                    {generations.some((g) => g.generation.status === 'failed') && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {generations.filter((g) => g.generation.status === 'failed').map(({ generation: g }) => (
+                          <div key={g.id} className="alert alert-error" style={{ fontSize: 13 }}>
+                            A generation attempt failed at {new Date(g.createdAt).toLocaleTimeString()}.
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </>
             )}
           </div>
