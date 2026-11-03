@@ -81,6 +81,13 @@ export default function AdminSettingsPage() {
     setConnResults(null);
     try {
       const res = await fetch('/api/v1/admin/connection-test');
+      if (!res.ok) {
+        const detail = res.status === 403
+          ? 'Not authorized — add your Supabase user UUID to ADMIN_USER_IDS in Vercel env vars'
+          : `HTTP ${res.status}`;
+        setConnResults({ ok: false, results: { error: { ok: false, detail } } });
+        return;
+      }
       const data: ConnectionTestResult = await res.json();
       setConnResults(data);
     } catch {
