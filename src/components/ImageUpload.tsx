@@ -20,10 +20,14 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
 
   async function uploadFile(file: File) {
     setError('');
     setUploading(true);
+    // Show local preview immediately so the user sees the image right away
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
     try {
       const form = new FormData();
       form.append('file', file);
@@ -31,12 +35,18 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d.error ?? `Upload failed (${res.status})`);
+        URL.revokeObjectURL(objectUrl);
+        setLocalPreview(null);
         return;
       }
       const data = (await res.json()) as UploadResult;
+      URL.revokeObjectURL(objectUrl);
+      setLocalPreview(null);
       onChange(data);
     } catch (err: unknown) {
       setError(String(err));
+      URL.revokeObjectURL(objectUrl);
+      setLocalPreview(null);
     } finally {
       setUploading(false);
     }
@@ -90,7 +100,7 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
         onChange={handleFileChange}
       />
 
-      {value ? (
+      {(value || localPreview) ? (
         /* ── Preview state ── */
         <div style={{
           border: '1px solid var(--border)',
@@ -101,7 +111,7 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
           <div style={{ position: 'relative' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={value.previewUrl}
+              src={localPreview ?? value!.previewUrl}
               alt="Reference image preview"
               style={{
                 width: '100%',
@@ -137,7 +147,7 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
             </div>
           </div>
           <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-            {value.filename}
+            {uploading ? 'Uploading…' : value?.filename}
           </div>
         </div>
       ) : (
