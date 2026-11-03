@@ -82,14 +82,23 @@ export async function GET(
     latestCompletedGen: latestCompletedGenByScreen.get(s.id) ?? null,
   }));
 
-  // Generate signed URL for the base image preview
-  const { data: signedData } = await supabase.storage
-    .from(process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads')
-    .createSignedUrl(project.baseImagePath, 3600);
+  // Generate signed URL for the base image — race against a 2s timeout so it never blocks the page
+  let baseImagePreviewUrl: string | null = null;
+  try {
+    const signedResult = await Promise.race([
+      supabase.storage
+        .from(process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads')
+        .createSignedUrl(project.baseImagePath, 3600),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ]);
+    baseImagePreviewUrl = signedResult.data?.signedUrl ?? null;
+  } catch {
+    // timed out or failed — frontend will show placeholder
+  }
 
   return NextResponse.json({
     ...project,
-    baseImagePreviewUrl: signedData?.signedUrl ?? null,
+    baseImagePreviewUrl,
     screens: enrichedScreens,
   });
 }
