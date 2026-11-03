@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { videoScreens, videoGenerations } from '@/db/schema.pg';
+import { videoProjects, videoScreens, videoGenerations, screenPromptVersions } from '@/db/schema.pg';
+import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 import { submitVideoGeneration } from '@/services/video-workflow';
 import { AuthenticationError, ConfigurationError, UnexpectedProviderError } from '@/providers/useapi/errors';
@@ -9,12 +10,21 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; n: string }> },
 ): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id, n } = await params;
   const projectId = parseInt(id, 10);
   const screenNumber = parseInt(n, 10);
   if (isNaN(projectId) || isNaN(screenNumber)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
+
+  const projectRows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
+  const project = projectRows[0];
+  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const screenRows = await db
     .select()
@@ -27,6 +37,21 @@ export async function POST(
   const body = (await req.json()) as { promptVersionId: number; creatorFeedback?: string; durationOverride?: number };
   if (!body.promptVersionId) {
     return NextResponse.json({ error: 'promptVersionId required' }, { status: 400 });
+  }
+
+  // Stale-prompt guard: reject if the prompt version was created before the last dialogue change
+  const pvRows = await db
+    .select()
+    .from(screenPromptVersions)
+    .where(eq(screenPromptVersions.id, body.promptVersionId))
+    .limit(1);
+  const pv = pvRows[0];
+  if (!pv) return NextResponse.json({ error: 'Prompt version not found' }, { status: 404 });
+  if (pv.isStale) {
+    return NextResponse.json(
+      { error: 'Prompt version is stale — the scene dialogue has changed since this prompt was written. Regenerate the prompt before submitting.' },
+      { status: 422 },
+    );
   }
 
   let result: { generationId: number };

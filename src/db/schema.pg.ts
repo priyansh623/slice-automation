@@ -95,6 +95,7 @@ export const screenPromptVersions = pgTable('screen_prompt_versions', {
   feedbackScope: text('feedback_scope'),                  // 'project' | 'scene' | null
   screen1PromptVersionId: integer('screen1_prompt_version_id'),
   creativeBriefSnapshot: text('creative_brief_snapshot'),
+  isStale: boolean('is_stale').notNull().default(false),  // true when screen dialogue changed after this version was created
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 });
 
@@ -181,6 +182,27 @@ export const generationFeedback = pgTable('generation_feedback', {
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
+
+// ── Compilation scene selections ─────────────────────────────────────────────
+
+export const compilationSceneSelections = pgTable('compilation_scene_selections', {
+  id: serial('id').primaryKey(),
+  compilationId: integer('compilation_id').notNull().references(() => videoCompilations.id),
+  videoScreenId: integer('video_screen_id').notNull().references(() => videoScreens.id),
+  videoGenerationId: integer('video_generation_id').notNull().references(() => videoGenerations.id),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+// ── Project testers ───────────────────────────────────────────────────────────
+
+export const projectTesters = pgTable('project_testers', {
+  id: serial('id').primaryKey(),
+  videoProjectId: integer('video_project_id').notNull().references(() => videoProjects.id),
+  userId: uuid('user_id').notNull(),
+  invitedAt: bigint('invited_at', { mode: 'number' }).notNull(),
+}, (table) => ({
+  uniqueProjectUser: unique().on(table.videoProjectId, table.userId),
+}));
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 

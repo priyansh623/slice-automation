@@ -8,7 +8,7 @@ import {
   videoGenerations,
   promptGenerationTasks,
 } from '@/db/schema.pg';
-import { eq, max } from 'drizzle-orm';
+import { and, desc, eq, inArray, max } from 'drizzle-orm';
 import { callClaude, encodeImageFromStorage, loadConversation } from './anthropic';
 import { getSkillContent } from '@/lib/ugc-skill';
 import { useapiProvider } from '@/providers/useapi/provider';
@@ -302,6 +302,29 @@ function buildCreativeDirectionBlock(brief: CreativeBrief, screen1PromptText: st
   return block;
 }
 
+async function gatherProjectScopeFeedback(videoProjectId: number): Promise<string | null> {
+  const screens = await db
+    .select({ id: videoScreens.id })
+    .from(videoScreens)
+    .where(eq(videoScreens.videoProjectId, videoProjectId));
+  if (screens.length === 0) return null;
+
+  const screenIds = screens.map((s) => s.id);
+  const pvRows = await db
+    .select({ nlFeedback: screenPromptVersions.nlFeedback })
+    .from(screenPromptVersions)
+    .where(
+      and(
+        inArray(screenPromptVersions.videoScreenId, screenIds),
+        eq(screenPromptVersions.feedbackScope, 'project'),
+      ),
+    )
+    .orderBy(desc(screenPromptVersions.createdAt))
+    .limit(1);
+
+  return pvRows[0]?.nlFeedback ?? null;
+}
+
 async function getScreen1ApprovedPromptInfo(videoProjectId: number): Promise<{ promptText: string; versionId: number } | null> {
   const allScreens = await db
     .select()
@@ -422,6 +445,7 @@ export async function generateInitialScreenPrompt(
   const image = await encodeImageFromStorage(project.baseImagePath, UPLOADS_BUCKET());
   const screen1Info = await getScreen1ApprovedPromptInfo(videoProjectId);
   const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null);
+  const projectFeedback = await gatherProjectScopeFeedback(videoProjectId);
 
   const userMessage =
     `Here is the original video script and the reference image of the creator.` +
@@ -429,6 +453,7 @@ export async function generateInitialScreenPrompt(
     `\nPreserve the original dialogue exactly.` +
     creativeDirectionBlock +
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
+    (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
     `\n\nFull script:\n${project.approvedScript ?? project.originalScript}` +
     `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
@@ -462,6 +487,7 @@ export async function generateRemainingPrompts(
   const image = await encodeImageFromStorage(project.baseImagePath, UPLOADS_BUCKET());
   const screen1Info = await getScreen1ApprovedPromptInfo(videoProjectId);
   const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null);
+  const projectFeedback = await gatherProjectScopeFeedback(videoProjectId);
 
   const results: Array<{ videoScreenId: number; promptText: string; version: number }> = [];
 
@@ -472,6 +498,7 @@ export async function generateRemainingPrompts(
       `\nPreserve the original dialogue exactly.` +
       creativeDirectionBlock +
       SELF_CONTAINED_PROMPT_INSTRUCTION +
+      (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
       `\n\nFull script:\n${project.approvedScript ?? project.originalScript}` +
       `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
@@ -522,6 +549,10 @@ export async function revisePrompt(
     ? buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null)
     : '';
 
+  const projectFeedback = feedbackScope === 'scene'
+    ? await gatherProjectScopeFeedback(videoProjectId)
+    : null;
+
   const userMessage =
     `Revise the Scene ${screen.screenNumber} prompt based on this feedback: ${nlFeedback}\n\n` +
     `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
@@ -529,6 +560,7 @@ export async function revisePrompt(
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
     creativeDirectionBlock +
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
+    (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
     (latestVersion ? `\n\nCurrent prompt:\n${latestVersion.promptText}` : '');
 
   if (reviewingGenerationId) {

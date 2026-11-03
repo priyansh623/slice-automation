@@ -1,40 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
+import { createClient } from '@/lib/supabase/server';
 import { eq } from 'drizzle-orm';
 import type { CreativeBrief } from '@/services/video-workflow';
 import { parseBrief } from '@/services/video-workflow';
-
-function getId(idStr: string): number | null {
-  const id = parseInt(idStr, 10);
-  return isNaN(id) ? null : id;
-}
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
-  const projectId = getId(id);
-  if (!projectId) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+  const projectId = parseInt(id, 10);
+  if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
-  if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const project = rows[0];
+  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  return NextResponse.json(parseBrief(rows[0].creativeBrief));
+  return NextResponse.json(parseBrief(project.creativeBrief));
 }
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
-  const projectId = getId(id);
-  if (!projectId) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+  const projectId = parseInt(id, 10);
+  if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const raw = (await req.json()) as Record<string, unknown>;
   const incoming: Partial<CreativeBrief> = {};

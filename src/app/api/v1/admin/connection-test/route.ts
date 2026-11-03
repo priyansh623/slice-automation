@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { createClient } from '@/lib/supabase/server';
+import { requireUser, requireAdmin } from '@/lib/api-auth';
 import { sql } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
+  const authResult = await requireUser();
+  if (authResult instanceof NextResponse) return authResult;
+
+  const adminError = requireAdmin(authResult.user.id);
+  if (adminError) return adminError;
 
   const results: Record<string, { ok: boolean; detail: string }> = {};
 
@@ -19,7 +25,6 @@ export async function GET(): Promise<NextResponse> {
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.getUser();
-    // No session is fine — "Auth session missing!" means the endpoint is reachable, not broken
     const sessionMissing = error?.message?.includes('session') || error?.message?.includes('missing');
     results.supabaseAuth = (!error || sessionMissing)
       ? { ok: true, detail: 'Reachable' }

@@ -2,23 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, videoGenerations } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 import { eq, inArray } from 'drizzle-orm';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const { id } = await params;
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const supabase = createServiceClient(
+  const serviceClient = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } },
   );
 
-  // Batch 1: project + screens in parallel (both only need projectId)
   const [projectRows, allScreens] = await Promise.all([
     db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1),
     db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId)),
@@ -26,12 +30,12 @@ export async function GET(
 
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screenIds = screens.map((s) => s.id);
   const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
 
-  // Batch 2: prompt presence, generations, and signed URL all in parallel
   const [promptRows, allGens, signedResult] = await Promise.all([
     screenIds.length > 0
       ? db.select({ videoScreenId: screenPromptVersions.videoScreenId }).from(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds))
@@ -40,7 +44,7 @@ export async function GET(
       ? db.select().from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds))
       : Promise.resolve([] as typeof videoGenerations.$inferSelect[]),
     Promise.race([
-      supabase.storage.from(bucket).createSignedUrl(project.baseImagePath, 3600),
+      serviceClient.storage.from(bucket).createSignedUrl(project.baseImagePath, 3600),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
     ]).catch(() => ({ data: null as null })),
   ]);

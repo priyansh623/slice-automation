@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { adminSettings } from '@/db/schema.pg';
+import { requireUser, requireAdmin } from '@/lib/api-auth';
 import { eq } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
+  const authResult = await requireUser();
+  if (authResult instanceof NextResponse) return authResult;
+
+  const adminError = requireAdmin(authResult.user.id);
+  if (adminError) return adminError;
 
   const rows = await db.select().from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
   const settings = rows[0] ?? { id: 1, scene1HookInstruction: null, compilationCrf: 23, updatedAt: 0 };
@@ -12,6 +18,11 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function PUT(req: NextRequest): Promise<NextResponse> {
+  const authResult = await requireUser();
+  if (authResult instanceof NextResponse) return authResult;
+
+  const adminError = requireAdmin(authResult.user.id);
+  if (adminError) return adminError;
 
   const body = (await req.json()) as {
     scene1HookInstruction?: string | null;

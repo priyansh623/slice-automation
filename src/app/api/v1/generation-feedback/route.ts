@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { generationFeedback, videoGenerations } from '@/db/schema.pg';
+import { generationFeedback, videoGenerations, videoScreens, videoProjects, projectTesters } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 
@@ -37,13 +37,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Verify the generation exists
+  // Traverse: generation → screen → project, then check owner or tester
   const genRows = await db
-    .select({ id: videoGenerations.id })
+    .select({ id: videoGenerations.id, videoScreenId: videoGenerations.videoScreenId })
     .from(videoGenerations)
     .where(eq(videoGenerations.id, body.videoGenerationId))
     .limit(1);
   if (!genRows[0]) return NextResponse.json({ error: 'Generation not found' }, { status: 404 });
+
+  const screenRows = await db
+    .select({ videoProjectId: videoScreens.videoProjectId })
+    .from(videoScreens)
+    .where(eq(videoScreens.id, genRows[0].videoScreenId))
+    .limit(1);
+  if (!screenRows[0]) return NextResponse.json({ error: 'Screen not found' }, { status: 404 });
+
+  const projectId = screenRows[0].videoProjectId;
+
+  const projectRows = await db
+    .select({ userId: videoProjects.userId })
+    .from(videoProjects)
+    .where(eq(videoProjects.id, projectId))
+    .limit(1);
+  if (!projectRows[0]) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+  const isOwner = projectRows[0].userId === user.id;
+  if (!isOwner) {
+    // Check tester access
+    const testerRows = await db
+      .select({ id: projectTesters.id })
+      .from(projectTesters)
+      .where(and(eq(projectTesters.videoProjectId, projectId), eq(projectTesters.userId, user.id)))
+      .limit(1);
+    if (!testerRows[0]) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const now = Date.now();
 

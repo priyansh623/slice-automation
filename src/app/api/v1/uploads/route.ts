@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'node:crypto';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 
 const ALLOWED_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -11,6 +12,10 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -32,10 +37,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const filename = `${crypto.randomUUID()}.${ext}`;
-  const storagePath = filename;
+  // Store under user's own prefix to prevent cross-user path guessing
+  const storagePath = `${user.id}/${filename}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // Use service-role client to bypass RLS on the upload itself
   const serviceSupabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -53,7 +58,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
   }
 
-  // Generate a short-lived signed URL for the preview
   const { data: signedData } = await serviceSupabase.storage
     .from(bucket)
     .createSignedUrl(storagePath, 3600);
