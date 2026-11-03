@@ -365,7 +365,7 @@ export async function generateScreen1Prompt(
     // Inject scene1 hook — use project snapshot if set, otherwise fall back to default
     const DEFAULT_SCENE1_HOOK = `Treat Scene 1 as the hook. Deliver it with high energy, strong curiosity, an engaging influencer-style tone, and expressive but natural facial expressions and gestures. Make the opening immediately attention-grabbing and give the viewer a reason to keep watching.`;
     const hookText = project.scene1HookSnapshot ?? DEFAULT_SCENE1_HOOK;
-    const hookBlock = `\n\n[SCENE 1 HOOK — PERFORMANCE DIRECTION ONLY]\nThis is a direction for how the creator performs and delivers the scene — not dialogue to add or change. Do not alter the script. Apply it to energy, tone, expression, and body language only. If you have prior revision feedback, that takes priority over this direction.\n${hookText}`;
+    const hookBlock = `\n\n[SCENE 1 HOOK — PERFORMANCE DIRECTION ONLY]\nThis is a starting-point direction for how the creator performs — not dialogue to add or change. Do not alter the script. Apply it to energy, tone, expression, and body language only. Treat it as a default: if feedback asks to tone something down (e.g. less expressive), adjust that dimension while retaining the rest. Explicit revision feedback always takes priority over this direction.\n${hookText}`;
 
     userMessage =
       `Here is the original video script and the reference image of the creator.` +
