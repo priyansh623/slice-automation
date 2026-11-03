@@ -28,6 +28,7 @@ export default function ReviewPage() {
   const [project, setProject] = useState<VideoProject | null>(null);
   const [compilation, setCompilation] = useState<Compilation | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -148,11 +149,26 @@ export default function ReviewPage() {
                 )}
                 <div style={{ display: 'flex', gap: 10 }}>
                   {signedUrl && (
-                    <a href={signedUrl} download>
-                      <button style={{ padding: '10px 20px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                        Download video
-                      </button>
-                    </a>
+                    <button
+                      disabled={downloading}
+                      onClick={async () => {
+                        setDownloading(true);
+                        try {
+                          const blob = await fetch(signedUrl).then((r) => r.blob());
+                          const objectUrl = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = objectUrl;
+                          a.download = `compilation-${cid}.mp4`;
+                          a.click();
+                          URL.revokeObjectURL(objectUrl);
+                        } finally {
+                          setDownloading(false);
+                        }
+                      }}
+                      style={{ padding: '10px 20px', background: downloading ? 'var(--border)' : '#111113', color: downloading ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 600, cursor: downloading ? 'not-allowed' : 'pointer' }}
+                    >
+                      {downloading ? 'Downloading…' : 'Download video'}
+                    </button>
                   )}
                   <Link href={`/video-projects/${id}/compile`}>
                     <button className="btn btn-secondary">Compile another version</button>
