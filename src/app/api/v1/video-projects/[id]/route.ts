@@ -18,60 +18,51 @@ export async function GET(
     { auth: { persistSession: false } },
   );
 
-  const projectRows = await db
-    .select()
-    .from(videoProjects)
-    .where(eq(videoProjects.id, projectId))
-    .limit(1);
+  // Batch 1: project + screens in parallel (both only need projectId)
+  const [projectRows, allScreens] = await Promise.all([
+    db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1),
+    db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId)),
+  ]);
+
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const allScreens = await db
-    .select()
-    .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, projectId));
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screenIds = screens.map((s) => s.id);
+  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
+
+  // Batch 2: prompt presence, generations, and signed URL all in parallel
+  const [promptRows, allGens, signedResult] = await Promise.all([
+    screenIds.length > 0
+      ? db.select({ videoScreenId: screenPromptVersions.videoScreenId }).from(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds))
+      : Promise.resolve([] as { videoScreenId: number }[]),
+    screenIds.length > 0
+      ? db.select().from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds))
+      : Promise.resolve([] as typeof videoGenerations.$inferSelect[]),
+    Promise.race([
+      supabase.storage.from(bucket).createSignedUrl(project.baseImagePath, 3600),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ]).catch(() => ({ data: null as null })),
+  ]);
 
   const promptPresence = new Map<number, boolean>();
-  if (screenIds.length > 0) {
-    const rows = await db
-      .select({ videoScreenId: screenPromptVersions.videoScreenId })
-      .from(screenPromptVersions)
-      .where(inArray(screenPromptVersions.videoScreenId, screenIds));
-    for (const r of rows) promptPresence.set(r.videoScreenId, true);
-  }
+  for (const r of promptRows) promptPresence.set(r.videoScreenId, true);
 
   type GenSummary = { id: number; status: string; videoStoragePath: string | null; updatedAt: number };
   const latestGenByScreen = new Map<number, GenSummary>();
   const latestCompletedGenByScreen = new Map<number, { id: number; videoStoragePath: string }>();
-
-  if (screenIds.length > 0) {
-    const allGens = await db
-      .select()
-      .from(videoGenerations)
-      .where(inArray(videoGenerations.videoScreenId, screenIds));
-
-    const sorted = allGens.sort((a, b) => b.updatedAt - a.updatedAt);
-    for (const gen of sorted) {
-      if (!latestGenByScreen.has(gen.videoScreenId)) {
-        latestGenByScreen.set(gen.videoScreenId, {
-          id: gen.id,
-          status: gen.status,
-          videoStoragePath: gen.videoStoragePath ?? null,
-          updatedAt: gen.updatedAt,
-        });
-      }
-      if (
-        gen.status === 'completed' &&
-        gen.videoStoragePath &&
-        !latestCompletedGenByScreen.has(gen.videoScreenId)
-      ) {
-        latestCompletedGenByScreen.set(gen.videoScreenId, {
-          id: gen.id,
-          videoStoragePath: gen.videoStoragePath,
-        });
-      }
+  const sorted = allGens.sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const gen of sorted) {
+    if (!latestGenByScreen.has(gen.videoScreenId)) {
+      latestGenByScreen.set(gen.videoScreenId, {
+        id: gen.id,
+        status: gen.status,
+        videoStoragePath: gen.videoStoragePath ?? null,
+        updatedAt: gen.updatedAt,
+      });
+    }
+    if (gen.status === 'completed' && gen.videoStoragePath && !latestCompletedGenByScreen.has(gen.videoScreenId)) {
+      latestCompletedGenByScreen.set(gen.videoScreenId, { id: gen.id, videoStoragePath: gen.videoStoragePath });
     }
   }
 
@@ -82,23 +73,9 @@ export async function GET(
     latestCompletedGen: latestCompletedGenByScreen.get(s.id) ?? null,
   }));
 
-  // Generate signed URL for the base image — race against a 2s timeout so it never blocks the page
-  let baseImagePreviewUrl: string | null = null;
-  try {
-    const signedResult = await Promise.race([
-      supabase.storage
-        .from(process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads')
-        .createSignedUrl(project.baseImagePath, 3600),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
-    ]);
-    baseImagePreviewUrl = signedResult.data?.signedUrl ?? null;
-  } catch {
-    // timed out or failed — frontend will show placeholder
-  }
-
   return NextResponse.json({
     ...project,
-    baseImagePreviewUrl,
+    baseImagePreviewUrl: signedResult.data?.signedUrl ?? null,
     screens: enrichedScreens,
   });
 }

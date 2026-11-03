@@ -14,19 +14,12 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
-  const screenRows = await db
-    .select()
-    .from(videoScreens)
-    .where(and(eq(videoScreens.videoProjectId, projectId), eq(videoScreens.screenNumber, screenNumber)))
-    .limit(1);
-  const screen = screenRows[0];
-  if (!screen) return NextResponse.json({ error: 'Screen not found' }, { status: 404 });
-
   const gens = await db
     .select({ generation: videoGenerations, promptVersion: screenPromptVersions })
     .from(videoGenerations)
     .innerJoin(screenPromptVersions, eq(videoGenerations.promptVersionId, screenPromptVersions.id))
-    .where(eq(videoGenerations.videoScreenId, screen.id));
+    .innerJoin(videoScreens, eq(videoGenerations.videoScreenId, videoScreens.id))
+    .where(and(eq(videoScreens.videoProjectId, projectId), eq(videoScreens.screenNumber, screenNumber)));
 
   return NextResponse.json(gens.sort((a, b) => b.generation.createdAt - a.generation.createdAt));
 }
