@@ -32,8 +32,6 @@ export async function GET(
     .where(and(eq(videoScreens.videoProjectId, projectId), eq(videoScreens.screenNumber, screenNumber)));
 
   return NextResponse.json(
-    gens
-      .sort((a, b) => b.generation.createdAt - a.generation.createdAt)
-      .map(({ generation, promptVersion }) => ({ ...generation, promptVersion })),
+    gens.sort((a, b) => b.generation.createdAt - a.generation.createdAt),
   );
 }
