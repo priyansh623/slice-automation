@@ -169,17 +169,18 @@ export async function DELETE(
   const compilationRows = await db.select({ id: videoCompilations.id }).from(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
   const compilationIds = compilationRows.map((c) => c.id);
 
+  // compilationSceneSelections must come before videoGenerations (FK: css.video_generation_id → video_generations.id)
+  if (compilationIds.length > 0) {
+    await db.delete(compilationSceneSelections).where(inArray(compilationSceneSelections.compilationId, compilationIds));
+    await db.delete(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
+  }
+
   if (screenIds.length > 0) {
     const genRows = await db.select({ id: videoGenerations.id }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
     const genIds = genRows.map((g) => g.id);
     if (genIds.length > 0) await db.delete(generationFeedback).where(inArray(generationFeedback.videoGenerationId, genIds));
     await db.delete(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
     await db.delete(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds));
-  }
-
-  if (compilationIds.length > 0) {
-    await db.delete(compilationSceneSelections).where(inArray(compilationSceneSelections.compilationId, compilationIds));
-    await db.delete(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
   }
 
   await db.delete(promptGenerationTasks).where(eq(promptGenerationTasks.videoProjectId, projectId));

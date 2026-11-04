@@ -92,7 +92,12 @@ export default function VideoProjectsPage() {
     const res = await fetch(`/api/v1/video-projects/${projectId}`, { method: 'DELETE' });
     setDeletingId(null);
     setConfirmDeleteId(null);
-    if (res.ok) setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    if (res.ok) {
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      alert(`Failed to delete project: ${body.error ?? res.statusText}`);
+    }
   }
 
   return (
