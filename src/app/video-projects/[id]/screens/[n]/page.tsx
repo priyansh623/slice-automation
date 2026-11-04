@@ -7,6 +7,8 @@ import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { useProject } from '@/contexts/ProjectContext';
 
+const SUPPORTED_DURATIONS = [4, 6, 8, 10];
+
 interface PromptVersion {
   id: number;
   version: number;
@@ -110,6 +112,7 @@ export default function ScreenPage() {
   const [activeTab, setActiveTab] = useState<'prompt' | 'requests'>('prompt');
   const [displayGenId, setDisplayGenId] = useState<number | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingFetchesRef = useRef<Set<number>>(new Set());
 
@@ -241,6 +244,24 @@ export default function ScreenPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ promptVersionId: activePromptVersionId }),
+    });
+    if (!res.ok) {
+      let message = 'Video generation failed. Please try again.';
+      try { const d = await res.json(); if (typeof d.error === 'string' && d.error) message = d.error; } catch { /* */ }
+      setError(message); setSubmitting(false); return;
+    }
+    await loadSceneData();
+    setSubmitting(false);
+  }
+
+  async function handleGenerateWithDuration(duration: number) {
+    if (!activePromptVersionId) { setError('No prompt available'); return; }
+    setSubmitting(true);
+    setError('');
+    const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptVersionId: activePromptVersionId, durationOverride: duration }),
     });
     if (!res.ok) {
       let message = 'Video generation failed. Please try again.';
@@ -659,8 +680,32 @@ export default function ScreenPage() {
                   ) : <IconSend />}
                 </button>
               </div>
+              {/* Duration selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ font: '500 12px/1 Satoshi', color: '#75757C', flexShrink: 0 }}>Duration</span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {SUPPORTED_DURATIONS.map((d) => {
+                    const isSelected = selectedDuration === d;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setSelectedDuration(isSelected ? null : d)}
+                        style={{
+                          height: 28, padding: '0 10px', borderRadius: 999,
+                          border: `1px solid ${isSelected ? '#6C47FF' : '#E4E4E0'}`,
+                          background: isSelected ? '#6C47FF' : '#fff',
+                          color: isSelected ? '#fff' : '#5E5E65',
+                          font: '500 12px/1 Satoshi', cursor: 'pointer',
+                        }}
+                      >
+                        {d}s
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <button
-                onClick={handleGenerateVideo}
+                onClick={() => selectedDuration ? handleGenerateWithDuration(selectedDuration) : handleGenerateVideo()}
                 disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits || hasPending}
                 style={{
                   width: '100%', height: 44, borderRadius: 12,
@@ -671,7 +716,7 @@ export default function ScreenPage() {
                 }}
               >
                 <IconPlay />
-                {submitting ? 'Generating…' : hasPending ? 'Generating…' : 'Generate another video'}
+                {submitting ? 'Generating…' : hasPending ? 'Generating…' : selectedDuration ? `Generate at ${selectedDuration}s` : 'Generate another video'}
               </button>
               {hasUnsavedPromptEdits && (
                 <div style={{ font: '400 11px/1 Satoshi', color: '#75757C', marginTop: 6, textAlign: 'center' }}>Save your prompt edits first</div>
@@ -681,7 +726,7 @@ export default function ScreenPage() {
         </div>
 
         {/* ── Right panel ────────────────────────────────────────────────── */}
-        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #ECECE8', overflow: 'hidden' }}>
+        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #ECECE8' }}>
 
           {/* Right header */}
           {displayGen && (
@@ -698,7 +743,7 @@ export default function ScreenPage() {
           {/* Video area */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', gap: 14, overflowY: 'auto', background: '#FAFAF9' }}>
             {hasPending ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, minHeight: 360 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, minHeight: 360 }}>
                 <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 12 }}>
                   <div className="pulse-dot" style={{ background: '#6C47FF' }} />
                   <div className="pulse-dot" style={{ background: '#6C47FF' }} />
@@ -708,13 +753,13 @@ export default function ScreenPage() {
                 <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
               </div>
             ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
-              <div style={{ position: 'relative', background: '#1A1A1E', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{ background: '#1A1A1E', borderRadius: 14, overflow: 'hidden' }}>
                 {signedVideoUrls[displayGen.generation.id] ? (
                   <video
                     key={displayGen.generation.id}
                     src={signedVideoUrls[displayGen.generation.id]}
                     controls
-                    style={{ width: '100%', display: 'block', borderRadius: 14 }}
+                    style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }}
                   />
                 ) : (
                   <div style={{ paddingBottom: '177.78%', position: 'relative' }}>
