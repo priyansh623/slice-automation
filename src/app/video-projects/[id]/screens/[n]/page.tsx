@@ -726,7 +726,7 @@ export default function ScreenPage() {
         </div>
 
         {/* ── Right panel ────────────────────────────────────────────────── */}
-        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #ECECE8' }}>
+        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff', borderLeft: '1px solid #ECECE8' }}>
 
           {/* Right header */}
           {displayGen && (
@@ -741,7 +741,7 @@ export default function ScreenPage() {
           )}
 
           {/* Video area */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', gap: 14, overflowY: 'auto', background: '#FAFAF9' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '20px', gap: 14, overflowY: 'auto', background: '#FAFAF9' }}>
             {hasPending ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, minHeight: 360 }}>
                 <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 12 }}>
