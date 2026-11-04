@@ -33,19 +33,49 @@ export async function GET(): Promise<NextResponse> {
     });
   }
 
-  // Generate signed preview URLs for all base images in one batch call
+  // DB-backed signed URL cache: only call Storage for projects whose cached URL has expired.
   const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
   const serviceClient = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } },
   );
-  const paths = rows.map((p) => p.baseImagePath).filter(Boolean) as string[];
-  const { data: signedUrlsData } = paths.length > 0
-    ? await serviceClient.storage.from(bucket).createSignedUrls(paths, 3600)
-    : { data: [] };
-  const signedUrlMap = new Map(
-    (signedUrlsData ?? []).map((item) => [item.path, item.signedUrl]),
+  const ONE_HOUR_MS = 3_600_000;
+  const URL_TTL_S = 7 * 24 * 3600; // 7-day TTL; refresh 1 h before expiry
+  const now = Date.now();
+
+  const needsRefresh = rows.filter(
+    (p) => !p.baseImageSignedUrlExpiresAt || p.baseImageSignedUrlExpiresAt < now + ONE_HOUR_MS,
+  );
+  const refreshPaths = needsRefresh.map((p) => p.baseImagePath).filter(Boolean) as string[];
+  const refreshedUrlMap = new Map<string, string>();
+
+  if (refreshPaths.length > 0) {
+    const { data: freshUrls } = await serviceClient.storage.from(bucket).createSignedUrls(refreshPaths, URL_TTL_S);
+    const expiresAt = now + URL_TTL_S * 1000;
+    await Promise.all(
+      (freshUrls ?? []).map((item) => {
+        if (!item.signedUrl || !item.path) return Promise.resolve();
+        refreshedUrlMap.set(item.path, item.signedUrl);
+        const proj = needsRefresh.find((p) => p.baseImagePath === item.path);
+        if (!proj) return Promise.resolve();
+        return db.update(videoProjects)
+          .set({ baseImageSignedUrl: item.signedUrl, baseImageSignedUrlExpiresAt: expiresAt })
+          .where(eq(videoProjects.id, proj.id));
+      }),
+    );
+  }
+
+  const signedUrlById = new Map<number, string | null>(
+    rows.map((p) => {
+      const url =
+        p.baseImageSignedUrl &&
+        p.baseImageSignedUrlExpiresAt &&
+        p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS
+          ? p.baseImageSignedUrl
+          : (refreshedUrlMap.get(p.baseImagePath) ?? null);
+      return [p.id, url];
+    }),
   );
 
   return NextResponse.json(rows.map((p) => ({
@@ -53,7 +83,7 @@ export async function GET(): Promise<NextResponse> {
     approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
     totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
     ownerEmail: user.email ?? null,
-    baseImagePreviewUrl: signedUrlMap.get(p.baseImagePath) ?? null,
+    baseImagePreviewUrl: signedUrlById.get(p.id) ?? null,
   })));
 }
 

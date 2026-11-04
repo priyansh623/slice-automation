@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, Check, ChevronRight } from 'lucide-react';
 
 interface Step {
   label: string;
@@ -67,7 +68,7 @@ export default function ProjectHeader({
             cursor: 'pointer',
           }}
         >
-          <i className="icon-arrow-left" style={{ fontSize: 16 }} />
+          <ArrowLeft size={16} />
         </button>
         <div style={{ minWidth: 0 }}>
           <div style={{
@@ -135,13 +136,13 @@ export default function ProjectHeader({
                   flexShrink: 0,
                 }}>
                   {isComplete
-                    ? <i className="icon-check" style={{ fontSize: 12 }} />
+                    ? <Check size={12} />
                     : i + 1}
                 </span>
                 {step.label}
               </button>
               {i < steps.length - 1 && (
-                <i className="icon-chevron-right" style={{ fontSize: 14, color: '#C4C4C9' }} />
+                <ChevronRight size={14} color="#C4C4C9" />
               )}
             </div>
           );

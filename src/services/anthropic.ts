@@ -31,12 +31,22 @@ export interface EncodedImage {
   mimeType: SupportedMimeType;
 }
 
+// Module-level image cache for the worker process (runs as a persistent Render process, not
+// Vercel serverless — instances are not shared and won't survive a restart, but within a single
+// worker process this avoids re-downloading the same base image for every single-screen call).
+const IMAGE_CACHE_MAX = 100;
+const _imageCache = new Map<string, EncodedImage>();
+
 /**
  * Downloads a file from Supabase Storage and encodes it as base64 for Claude.
  * storagePath: the path stored in the DB, e.g. "uploads/my-image.jpg"
  * bucket: the Supabase Storage bucket name
  */
 export async function encodeImageFromStorage(storagePath: string, bucket: string): Promise<EncodedImage> {
+  const cacheKey = `${bucket}:${storagePath}`;
+  const cached = _imageCache.get(cacheKey);
+  if (cached) return cached;
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -52,7 +62,14 @@ export async function encodeImageFromStorage(storagePath: string, bucket: string
   const mimeType = SUPPORTED_IMAGE_TYPES[ext as keyof typeof SUPPORTED_IMAGE_TYPES] ?? 'image/jpeg';
   const arrayBuffer = await data.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString('base64');
-  return { base64, mimeType };
+  const result: EncodedImage = { base64, mimeType };
+  if (_imageCache.size >= IMAGE_CACHE_MAX) {
+    // Evict oldest entry (Map preserves insertion order, so the first key is oldest).
+    const firstKey = _imageCache.keys().next().value;
+    if (firstKey !== undefined) _imageCache.delete(firstKey);
+  }
+  _imageCache.set(cacheKey, result);
+  return result;
 }
 
 export async function loadConversation(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import { Plus, Clapperboard, Search, ChevronRight } from 'lucide-react';
 
 interface VideoProject {
   id: number;
@@ -102,7 +103,7 @@ export default function VideoProjectsPage() {
               onMouseEnter={(e) => (e.currentTarget.style.background = '#5A36E8')}
               onMouseLeave={(e) => (e.currentTarget.style.background = '#6C47FF')}
             >
-              <i className="icon-plus" style={{ fontSize: 16 }} />
+              <Plus size={16} />
               New project
             </button>
           </div>
@@ -126,7 +127,7 @@ export default function VideoProjectsPage() {
           ) : projects.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '72px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
               <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F0F0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                <i className="icon-clapperboard" style={{ fontSize: 22 }} />
+                <Clapperboard size={22} />
               </div>
               <h2 style={{ margin: 0, font: '700 20px/1.3 Satoshi' }}>Create your first project</h2>
               <p style={{ margin: '8px 0 28px', maxWidth: 440, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
@@ -136,7 +137,7 @@ export default function VideoProjectsPage() {
                 onClick={() => router.push('/video-projects/new')}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}
               >
-                <i className="icon-plus" style={{ fontSize: 16 }} />
+                <Plus size={16} />
                 New project
               </button>
             </div>
@@ -145,7 +146,7 @@ export default function VideoProjectsPage() {
               {/* Search + filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <div style={{ position: 'relative', width: 300 }}>
-                  <i className="icon-search" style={{ position: 'absolute', left: 12, top: 10, fontSize: 15, color: '#A3A3A9' }} />
+                  <Search size={15} style={{ position: 'absolute', left: 12, top: 10, color: '#A3A3A9' }} />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -230,6 +231,7 @@ export default function VideoProjectsPage() {
                               <img
                                 src={p.baseImagePreviewUrl}
                                 alt=""
+                                loading="lazy"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                               />
                             )}
@@ -281,7 +283,7 @@ export default function VideoProjectsPage() {
                         </div>
 
                         {/* Chevron */}
-                        <i className="icon-chevron-right" style={{ fontSize: 16, color: '#A3A3A9' }} />
+                        <ChevronRight size={16} color="#A3A3A9" />
                       </div>
                     );
                   })

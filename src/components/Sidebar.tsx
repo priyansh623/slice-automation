@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { FolderOpen, Settings2, MessageSquare } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -56,7 +57,7 @@ export default function Sidebar() {
           cursor: 'pointer',
           font: '500 11px/1 Satoshi',
         }}>
-          <i className="icon-folder-open" style={{ fontSize: 19 }} />
+          <FolderOpen size={19} />
           Projects
         </button>
       </Link>
@@ -77,7 +78,7 @@ export default function Sidebar() {
           cursor: 'pointer',
           font: '500 11px/1 Satoshi',
         }}>
-          <i className="icon-settings-2" style={{ fontSize: 19 }} />
+          <Settings2 size={19} />
           Settings
         </button>
       </Link>
@@ -103,7 +104,7 @@ export default function Sidebar() {
         onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#F6F6F4'; (e.currentTarget as HTMLButtonElement).style.color = '#111113'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#75757C'; }}
       >
-        <i className="icon-message-square" style={{ fontSize: 19 }} />
+        <MessageSquare size={19} />
         Feedback
       </button>
 

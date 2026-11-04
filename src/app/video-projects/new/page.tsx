@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ImageUpload from '@/components/ImageUpload';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 interface UploadResult {
   storedPath: string;
@@ -84,7 +85,7 @@ export default function NewVideoProjectPage() {
                 href="/video-projects"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '400 13px/1 Satoshi', color: '#75757C', textDecoration: 'none', marginBottom: 10 }}
               >
-                <i className="icon-arrow-left" style={{ fontSize: 14 }} />
+                <ArrowLeft size={14} />
                 Projects
               </Link>
               <h1 style={{ margin: 0, font: '700 28px/1.1 Satoshi', letterSpacing: '-0.03em' }}>New project</h1>
@@ -104,7 +105,7 @@ export default function NewVideoProjectPage() {
               }}
             >
               {saving ? 'Creating…' : 'Analyse script'}
-              {!saving && <i className="icon-arrow-right" style={{ fontSize: 14 }} />}
+              {!saving && <ArrowRight size={14} />}
             </button>
           </div>
 

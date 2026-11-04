@@ -36,17 +36,50 @@ export async function GET(
   const screenIds = screens.map((s) => s.id);
   const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
 
-  const [promptRows, allGens, signedResult] = await Promise.all([
+  // DB-backed signed URL cache: skip Storage call when the cached URL is still fresh.
+  const ONE_HOUR_MS = 3_600_000;
+  const URL_TTL_S = 7 * 24 * 3600;
+  const nowMs = Date.now();
+  let baseImagePreviewUrl: string | null = null;
+  if (
+    project.baseImageSignedUrl &&
+    project.baseImageSignedUrlExpiresAt &&
+    project.baseImageSignedUrlExpiresAt >= nowMs + ONE_HOUR_MS
+  ) {
+    baseImagePreviewUrl = project.baseImageSignedUrl;
+  } else {
+    const signedResult = await Promise.race([
+      serviceClient.storage.from(bucket).createSignedUrl(project.baseImagePath, URL_TTL_S),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ]).catch(() => ({ data: null as null }));
+    if (signedResult.data?.signedUrl) {
+      baseImagePreviewUrl = signedResult.data.signedUrl;
+      const expiresAt = nowMs + URL_TTL_S * 1000;
+      try {
+        await db.update(videoProjects)
+          .set({ baseImageSignedUrl: baseImagePreviewUrl, baseImageSignedUrlExpiresAt: expiresAt })
+          .where(eq(videoProjects.id, projectId));
+      } catch {
+        // Cache write failure is non-fatal; signed URL was already obtained.
+      }
+    }
+  }
+
+  // Fetch only the columns needed by the breakdown view; avoid pulling every generation column.
+  type GenRow = { id: number; videoScreenId: number; status: string; videoStoragePath: string | null; updatedAt: number };
+  const [promptRows, allGens] = await Promise.all([
     screenIds.length > 0
       ? db.select({ videoScreenId: screenPromptVersions.videoScreenId }).from(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds))
       : Promise.resolve([] as { videoScreenId: number }[]),
     screenIds.length > 0
-      ? db.select().from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds))
-      : Promise.resolve([] as typeof videoGenerations.$inferSelect[]),
-    Promise.race([
-      serviceClient.storage.from(bucket).createSignedUrl(project.baseImagePath, 3600),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
-    ]).catch(() => ({ data: null as null })),
+      ? db.select({
+          id: videoGenerations.id,
+          videoScreenId: videoGenerations.videoScreenId,
+          status: videoGenerations.status,
+          videoStoragePath: videoGenerations.videoStoragePath,
+          updatedAt: videoGenerations.updatedAt,
+        }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds))
+      : Promise.resolve([] as GenRow[]),
   ]);
 
   const promptPresence = new Map<number, boolean>();
@@ -55,7 +88,7 @@ export async function GET(
   type GenSummary = { id: number; status: string; videoStoragePath: string | null; updatedAt: number };
   const latestGenByScreen = new Map<number, GenSummary>();
   const latestCompletedGenByScreen = new Map<number, { id: number; videoStoragePath: string }>();
-  const sorted = allGens.sort((a, b) => b.updatedAt - a.updatedAt);
+  const sorted = (allGens as GenRow[]).sort((a, b) => b.updatedAt - a.updatedAt);
   for (const gen of sorted) {
     if (!latestGenByScreen.has(gen.videoScreenId)) {
       latestGenByScreen.set(gen.videoScreenId, {
@@ -79,7 +112,7 @@ export async function GET(
 
   return NextResponse.json({
     ...project,
-    baseImagePreviewUrl: signedResult.data?.signedUrl ?? null,
+    baseImagePreviewUrl,
     screens: enrichedScreens,
   });
 }

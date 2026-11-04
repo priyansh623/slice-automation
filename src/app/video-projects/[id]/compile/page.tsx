@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
+import { Play, RotateCcw, ChevronRight } from 'lucide-react';
 
 interface Screen {
   id: number;
@@ -153,7 +154,7 @@ export default function CompilePage() {
             {isDone && latestComp && (
               <Link href={`/video-projects/${id}/review?cid=${latestComp.id}`} style={{ textDecoration: 'none' }}>
                 <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}>
-                  <i className="icon-play" style={{ fontSize: 14 }} />
+                  <Play size={14} />
                   Review video
                 </button>
               </Link>
@@ -273,7 +274,7 @@ export default function CompilePage() {
                 onClick={() => setShowModal(true)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: 'pointer' }}
               >
-                <i className="icon-rotate-ccw" style={{ fontSize: 14 }} />
+                <RotateCcw size={14} />
                 Try again
               </button>
             </div>
@@ -315,7 +316,7 @@ export default function CompilePage() {
                       <span style={{ marginLeft: 'auto', font: '400 12px/1 Satoshi', color: '#9A9AA0' }}>
                         {new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                       </span>
-                      <i className="icon-chevron-right" style={{ fontSize: 15, color: '#A3A3A9' }} />
+                      <ChevronRight size={15} color="#A3A3A9" />
                     </div>
                   </Link>
                 ))}

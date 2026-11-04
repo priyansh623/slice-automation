@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
@@ -168,13 +168,44 @@ export default function VideoProjectPage() {
     setDirty(false);
     if (tasksRes.ok) {
       const tasksData = await tasksRes.json();
-      setPromptTasks(tasksData.tasks ?? []);
+      const tasks: PromptTask[] = tasksData.tasks ?? [];
+      setPromptTasks(tasks);
+      const statusMap: Record<number, string> = {};
+      for (const t of tasks) statusMap[t.id] = t.status;
+      prevTaskStatusesRef.current = statusMap;
     }
   }
 
+  const autoAnalyzedRef = useRef(false);
+  const prevTaskStatusesRef = useRef<Record<number, string>>({});
+
   useEffect(() => { load(); }, [id]);
 
-  // Poll while prompt tasks are in-flight or video gens are active
+  // Auto-trigger analysis when project loads with no scenes yet
+  useEffect(() => {
+    if (loading || autoAnalyzedRef.current) return;
+    if (editedScreens.length === 0 && project) {
+      autoAnalyzedRef.current = true;
+      setAnalyzing(true);
+      setError('');
+      fetch(`/api/v1/video-projects/${id}/analyze`, { method: 'POST' })
+        .then(async (res) => {
+          if (!res.ok) { setError('Analysis failed. Please try again.'); return; }
+          const data = await res.json();
+          if (Array.isArray(data.possibleTypos) && data.possibleTypos.length > 0) {
+            setPossibleTypos(data.possibleTypos);
+          }
+          await load();
+        })
+        .catch(() => setError('Analysis failed. Please try again.'))
+        .finally(() => setAnalyzing(false));
+    }
+  }, [loading, editedScreens.length, project, id]);
+
+  // Poll while prompt tasks are in-flight or video gens are active.
+  // When only tasks are active (no active gens) we use a lightweight path: poll tasks only and
+  // fetch the full project only when a task transitions to completed/failed — this avoids the
+  // heavy project fetch on every 4-second tick while prompts are being written.
   useEffect(() => {
     const hasActiveTasks = promptTasks.some((t) => t.status === 'pending' || t.status === 'processing');
     const hasActiveGens = project?.screens.some((s) => {
@@ -182,19 +213,53 @@ export default function VideoProjectPage() {
       return g && (g.status === 'queued' || g.status === 'pending' || g.status === 'processing');
     });
     if (!hasActiveTasks && !hasActiveGens) return;
+
     const timer = setTimeout(async () => {
-      const [tasksRes, projectRes] = await Promise.all([
-        fetch(`/api/v1/video-projects/${id}/prompt-tasks`),
-        fetch(`/api/v1/video-projects/${id}`),
-      ]);
-      if (tasksRes.ok) {
+      if (hasActiveGens) {
+        // Full refresh: gen status lives on the project response.
+        const [tasksRes, projectRes] = await Promise.all([
+          fetch(`/api/v1/video-projects/${id}/prompt-tasks`),
+          fetch(`/api/v1/video-projects/${id}`),
+        ]);
+        if (tasksRes.ok) {
+          const data = await tasksRes.json();
+          const newTasks: PromptTask[] = data.tasks ?? [];
+          setPromptTasks(newTasks);
+          const statusMap: Record<number, string> = {};
+          for (const t of newTasks) statusMap[t.id] = t.status;
+          prevTaskStatusesRef.current = statusMap;
+        }
+        if (projectRes.ok) {
+          const data = await projectRes.json();
+          setProject(data);
+          setEditedScreens(data.screens ?? []);
+        }
+      } else {
+        // Lightweight path: only task statuses matter, skip the heavy project fetch.
+        const tasksRes = await fetch(`/api/v1/video-projects/${id}/prompt-tasks`);
+        if (!tasksRes.ok) return;
         const data = await tasksRes.json();
-        setPromptTasks(data.tasks ?? []);
-      }
-      if (projectRes.ok) {
-        const data = await projectRes.json();
-        setProject(data);
-        setEditedScreens(data.screens ?? []);
+        const newTasks: PromptTask[] = data.tasks ?? [];
+        // Detect any task transitioning from active to terminal.
+        const prev = prevTaskStatusesRef.current;
+        const anyTransitioned = newTasks.some(
+          (t) =>
+            (t.status === 'completed' || t.status === 'failed') &&
+            prev[t.id] !== undefined &&
+            (prev[t.id] === 'pending' || prev[t.id] === 'processing'),
+        );
+        const statusMap: Record<number, string> = {};
+        for (const t of newTasks) statusMap[t.id] = t.status;
+        prevTaskStatusesRef.current = statusMap;
+        setPromptTasks(newTasks);
+        if (anyTransitioned) {
+          const projectRes = await fetch(`/api/v1/video-projects/${id}`);
+          if (projectRes.ok) {
+            const projectData = await projectRes.json();
+            setProject(projectData);
+            setEditedScreens(projectData.screens ?? []);
+          }
+        }
       }
     }, 4000);
     return () => clearTimeout(timer);
@@ -639,79 +704,23 @@ export default function VideoProjectPage() {
     );
   }
 
-  // ─── Phase 1: No screens yet ─────────────────────────────────────────────
+  // ─── Phase 1: No screens yet — auto-analyzing ─────────────────────────────
   if (editedScreens.length === 0) {
     return (
       <AppShell>
-        <div className="page-header">
-          <div className="page-header-left">
-            <div className="page-breadcrumb">
-              <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
-              <span>›</span>
-              <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
-            </div>
-            <h1 className="page-title">{project.name}</h1>
-          </div>
-        </div>
-
         <div className="page-body" style={{ maxWidth: 720 }}>
-          {error && (
+          {error ? (
             <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span>{error}</span>
               <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
             </div>
+          ) : (
+            <>
+              <div className="skeleton" style={{ height: 28, width: '40%', marginBottom: 16 }} />
+              <div className="skeleton" style={{ height: 120, marginBottom: 16 }} />
+              <div className="skeleton" style={{ height: 120 }} />
+            </>
           )}
-
-          {/* Step banner */}
-          <div className="stage-banner stage-banner-purple">
-            <div className="stage-banner-icon">
-              <IconSparkle />
-            </div>
-            <div>
-              <div className="stage-banner-title">Step 1 of 3: Break down the script</div>
-              <div className="stage-banner-desc">
-                Claude will read your script and split it into individual scenes, one for each line of dialogue. You can edit the scenes before moving on.
-              </div>
-            </div>
-          </div>
-
-          {/* Script preview */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-header">
-              <div>
-                <div className="card-title">Your Script</div>
-                <div className="card-subtitle">This is the script Claude will analyse</div>
-              </div>
-            </div>
-            <div className="card-body">
-              <pre style={{
-                margin: 0, fontSize: 13, color: 'var(--text-secondary)',
-                whiteSpace: 'pre-wrap', lineHeight: 1.7,
-                background: 'var(--bg-page)', padding: '12px 14px',
-                borderRadius: 8, border: '1px solid var(--border)',
-                maxHeight: 260, overflowY: 'auto',
-              }}>{project.originalScript}</pre>
-            </div>
-          </div>
-
-          {/* Primary action */}
-          <div className="action-well">
-            <div className="action-well-title">Ready to analyse</div>
-            <div className="action-well-desc">
-              When you click <strong>Analyse script</strong>, Claude will split your script into scenes. This takes a few seconds. You'll be able to review and edit the scenes before anything is generated.
-            </div>
-            <div>
-              <button
-                className="btn btn-primary"
-                onClick={handleAnalyze}
-                disabled={analyzing}
-                style={{ gap: 8, display: 'inline-flex', alignItems: 'center' }}
-              >
-                <IconSparkle />
-                {analyzing ? 'Analysing script…' : 'Analyse script'}
-              </button>
-            </div>
-          </div>
         </div>
       </AppShell>
     );

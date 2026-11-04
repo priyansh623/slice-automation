@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
+import { Play, Pause, RotateCcw, Download } from 'lucide-react';
 
 interface VideoProject {
   id: number;
@@ -254,7 +255,7 @@ export default function ReviewPage() {
                 cursor: signedUrl ? 'pointer' : 'not-allowed',
               }}
             >
-              <i className={isPlaying ? 'icon-pause' : 'icon-play'} style={{ fontSize: 16 }} />
+              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
 
             {/* Time */}
@@ -272,7 +273,7 @@ export default function ReviewPage() {
                   background: 'transparent', border: '1px solid #D0D0CC',
                   font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113',
                 }}>
-                  <i className="icon-rotate-ccw" style={{ fontSize: 13, marginRight: 6 }} />
+                  <RotateCcw size={13} style={{ marginRight: 6 }} />
                   Try again
                 </button>
               </Link>
@@ -326,7 +327,7 @@ export default function ReviewPage() {
                 cursor: downloading || !isCompleted ? 'not-allowed' : 'pointer',
               }}
             >
-              <i className="icon-download" style={{ fontSize: 14 }} />
+              <Download size={14} />
               {downloading ? 'Downloading…' : 'Download'}
             </button>
           </div>

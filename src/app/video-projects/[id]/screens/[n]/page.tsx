@@ -93,20 +93,24 @@ export default function ScreenPage() {
   const [activeTab, setActiveTab] = useState<'prompt' | 'requests'>('prompt');
   const [generatingAll, setGeneratingAll] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingFetchesRef = useRef<Set<number>>(new Set());
 
   function isProjectScopeFeedback(text: string): boolean {
     return /across all scenes|throughout|in every scene|all scenes|his voice throughout|her voice throughout|the whole project|project.wide|consistently|every scene/i.test(text);
   }
 
   const fetchSignedUrl = useCallback(async (generationId: number) => {
-    if (signedVideoUrls[generationId]) return;
+    if (pendingFetchesRef.current.has(generationId)) return;
+    pendingFetchesRef.current.add(generationId);
     try {
       const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/video?generationId=${generationId}`);
       if (!res.ok) return;
       const { signedUrl } = await res.json() as { signedUrl: string };
       setSignedVideoUrls((prev) => ({ ...prev, [generationId]: signedUrl }));
-    } catch { /* will retry on next render */ }
-  }, [id, n, signedVideoUrls]);
+    } catch { /* */ } finally {
+      pendingFetchesRef.current.delete(generationId);
+    }
+  }, [id, n]);
 
   async function loadAll() {
     const [projRes, histRes, genRes] = await Promise.all([
@@ -166,6 +170,17 @@ export default function ScreenPage() {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     };
   }, [generations.map((g) => `${g.generation.id}:${g.generation.status}`).join(',')]);
+
+  // Trigger signed URL fetch when the display generation changes — not from render body.
+  useEffect(() => {
+    const latestCompleted = generations.find((g) => g.generation.status === 'completed');
+    const displayGeneration = latestCompleted ?? generations[0];
+    const genId = displayGeneration?.generation?.id;
+    if (genId != null && !signedVideoUrls[genId]) {
+      void fetchSignedUrl(genId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generations]);
 
   async function handleUnapprove() {
     setApproving(true);
@@ -338,9 +353,6 @@ export default function ScreenPage() {
   // The latest completed generation for the right panel
   const latestCompletedGen = generations.find((g) => g.generation.status === 'completed');
   const displayGen = latestCompletedGen ?? latestGen;
-  if (displayGen?.generation && !signedVideoUrls[displayGen.generation.id]) {
-    void fetchSignedUrl(displayGen.generation.id);
-  }
 
   return (
     <AppShell fullscreen>

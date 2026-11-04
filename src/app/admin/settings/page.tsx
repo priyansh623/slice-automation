@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Video, Layers, MessageCircle, Info } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 
 interface AdminSettings {
@@ -11,11 +12,11 @@ interface AdminSettings {
 
 type NavSection = 'hook' | 'video' | 'compilation' | 'feedback';
 
-const NAV_ITEMS: { key: NavSection; label: string; icon: string }[] = [
-  { key: 'hook', label: 'Hook instructions', icon: 'icon-file-text' },
-  { key: 'video', label: 'Video generation', icon: 'icon-video' },
-  { key: 'compilation', label: 'Compilation', icon: 'icon-layers' },
-  { key: 'feedback', label: 'Tester feedback', icon: 'icon-message-circle' },
+const NAV_ITEMS: { key: NavSection; label: string; Icon: React.ElementType }[] = [
+  { key: 'hook', label: 'Hook instructions', Icon: FileText },
+  { key: 'video', label: 'Video generation', Icon: Video },
+  { key: 'compilation', label: 'Compilation', Icon: Layers },
+  { key: 'feedback', label: 'Tester feedback', Icon: MessageCircle },
 ];
 
 const CRF_MARKS = [
@@ -145,7 +146,7 @@ export default function AdminSettingsPage() {
                   cursor: 'pointer', textAlign: 'left', width: '100%',
                 }}
               >
-                <i className={item.icon} style={{ fontSize: 15, flexShrink: 0 }} />
+                <item.Icon size={15} style={{ flexShrink: 0 }} />
                 {item.label}
               </button>
             );
@@ -331,7 +332,7 @@ export default function AdminSettingsPage() {
 
                 {/* Audio info row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0', borderBottom: '1px solid #F3F3F1' }}>
-                  <i className="icon-info" style={{ fontSize: 15, color: '#9A9AA0', flexShrink: 0 }} />
+                  <Info size={15} color="#9A9AA0" style={{ flexShrink: 0 }} />
                   <span style={{ font: '400 13px/1.5 Satoshi', color: '#5E5E65' }}>
                     Audio is always preserved. Speech is normalised and encoded as AAC 192 kbps.
                   </span>
@@ -380,7 +381,7 @@ export default function AdminSettingsPage() {
                 </p>
                 <div style={{ padding: '48px 0', textAlign: 'center' }}>
                   <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F0F0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                    <i className="icon-message-circle" style={{ fontSize: 20, color: '#9A9AA0' }} />
+                    <MessageCircle size={20} color="#9A9AA0" />
                   </div>
                   <div style={{ font: '500 14px/1.3 Satoshi', marginBottom: 6 }}>No feedback yet</div>
                   <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C' }}>Feedback submitted from the review screen will appear here.</div>
