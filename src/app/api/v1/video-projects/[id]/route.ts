@@ -59,9 +59,16 @@ export async function GET(
         await db.update(videoProjects)
           .set({ baseImageSignedUrl: baseImagePreviewUrl, baseImageSignedUrlExpiresAt: expiresAt })
           .where(eq(videoProjects.id, projectId));
-      } catch {
-        // Cache write failure is non-fatal; signed URL was already obtained.
+      } catch (err) {
+        console.warn(`[video-projects/${projectId}] signed URL cache write failed:`, err);
       }
+    } else if (
+      project.baseImageSignedUrl &&
+      project.baseImageSignedUrlExpiresAt &&
+      project.baseImageSignedUrlExpiresAt > nowMs
+    ) {
+      // Signing failed but the existing URL has not yet expired — serve it rather than returning null.
+      baseImagePreviewUrl = project.baseImageSignedUrl;
     }
   }
 

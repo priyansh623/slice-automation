@@ -53,7 +53,7 @@ export async function GET(): Promise<NextResponse> {
   if (refreshPaths.length > 0) {
     const { data: freshUrls } = await serviceClient.storage.from(bucket).createSignedUrls(refreshPaths, URL_TTL_S);
     const expiresAt = now + URL_TTL_S * 1000;
-    await Promise.all(
+    const writeResults = await Promise.allSettled(
       (freshUrls ?? []).map((item) => {
         if (!item.signedUrl || !item.path) return Promise.resolve();
         refreshedUrlMap.set(item.path, item.signedUrl);
@@ -64,17 +64,25 @@ export async function GET(): Promise<NextResponse> {
           .where(eq(videoProjects.id, proj.id));
       }),
     );
+    for (const r of writeResults) {
+      if (r.status === 'rejected') {
+        console.warn('[video-projects] signed URL cache write failed:', r.reason);
+      }
+    }
   }
 
   const signedUrlById = new Map<number, string | null>(
     rows.map((p) => {
-      const url =
-        p.baseImageSignedUrl &&
-        p.baseImageSignedUrlExpiresAt &&
-        p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS
-          ? p.baseImageSignedUrl
-          : (refreshedUrlMap.get(p.baseImagePath) ?? null);
-      return [p.id, url];
+      if (p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS) {
+        return [p.id, p.baseImageSignedUrl];
+      }
+      const refreshed = refreshedUrlMap.get(p.baseImagePath) ?? null;
+      if (refreshed) return [p.id, refreshed];
+      // Signing failed: serve existing URL if it has not actually expired yet (still within safety buffer).
+      if (p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt > now) {
+        return [p.id, p.baseImageSignedUrl];
+      }
+      return [p.id, null];
     }),
   );
 
