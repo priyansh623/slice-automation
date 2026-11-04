@@ -709,18 +709,18 @@ export default function VideoProjectPage() {
   if (editedScreens.length === 0) {
     return (
       <AppShell>
-        <div className="page-body" style={{ maxWidth: 720 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {error ? (
-            <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ maxWidth: 400, padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#991B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span>{error}</span>
-              <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
+              <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }}>×</button>
             </div>
           ) : (
-            <>
-              <div className="skeleton" style={{ height: 28, width: '40%', marginBottom: 16 }} />
-              <div className="skeleton" style={{ height: 120, marginBottom: 16 }} />
-              <div className="skeleton" style={{ height: 120 }} />
-            </>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #ECECE8', borderTopColor: '#6C47FF', animation: 'spin 0.75s linear infinite' }} />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <div style={{ font: '500 14px/1 Satoshi', color: '#75757C' }}>Analysing your script…</div>
+            </div>
           )}
         </div>
       </AppShell>
@@ -746,7 +746,7 @@ export default function VideoProjectPage() {
       />
 
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 40px 80px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 40px 48px' }}>
 
           {error && (
             <div style={{ marginBottom: 20, padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#991B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -841,13 +841,13 @@ export default function VideoProjectPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <textarea
                     value={s.dialogue}
-                    onChange={(e) => updateDialogue(s.screenNumber, e.target.value)}
-                    rows={2}
+                    onChange={(e) => { updateDialogue(s.screenNumber, e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
+                    ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
                     placeholder="Enter dialogue for this scene…"
                     style={{
                       width: '100%', border: '1px solid transparent', borderRadius: 8,
                       padding: '6px 8px', font: '400 14px/1.6 Satoshi', background: 'transparent',
-                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                      outline: 'none', resize: 'none', boxSizing: 'border-box', overflow: 'hidden',
                     }}
                     onFocus={(e) => { e.currentTarget.style.border = '1px solid #E4E4E0'; e.currentTarget.style.background = '#FAFAF8'; }}
                     onBlur={(e) => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = 'transparent'; }}
@@ -871,10 +871,6 @@ export default function VideoProjectPage() {
                         }}
                       >{d}s</button>
                     ))}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <button onClick={() => moveScreen(idx, -1)} disabled={idx === 0} style={{ width: 20, height: 14, border: '1px solid #E4E4E0', borderRadius: 3, background: '#fff', cursor: idx === 0 ? 'default' : 'pointer', color: '#9A9AA0', font: '400 9px/1 Satoshi', opacity: idx === 0 ? 0.4 : 1 }}>↑</button>
-                    <button onClick={() => moveScreen(idx, 1)} disabled={idx === editedScreens.length - 1} style={{ width: 20, height: 14, border: '1px solid #E4E4E0', borderRadius: 3, background: '#fff', cursor: idx === editedScreens.length - 1 ? 'default' : 'pointer', color: '#9A9AA0', font: '400 9px/1 Satoshi', opacity: idx === editedScreens.length - 1 ? 0.4 : 1 }}>↓</button>
                   </div>
                   <button onClick={() => removeScreen(s.screenNumber)} title="Remove scene" style={{ width: 28, height: 28, border: '1px solid #E4E4E0', borderRadius: 6, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A9AA0' }}>
                     <IconTrash />
