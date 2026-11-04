@@ -18,6 +18,11 @@ import { useapiProvider } from '@/providers/useapi/provider';
 import type { VideoGenerationProvider } from '@/providers/useapi/interface';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
+function stripNotesSection(text: string): string {
+  // Remove any trailing "**Notes:**", "**Note:**", "Notes:", "Note:" section and everything after it
+  return text.replace(/\n+\*{0,2}Notes?\*{0,2}:[\s\S]*/i, '').trimEnd();
+}
+
 async function downloadImageToTmp(storagePath: string, bucket: string): Promise<string> {
   const supabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -423,7 +428,7 @@ export async function generateScreen1Prompt(
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
   }
 
-  const promptText = await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image });
+  const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));
   const version = await insertPromptVersion(videoScreenId, promptText, 'claude', nlFeedback, feedbackScope);
   const validation = validatePrompt(promptText, screen.dialogue, screen.durationSeconds, brief);
 
@@ -462,7 +467,7 @@ export async function generateInitialScreenPrompt(
     `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
 
-  const promptText = await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image });
+  const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));
   const version = await insertPromptVersion(
     videoScreenId, promptText, 'claude', undefined, undefined,
     screen1Info?.versionId ?? null,
@@ -507,10 +512,10 @@ export async function generateRemainingPrompts(
       `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
 
-    const promptText = await callClaude(videoProjectId, userMessage, skillContent, {
+    const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, {
       videoScreenId: screen.id,
       image,
-    });
+    }));
     const version = await insertPromptVersion(
       screen.id, promptText, 'claude', undefined, undefined,
       screen1Info?.versionId ?? null,
@@ -575,7 +580,7 @@ export async function revisePrompt(
       .where(eq(videoGenerations.id, reviewingGenerationId));
   }
 
-  const promptText = await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image });
+  const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));
   const version = await insertPromptVersion(
     videoScreenId, promptText, 'claude', nlFeedback, feedbackScope,
     screen1Info?.versionId ?? null,
