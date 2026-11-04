@@ -681,7 +681,7 @@ export default function ScreenPage() {
         </div>
 
         {/* ── Right panel ────────────────────────────────────────────────── */}
-        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #ECECE8', overflow: 'hidden' }}>
+        <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderLeft: '1px solid #ECECE8' }}>
 
           {/* Right header */}
           {displayGen && (
@@ -696,9 +696,9 @@ export default function ScreenPage() {
           )}
 
           {/* Video area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '20px 20px 14px', gap: 14, background: '#FAFAF9' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', gap: 14, overflowY: 'auto', background: '#FAFAF9' }}>
             {hasPending ? (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, minHeight: 360 }}>
                 <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 12 }}>
                   <div className="pulse-dot" style={{ background: '#6C47FF' }} />
                   <div className="pulse-dot" style={{ background: '#6C47FF' }} />
@@ -708,13 +708,13 @@ export default function ScreenPage() {
                 <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
               </div>
             ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{ background: '#1A1A1E', borderRadius: 14, overflow: 'hidden' }}>
                 {signedVideoUrls[displayGen.generation.id] ? (
                   <video
                     key={displayGen.generation.id}
                     src={signedVideoUrls[displayGen.generation.id]}
                     controls
-                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+                    style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }}
                   />
                 ) : (
                   <div style={{ paddingBottom: '177.78%', position: 'relative' }}>
