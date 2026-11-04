@@ -16,6 +16,7 @@ import { callClaude, encodeImageFromStorage, loadConversation } from './anthropi
 import { getSkillContent } from '@/lib/ugc-skill';
 import { useapiProvider } from '@/providers/useapi/provider';
 import type { VideoGenerationProvider } from '@/providers/useapi/interface';
+import { RateLimitError } from '@/providers/useapi/errors';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 function stripNotesSection(text: string): string {
@@ -742,6 +743,15 @@ export async function submitQueuedGeneration(
         .where(eq(videoGenerations.id, generationId));
     }
   } catch (err: unknown) {
+    if (err instanceof RateLimitError) {
+      // All accounts busy — reset to queued so the worker retries on the next tick
+      await db
+        .update(videoGenerations)
+        .set({ status: 'queued', updatedAt: Date.now() })
+        .where(eq(videoGenerations.id, generationId));
+      console.log(`[workflow] Gen ${generationId} rate-limited, reset to queued (retry next tick)`);
+      return;
+    }
     await db
       .update(videoGenerations)
       .set({ status: 'failed', errorMessage: (err instanceof Error ? err.message : String(err)), updatedAt: Date.now() })

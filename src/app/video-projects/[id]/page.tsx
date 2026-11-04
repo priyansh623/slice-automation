@@ -153,7 +153,7 @@ export default function VideoProjectPage() {
   const [promptTasks, setPromptTasks] = useState<PromptTask[]>([]);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingAllPrompts, setGeneratingAllPrompts] = useState(false);
-  const [showGenerateAllConfirm, setShowGenerateAllConfirm] = useState(false);
+
   const [showReanalyzeConfirm, setShowReanalyzeConfirm] = useState(false);
   const [infoMsg, setInfoMsg] = useState('');
 
@@ -354,11 +354,6 @@ export default function VideoProjectPage() {
   }
 
   async function handleGenerateAll() {
-    if (!showGenerateAllConfirm) {
-      setShowGenerateAllConfirm(true);
-      return;
-    }
-    setShowGenerateAllConfirm(false);
     setGeneratingAll(true);
     setError('');
     const res = await fetch(`/api/v1/video-projects/${id}/generate-all`, { method: 'POST' });

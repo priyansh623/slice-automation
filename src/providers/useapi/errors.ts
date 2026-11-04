@@ -24,6 +24,13 @@ export class AuthenticationError extends DownloadError {}
 // Operator action required: wrong account, unconfigured Google Flow, or expired Google session (596)
 export class ConfigurationError extends DownloadError {}
 
+// Provider rate-limited (429) — all accounts busy; worker resets to queued and retries next tick
+export class RateLimitError extends DownloadError {
+  constructor(message: string, public readonly retryAfterMs: number) {
+    super(message);
+  }
+}
+
 // Undocumented provider status — bounded retries (MAX_UNEXPECTED_ATTEMPTS), then permanent failure
 export class UnexpectedProviderError extends DownloadError {
   constructor(message: string, public readonly httpStatus: number) {

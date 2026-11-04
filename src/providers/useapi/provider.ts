@@ -7,6 +7,7 @@ import {
   ConfigurationError,
   OutputExpiredError,
   PermanentDownloadError,
+  RateLimitError,
   TemporaryDownloadError,
   UnexpectedProviderError,
 } from './errors';
@@ -74,6 +75,11 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
 
     if (res.status === 401) throw new AuthenticationError('USEAPI_TOKEN invalid or expired');
     if (res.status === 596) throw new ConfigurationError('Google Flow not configured or Google session expired');
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get('retry-after') ?? '30', 10) * 1000;
+      const text = await res.text().catch(() => '');
+      throw new RateLimitError(`All Google Flow accounts busy (429): ${text}`, retryAfter);
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new UnexpectedProviderError(`Submit failed: ${res.status} ${text}`, res.status);
