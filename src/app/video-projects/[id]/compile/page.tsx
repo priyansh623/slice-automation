@@ -96,7 +96,7 @@ export default function CompilePage() {
     });
     setShowModal(false);
     if (!res.ok) {
-      const d = await res.json();
+      const d = await res.json().catch(() => ({})) as { error?: string };
       setError(d.error ?? 'Failed to start compilation');
       setSubmitting(false);
       return;

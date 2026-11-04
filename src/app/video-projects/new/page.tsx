@@ -58,7 +58,7 @@ export default function NewVideoProjectPage() {
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({})) as { error?: string };
         setError(data.error ?? 'Failed to create project');
         return;
       }

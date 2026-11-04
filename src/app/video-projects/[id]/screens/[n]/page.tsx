@@ -187,7 +187,7 @@ export default function ScreenPage() {
     setApproving(true);
     setError('');
     const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/unapprove`, { method: 'POST' });
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Failed to unapprove'); setApproving(false); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; setError(d.error ?? 'Failed to unapprove'); setApproving(false); return; }
     await loadAll();
     setApproving(false);
   }
@@ -210,7 +210,7 @@ export default function ScreenPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Failed'); setWritingPrompt(false); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; setError(d.error ?? 'Failed'); setWritingPrompt(false); return; }
     const data = await res.json();
     setCurrentPrompt(data.promptText);
     if (data.validation) setValidation(data.validation);
@@ -287,7 +287,7 @@ export default function ScreenPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ generationId }),
     });
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Failed'); setApproving(false); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; setError(d.error ?? 'Failed'); setApproving(false); return; }
     await loadAll();
     setApproving(false);
   }
