@@ -176,6 +176,8 @@ export async function DELETE(
   }
 
   if (screenIds.length > 0) {
+    // Null out approvedGenerationId before deleting generations (FK: video_screens_approved_gen_fk)
+    await db.update(videoScreens).set({ approvedGenerationId: null }).where(inArray(videoScreens.id, screenIds));
     const genRows = await db.select({ id: videoGenerations.id }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
     const genIds = genRows.map((g) => g.id);
     if (genIds.length > 0) await db.delete(generationFeedback).where(inArray(generationFeedback.videoGenerationId, genIds));
