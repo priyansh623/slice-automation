@@ -708,13 +708,13 @@ export default function ScreenPage() {
                 <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
               </div>
             ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
-              <div style={{ position: 'relative', background: '#1A1A1E', borderRadius: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14, overflow: 'hidden' }}>
                 {signedVideoUrls[displayGen.generation.id] ? (
                   <video
                     key={displayGen.generation.id}
                     src={signedVideoUrls[displayGen.generation.id]}
                     controls
-                    style={{ width: '100%', aspectRatio: '9/16', display: 'block', borderRadius: 14 }}
+                    style={{ maxHeight: 'calc(100vh - 220px)', maxWidth: '100%', width: 'auto', height: 'auto', display: 'block' }}
                   />
                 ) : (
                   <div style={{ paddingBottom: '177.78%', position: 'relative' }}>
