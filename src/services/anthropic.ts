@@ -97,7 +97,11 @@ export async function loadConversation(
   }
   const row = rows[0];
   if (!row) return [];
-  return JSON.parse(row.messagesJson) as MessageParam[];
+  try {
+    return JSON.parse(row.messagesJson) as MessageParam[];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveConversation(

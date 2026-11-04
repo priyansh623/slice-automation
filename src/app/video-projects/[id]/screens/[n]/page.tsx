@@ -150,6 +150,7 @@ export default function ScreenPage() {
           fetch(`/api/v1/video-projects/${id}/screens/${n}/generations`),
           fetch(`/api/v1/video-projects/${id}/screens/${n}/prompt-history`),
         ]);
+        if (!genRes.ok || !histRes.ok) return;
         const gens: Generation[] = await genRes.json();
         const hist: PromptVersion[] = await histRes.json();
         setGenerations(gens);
