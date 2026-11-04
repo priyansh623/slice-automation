@@ -601,7 +601,7 @@ export default function VideoProjectPage() {
           )}
 
           {approvedCount === total && total > 0 && (
-            <div className="stage-banner stage-banner-green" style={{ marginBottom: 20 }}>
+            <div className="stage-banner stage-banner-purple" style={{ marginBottom: 20 }}>
               <div className="stage-banner-icon">
                 <IconCheck />
               </div>
@@ -678,16 +678,16 @@ export default function VideoProjectPage() {
                         </div>
                         <div className="scene-card-dialogue">{s.dialogue || <span style={{ color: 'var(--text-muted)' }}>No dialogue</span>}</div>
                         <div className="scene-card-status">
-                          {status.kind === 'approved'           && <span className="badge badge-green"><span className="dot dot-green" />Approved</span>}
+                          {status.kind === 'approved'           && <span className="badge badge-purple"><span className="dot" style={{ background: '#6C47FF' }} />Approved</span>}
                           {status.kind === 'generating-video'   && <span className="badge badge-purple">Generating video…</span>}
                           {status.kind === 'queued-video'       && <span className="badge badge-gray">Video queued</span>}
                           {status.kind === 'generating-prompt'  && <span className="badge badge-purple">Generating prompt…</span>}
                           {status.kind === 'queued-prompt'      && <span className="badge badge-gray">Prompt queued</span>}
-                          {status.kind === 'failed-video'       && !status.hasPrior && <span className="badge badge-red">Video failed</span>}
-                          {status.kind === 'failed-video'       && status.hasPrior  && <span className="badge badge-red">Latest attempt failed</span>}
-                          {status.kind === 'failed-prompt'      && <span className="badge badge-red">Prompt failed</span>}
-                          {status.kind === 'generated'          && <span className="badge badge-teal">Generated</span>}
-                          {status.kind === 'prompt-ready'       && <span className="badge badge-blue">Prompt ready</span>}
+                          {status.kind === 'failed-video'       && !status.hasPrior && <span className="badge badge-gray">Video failed</span>}
+                          {status.kind === 'failed-video'       && status.hasPrior  && <span className="badge badge-gray">Latest attempt failed</span>}
+                          {status.kind === 'failed-prompt'      && <span className="badge badge-gray">Prompt failed</span>}
+                          {status.kind === 'generated'          && <span className="badge badge-purple">Generated</span>}
+                          {status.kind === 'prompt-ready'       && <span className="badge badge-gray">Prompt ready</span>}
                           {status.kind === 'up-next'            && <span className="badge badge-purple">Up next</span>}
                           {status.kind === 'not-started'        && <span className="badge badge-gray">Not started</span>}
                         </div>

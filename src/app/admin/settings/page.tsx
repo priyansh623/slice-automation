@@ -162,7 +162,7 @@ export default function AdminSettingsPage() {
               <div>
                 <h1 style={{ margin: '0 0 6px', font: '700 22px/1.2 Satoshi', letterSpacing: '-0.02em' }}>Hook instructions</h1>
                 <p style={{ margin: '0 0 28px', font: '400 14px/1.6 Satoshi', color: '#5E5E65' }}>
-                  Guidelines Claude follows when writing the opening scene&apos;s prompt. Changes apply to <strong>new projects only</strong> — existing projects keep their snapshot.
+                  Guidelines Claude follows when writing the opening scene&apos;s prompt. Changes apply to <strong>new projects only</strong>, existing projects keep the snapshot taken when they were created.
                 </p>
 
                 <textarea

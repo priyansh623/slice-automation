@@ -634,7 +634,7 @@ export default function ScreenPage() {
                   <div className="pulse-dot" style={{ background: '#6C47FF' }} />
                 </div>
                 <div style={{ font: '600 14px/1.3 Satoshi', color: '#E8E8F0' }}>Generating clip…</div>
-                <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
+                <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1-3 minutes</div>
               </div>
             ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
               <div style={{ width: '100%' }}>

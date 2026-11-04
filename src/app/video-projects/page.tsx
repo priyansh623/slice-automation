@@ -53,7 +53,7 @@ function initials(email: string | null): string {
 }
 
 function ownerName(email: string | null): string {
-  if (!email) return '—';
+  if (!email) return '-';
   return email.split('@')[0];
 }
 
@@ -166,15 +166,14 @@ export default function VideoProjectsPage() {
                         onClick={() => setFilter(f.key)}
                         style={{
                           height: 30, padding: '0 12px', border: 'none', borderRadius: 7,
-                          background: active ? '#fff' : 'transparent',
-                          color: active ? '#111113' : '#75757C',
+                          background: active ? '#6C47FF' : 'transparent',
+                          color: active ? '#FFFFFF' : '#5E5E65',
                           font: '500 13px/1 Satoshi', cursor: 'pointer',
                           display: 'flex', alignItems: 'center', gap: 6,
-                          boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                         }}
                       >
                         {f.label}
-                        <span style={{ color: active ? '#9A9AA0' : '#A3A3A9' }}>{count}</span>
+                        <span style={{ color: active ? '#CFC2FF' : '#A3A3A9' }}>{count}</span>
                       </button>
                     );
                   })}
@@ -261,7 +260,7 @@ export default function VideoProjectsPage() {
                         {/* Progress col: text + bar */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                           <div style={{ font: '500 13px/1 Satoshi' }}>
-                            {p.totalSceneCount > 0 ? `${p.approvedSceneCount} / ${p.totalSceneCount} approved` : '—'}
+                            {p.totalSceneCount > 0 ? `${p.approvedSceneCount} / ${p.totalSceneCount} approved` : '-'}
                           </div>
                           {p.totalSceneCount > 0 && (
                             <div style={{ height: 4, borderRadius: 2, background: '#EFEFEC', overflow: 'hidden' }}>

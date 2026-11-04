@@ -308,7 +308,7 @@ export default function ReviewPage() {
                   document.body.removeChild(a);
                   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
                 } catch {
-                  setDownloadError('Download failed — please try again.');
+                  setDownloadError('Download failed. Please try again.');
                 } finally {
                   setDownloading(false);
                 }

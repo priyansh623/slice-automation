@@ -344,39 +344,14 @@ input, textarea, select { font-family: var(--font); }
   font-weight: 500;
 }
 
-.badge-green {
-  background: #DCFCE7;
-  color: #16A34A;
-}
-
-.badge-yellow {
-  background: #FEF9C3;
-  color: #CA8A04;
-}
-
 .badge-purple {
   background: var(--brand-light);
   color: var(--brand);
 }
 
 .badge-gray {
-  background: #F4F4F5;
-  color: #71717A;
-}
-
-.badge-blue {
-  background: #DBEAFE;
-  color: #1D4ED8;
-}
-
-.badge-teal {
-  background: #CCFBF1;
-  color: #0F766E;
-}
-
-.badge-red {
-  background: #FEE2E2;
-  color: #DC2626;
+  background: #EFEFEC;
+  color: #5E5E65;
 }
 
 /* ── Status dots ───────────────────────────────────────── */
@@ -386,9 +361,7 @@ input, textarea, select { font-family: var(--font); }
   border-radius: 50%;
   display: inline-block;
 }
-.dot-green { background: #22C55E; }
-.dot-yellow { background: #EAB308; }
-.dot-gray { background: #A1A1AA; }
+.dot-gray { background: #A3A3A9; }
 
 /* ── Divider ───────────────────────────────────────────── */
 .divider {
@@ -616,13 +589,6 @@ input, textarea, select { font-family: var(--font); }
 .stage-banner-purple .stage-banner-icon { background: var(--brand); color: white; }
 .stage-banner-purple .stage-banner-title { color: var(--brand); }
 .stage-banner-purple .stage-banner-desc { color: #6C47FF99; }
-.stage-banner-green {
-  background: #F0FDF4;
-  border: 1px solid #BBF7D0;
-}
-.stage-banner-green .stage-banner-icon { background: #16A34A; color: white; }
-.stage-banner-green .stage-banner-title { color: #15803D; }
-.stage-banner-green .stage-banner-desc { color: #4ADE8099; }
 
 /* ── Scene status grid (breakdown approved) ────────────── */
 .scene-grid {
