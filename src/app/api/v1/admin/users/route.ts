@@ -34,11 +34,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     { auth: { persistSession: false } },
   );
 
-  const { data: userData, error: lookupError } = await serviceClient.auth.admin.getUserByEmail(email);
-  if (lookupError || !userData?.user) {
+  const { data: listData, error: lookupError } = await serviceClient.auth.admin.listUsers({ perPage: 1000 });
+  const targetUser = listData?.users?.find((u) => u.email === email);
+  if (lookupError || !targetUser) {
     return NextResponse.json({ error: 'No user with that email found in Supabase Auth' }, { status: 404 });
   }
-  const targetUserId = userData.user.id;
+  const targetUserId = targetUser.id;
 
   try {
     await db.insert(adminUsers).values({ userId: targetUserId, email, addedAt: Date.now() });
