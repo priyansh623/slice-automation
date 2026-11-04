@@ -8,7 +8,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
-  const adminError = requireAdmin(authResult.user.id);
+  const adminError = await requireAdmin(authResult.user.id);
   if (adminError) return adminError;
 
   const { searchParams } = new URL(req.url);

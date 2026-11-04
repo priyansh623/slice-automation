@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { Plus, Clapperboard, Search, ChevronRight } from 'lucide-react';
+import { Plus, Clapperboard, Search, ChevronRight, Trash2 } from 'lucide-react';
 
 interface VideoProject {
   id: number;
@@ -69,6 +69,8 @@ export default function VideoProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/video-projects')
@@ -84,6 +86,14 @@ export default function VideoProjectsPage() {
   });
 
   const countFor = (key: FilterKey) => key === 'all' ? projects.length : projects.filter(p => getFilterKey(getStatus(p)) === key).length;
+
+  async function handleDelete(projectId: number) {
+    setDeletingId(projectId);
+    const res = await fetch(`/api/v1/video-projects/${projectId}`, { method: 'DELETE' });
+    setDeletingId(null);
+    setConfirmDeleteId(null);
+    if (res.ok) setProjects((prev) => prev.filter((p) => p.id !== projectId));
+  }
 
   return (
     <AppShell>
@@ -183,11 +193,12 @@ export default function VideoProjectsPage() {
               {/* Table */}
               <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, overflow: 'hidden' }}>
                 {/* Header row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px', gap: 20, padding: '12px 20px', borderBottom: '1px solid #F0F0EE', font: '500 12px/1 Satoshi', color: '#9A9AA0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px 32px', gap: 20, padding: '12px 20px', borderBottom: '1px solid #F0F0EE', font: '500 12px/1 Satoshi', color: '#9A9AA0' }}>
                   <span>Project</span>
                   <span>Owner</span>
                   <span>Progress</span>
                   <span>Status</span>
+                  <span />
                   <span />
                 </div>
 
@@ -209,7 +220,7 @@ export default function VideoProjectsPage() {
                         onClick={() => router.push(`/video-projects/${p.id}`)}
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px',
+                          gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1.5fr) minmax(0,1.3fr) 20px 32px',
                           gap: 20,
                           alignItems: 'center',
                           padding: '16px 20px',
@@ -283,6 +294,22 @@ export default function VideoProjectsPage() {
 
                         {/* Chevron */}
                         <ChevronRight size={16} color="#A3A3A9" />
+
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(p.id); }}
+                          title="Delete project"
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                            background: 'transparent', border: '1px solid transparent',
+                            cursor: 'pointer', color: '#C4C4CC',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FECACA'; e.currentTarget.style.color = '#DC2626'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = '#C4C4CC'; }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     );
                   })
@@ -292,6 +319,35 @@ export default function VideoProjectsPage() {
           )}
         </div>
       </div>
+      {/* Delete confirmation modal */}
+      {confirmDeleteId !== null && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={(e) => e.target === e.currentTarget && setConfirmDeleteId(null)}
+        >
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 28px 24px', width: '100%', maxWidth: 380, boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
+            <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>Delete project?</div>
+            <div style={{ font: '400 14px/1.55 Satoshi', color: '#5E5E65', marginBottom: 24 }}>
+              This will permanently delete the project and all its scenes, generations, and compilations. This cannot be undone.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                style={{ height: 38, padding: '0 16px', borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', font: '500 14px/1 Satoshi', cursor: 'pointer', color: '#111113' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteId)}
+                disabled={deletingId === confirmDeleteId}
+                style={{ height: 38, padding: '0 16px', borderRadius: 9, background: deletingId === confirmDeleteId ? '#E4E4E0' : '#DC2626', color: deletingId === confirmDeleteId ? '#A3A3A9' : '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: deletingId === confirmDeleteId ? 'not-allowed' : 'pointer' }}
+              >
+                {deletingId === confirmDeleteId ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

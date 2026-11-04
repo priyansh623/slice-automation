@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { videoProjects, videoScreens, screenPromptVersions, videoGenerations } from '@/db/schema.pg';
+import { videoProjects, videoScreens, screenPromptVersions, videoGenerations, generationFeedback, videoCompilations, compilationSceneSelections, promptGenerationTasks, claudeConversations, analyticsEvents, projectTesters } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import { requireUser, requireAdmin } from '@/lib/api-auth';
 import { eq, inArray } from 'drizzle-orm';
 
 export async function GET(
@@ -122,4 +123,57 @@ export async function GET(
     baseImagePreviewUrl,
     screens: enrichedScreens,
   });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id } = await params;
+  const projectId = parseInt(id, 10);
+  if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+
+  const authResult = await requireUser();
+  if (authResult instanceof NextResponse) return authResult;
+
+  const projectRows = await db.select({ id: videoProjects.id, userId: videoProjects.userId })
+    .from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
+  if (!projectRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const isOwner = projectRows[0].userId === authResult.user.id;
+  if (!isOwner) {
+    const adminError = await requireAdmin(authResult.user.id);
+    if (adminError) return adminError;
+  }
+
+  // Cascade delete manually in FK-safe order
+  const screenRows = await db.select({ id: videoScreens.id }).from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  const screenIds = screenRows.map((s) => s.id);
+
+  const compilationRows = await db.select({ id: videoCompilations.id }).from(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
+  const compilationIds = compilationRows.map((c) => c.id);
+
+  if (screenIds.length > 0) {
+    const genRows = await db.select({ id: videoGenerations.id }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
+    const genIds = genRows.map((g) => g.id);
+    if (genIds.length > 0) await db.delete(generationFeedback).where(inArray(generationFeedback.videoGenerationId, genIds));
+    await db.delete(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
+    await db.delete(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds));
+  }
+
+  if (compilationIds.length > 0) {
+    await db.delete(compilationSceneSelections).where(inArray(compilationSceneSelections.compilationId, compilationIds));
+    await db.delete(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
+  }
+
+  await db.delete(promptGenerationTasks).where(eq(promptGenerationTasks.videoProjectId, projectId));
+  await db.delete(claudeConversations).where(eq(claudeConversations.videoProjectId, projectId));
+  await db.delete(projectTesters).where(eq(projectTesters.videoProjectId, projectId));
+
+  if (screenIds.length > 0) await db.delete(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+
+  await db.update(analyticsEvents).set({ videoProjectId: null }).where(eq(analyticsEvents.videoProjectId, projectId));
+  await db.delete(videoProjects).where(eq(videoProjects.id, projectId));
+
+  return NextResponse.json({ ok: true });
 }
