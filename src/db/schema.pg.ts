@@ -145,6 +145,15 @@ export const workerLock = pgTable('worker_lock', {
   heartbeatAt: bigint('heartbeat_at', { mode: 'number' }).notNull(),
 });
 
+// ── Admin users ───────────────────────────────────────────────────────────────
+
+export const adminUsers = pgTable('admin_users', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').notNull().unique(),
+  email: text('email').notNull(),
+  addedAt: bigint('added_at', { mode: 'number' }).notNull(),
+});
+
 // ── Admin settings ────────────────────────────────────────────────────────────
 
 export const adminSettings = pgTable('admin_settings', {
