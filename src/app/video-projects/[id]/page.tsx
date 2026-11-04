@@ -54,6 +54,7 @@ interface VideoProject {
   approvedScript: string | null;
   breakdownApprovedAt: number | null;
   creativeBrief: string | null;
+  creatorDescription: string | null;
   baseImagePreviewUrl?: string;
   screens: Screen[];
 }
