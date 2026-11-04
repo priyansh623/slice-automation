@@ -548,6 +548,14 @@ export default function VideoProjectPage() {
             </div>
           )}
 
+          {/* Character description read-only banner */}
+          {project.creatorDescription && (
+            <div style={{ marginBottom: 20, padding: '14px 18px', background: '#F7F5FF', border: '1px solid #DDD6FE', borderRadius: 12 }}>
+              <div style={{ font: '600 12px/1 Satoshi', color: '#6C47FF', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Character description</div>
+              <div style={{ font: '400 14px/1.6 Satoshi', color: '#3D3D45', whiteSpace: 'pre-wrap' }}>{project.creatorDescription}</div>
+            </div>
+          )}
+
           {/* Section header */}
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>

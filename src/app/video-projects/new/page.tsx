@@ -33,6 +33,7 @@ export default function NewVideoProjectPage() {
   const [name, setName] = useState('');
   const [baseImage, setBaseImage] = useState<UploadResult | null>(null);
   const [originalScript, setOriginalScript] = useState('');
+  const [creatorDescription, setCreatorDescription] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +56,7 @@ export default function NewVideoProjectPage() {
           baseImagePath: baseImage.storedPath,
           originalScript,
           skillVersion: 'v2',
+          creatorDescription: creatorDescription.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -195,6 +197,30 @@ export default function NewVideoProjectPage() {
                     Paste sample script
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Row 4: Character description */}
+            <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(0,1fr)', gap: 32, padding: '28px 0', borderTop: '1px solid #ECECE8' }}>
+              <div>
+                <div style={{ font: '700 14px/1.3 Satoshi', marginBottom: 4 }}>Character description</div>
+                <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', marginTop: 4 }}>
+                  Optional. Describe the creator&apos;s look, style, or any visual instructions for Claude. Locked in once scene 1 is approved.
+                </div>
+              </div>
+              <div>
+                <textarea
+                  value={creatorDescription}
+                  onChange={(e) => setCreatorDescription(e.target.value)}
+                  placeholder="e.g. Young woman, early 20s, light brown hair, minimalist aesthetic, neutral wardrobe…"
+                  style={{
+                    width: '100%', minHeight: 120, border: '1px solid #E4E4E0', borderRadius: 12,
+                    padding: '14px 16px', font: '400 15px/1.6 Satoshi', background: '#fff',
+                    outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
+                />
               </div>
             </div>
 
