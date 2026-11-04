@@ -75,7 +75,7 @@ export async function GET(
 
   // Fetch only the columns needed by the breakdown view; avoid pulling every generation column.
   type GenRow = { id: number; videoScreenId: number; status: string; videoStoragePath: string | null; updatedAt: number };
-  const [promptRows, allGens] = await Promise.all([
+  const [promptRows, allGens, promptTaskRows] = await Promise.all([
     screenIds.length > 0
       ? db.select({ videoScreenId: screenPromptVersions.videoScreenId }).from(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds))
       : Promise.resolve([] as { videoScreenId: number }[]),
@@ -88,10 +88,25 @@ export async function GET(
           updatedAt: videoGenerations.updatedAt,
         }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds))
       : Promise.resolve([] as GenRow[]),
+    screenIds.length > 0
+      ? db.select({ videoScreenId: promptGenerationTasks.videoScreenId, status: promptGenerationTasks.status })
+          .from(promptGenerationTasks)
+          .where(inArray(promptGenerationTasks.videoScreenId, screenIds))
+      : Promise.resolve([] as { videoScreenId: number | null; status: string }[]),
   ]);
 
   const promptPresence = new Map<number, boolean>();
   for (const r of promptRows) promptPresence.set(r.videoScreenId, true);
+
+  // Active prompt task status per screen (pending/processing = in progress, completed/failed = done)
+  const promptTaskByScreen = new Map<number, string>();
+  for (const t of promptTaskRows) {
+    if (t.videoScreenId === null) continue;
+    const existing = promptTaskByScreen.get(t.videoScreenId);
+    // Prefer active over terminal states
+    const isActive = t.status === 'pending' || t.status === 'processing';
+    if (!existing || isActive) promptTaskByScreen.set(t.videoScreenId, t.status);
+  }
 
   type GenSummary = { id: number; status: string; videoStoragePath: string | null; updatedAt: number };
   const latestGenByScreen = new Map<number, GenSummary>();
@@ -116,6 +131,7 @@ export async function GET(
     hasPrompt: promptPresence.get(s.id) ?? false,
     latestGen: latestGenByScreen.get(s.id) ?? null,
     latestCompletedGen: latestCompletedGenByScreen.get(s.id) ?? null,
+    promptTaskStatus: promptTaskByScreen.get(s.id) ?? null,
   }));
 
   return NextResponse.json({

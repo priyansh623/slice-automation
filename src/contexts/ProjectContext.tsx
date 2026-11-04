@@ -9,6 +9,10 @@ export interface Screen {
   position: number;
   approvedGenerationId: number | null;
   durationSeconds: number | null;
+  hasPrompt: boolean;
+  latestGen: { id: number; status: string; videoStoragePath: string | null; updatedAt: number } | null;
+  latestCompletedGen: { id: number; videoStoragePath: string } | null;
+  promptTaskStatus: string | null;
 }
 
 export interface VideoProject {

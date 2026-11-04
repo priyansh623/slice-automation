@@ -336,21 +336,6 @@ export default function ScreenPage() {
     { label: 'Review', status: 'pending' as const },
   ];
 
-  // Scene status text for sidebar
-  function sceneSubtitle(s: typeof screen): string {
-    if (!s) return '';
-    if (s.approvedGenerationId) {
-      const idx = generations.findIndex((g) => g.generation.id === s.approvedGenerationId);
-      return `Approved · Gen ${idx >= 0 ? genIndex(s.approvedGenerationId) : ''}`;
-    }
-    const anyFailed = generations.some((g) => g.generation.status === 'failed');
-    const anyCompleted = generations.some((g) => g.generation.status === 'completed');
-    if (anyFailed && !anyCompleted) return 'Generation failed, retry';
-    if (anyCompleted) return 'Video ready, needs review';
-    if (hasPending) return 'Generating video…';
-    if (promptHistory.length > 0) return `Prompt v${promptHistory[0].version} ready · no videos`;
-    return 'No prompt yet';
-  }
 
   if (!project) {
     return (
@@ -433,12 +418,53 @@ export default function ScreenPage() {
                       {approved ? <IconCheck size={11} /> : s.screenNumber}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ font: `${isActive ? '600' : '500'} 13px/1.3 Satoshi`, color: '#111113', marginBottom: 2 }}>
+                      <div style={{ font: `${isActive ? '600' : '500'} 13px/1.3 Satoshi`, color: '#111113', marginBottom: 4 }}>
                         Scene {s.screenNumber}
                       </div>
-                      <div style={{ font: '400 11px/1.3 Satoshi', color: '#9A9AA0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                        {s.screenNumber === currentScreenNum ? sceneSubtitle(screen) : (approved ? `Approved` : (s.dialogue ? s.dialogue.slice(0, 28) + (s.dialogue.length > 28 ? '…' : '') : 'No dialogue'))}
-                      </div>
+                      {(() => {
+                        const gen = s.latestGen;
+                        const isGenerating = gen && ['queued', 'pending', 'processing'].includes(gen.status);
+                        const isGenerated = gen && gen.status === 'completed';
+                        const isMakingPrompt = s.promptTaskStatus === 'pending' || s.promptTaskStatus === 'processing';
+                        if (approved) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#DCFCE7', color: '#16A34A', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                              Approved
+                            </span>
+                          );
+                        }
+                        if (isGenerating) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#FEF9C3', color: '#A16207', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#CA8A04', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                              Generating
+                            </span>
+                          );
+                        }
+                        if (isGenerated) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#DBEAFE', color: '#1D4ED8', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                              Generated
+                            </span>
+                          );
+                        }
+                        if (isMakingPrompt) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#EDE9FE', color: '#6D28D9', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7C3AED', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                              Making prompt
+                            </span>
+                          );
+                        }
+                        if (s.hasPrompt) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#F3F4F6', color: '#6B7280', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                              Ready
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 </Link>
