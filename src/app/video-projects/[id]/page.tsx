@@ -718,212 +718,210 @@ export default function VideoProjectPage() {
   }
 
   // ─── Phase 2: Screens exist, not yet approved ─────────────────────────────
+  const totalDuration = editedScreens.reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
+
   return (
     <AppShell>
-      <div className="page-header">
-        <div className="page-header-left">
-          <div className="page-breadcrumb">
-            <Link href="/video-projects" style={{ color: 'var(--text-muted)' }}>Projects</Link>
-            <span>›</span>
-            <span style={{ color: 'var(--text-primary)' }}>{project.name}</span>
-          </div>
-          <h1 className="page-title">{project.name}</h1>
-        </div>
-      </div>
+      <ProjectHeader
+        projectId={project.id}
+        projectName={project.name}
+        steps={[
+          { label: 'Script', status: 'complete' },
+          { label: 'Breakdown', status: 'active' },
+          { label: 'Scenes', status: 'pending' },
+          { label: 'Compile', status: 'pending' },
+          { label: 'Review', status: 'pending' },
+        ]}
+        statusLabel="Breakdown review"
+      />
 
-      <div className="page-body" style={{ maxWidth: 720 }}>
-        {error && (
-          <div className="alert alert-error" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span>{error}</span>
-            <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
-          </div>
-        )}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 40px 80px' }}>
 
-        {/* Step banner */}
-        <div className="stage-banner stage-banner-purple">
-          <div className="stage-banner-icon">
-            <IconCheck />
-          </div>
-          <div>
-            <div className="stage-banner-title">Step 2 of 3: Review your scenes</div>
-            <div className="stage-banner-desc">
-              Claude found <strong>{editedScreens.length} scene{editedScreens.length !== 1 ? 's' : ''}</strong>. Review and edit the dialogue for each scene. You can add, remove, or reorder scenes. When you're happy, approve them to start generating videos.
+          {error && (
+            <div style={{ marginBottom: 20, padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#991B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{error}</span>
+              <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }}>×</button>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Typo review panel */}
-        {possibleTypos.length > 0 && possibleTypos.some((_, i) => !typoDecisions[i]) && (
-          <div className="card" style={{ marginBottom: 20, border: '1px solid var(--warning, #f59e0b)', background: 'var(--warning-bg, #fffbeb)' }}>
-            <div className="card-header">
-              <div>
-                <div className="card-title" style={{ color: 'var(--warning-text, #92400e)' }}>Possible typos detected</div>
-                <div className="card-subtitle">Review each suggestion. Accept to apply the correction, or reject to keep the original.</div>
+          {/* Typo review panel */}
+          {possibleTypos.length > 0 && possibleTypos.some((_, i) => !typoDecisions[i]) && (
+            <div style={{ marginBottom: 20, border: '1px solid #FCD34D', background: '#FFFBEB', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid #FCD34D' }}>
+                <div style={{ font: '600 14px/1.3 Satoshi', color: '#92400E' }}>Possible typos detected</div>
+                <div style={{ font: '400 12px/1.5 Satoshi', color: '#78350F', marginTop: 2 }}>Review each suggestion.</div>
               </div>
-            </div>
-            <div className="card-body" style={{ padding: '0 20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 16 }}>
+              <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {possibleTypos.map((typo, i) => {
-                  const decision = typoDecisions[i];
-                  if (decision) return null;
+                  if (typoDecisions[i]) return null;
                   return (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      background: 'var(--bg-surface, white)', border: '1px solid var(--border)',
-                      borderRadius: 8, padding: '10px 14px',
-                    }}>
-                      <div style={{ flex: 1, fontSize: 13 }}>
-                        <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>Context:</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 12, background: 'var(--bg-page)', padding: '1px 6px', borderRadius: 4 }}>{typo.context}</span>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 8, padding: '10px 14px' }}>
+                      <div style={{ flex: 1, font: '400 13px/1 Satoshi' }}>
+                        <span style={{ color: '#75757C', marginRight: 6 }}>Context:</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 12, background: '#F5F5F3', padding: '1px 6px', borderRadius: 4 }}>{typo.context}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: 13, textDecoration: 'line-through', color: 'var(--text-muted)' }}>{typo.original}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)' }}>{typo.suggestion}</span>
+                        <span style={{ font: '400 13px/1 Satoshi', textDecoration: 'line-through', color: '#75757C' }}>{typo.original}</span>
+                        <span style={{ font: '400 12px/1 Satoshi', color: '#9A9AA0' }}>→</span>
+                        <span style={{ font: '600 13px/1 Satoshi', color: '#6C47FF' }}>{typo.suggestion}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => rejectTypo(i)}>Keep original</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => acceptTypo(i)}>Accept fix</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => rejectTypo(i)}>Keep</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => acceptTypo(i)}>Accept</button>
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Scene list */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header">
-            <div className="card-title">Scenes</div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-              {showReanalyzeConfirm && (
-                <div style={{ padding: '10px 14px', background: 'var(--warning-bg, #fffbeb)', border: '1px solid var(--warning, #f59e0b)', borderRadius: 8, fontSize: 13, color: '#78350F', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 260 }}>
-                  <strong>Unsaved edits will be lost</strong>
-                  <span>Re-analysing rewrites the scene breakdown from scratch. Your manual changes won't be preserved.</span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={analyzing}>Re-analyse anyway</button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setShowReanalyzeConfirm(false)}>Keep my edits</button>
-                  </div>
+          {/* Section header */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <span style={{ font: '600 18px/1.2 Satoshi' }}>Scene breakdown</span>
+              <span style={{ font: '400 14px/1 Satoshi', color: '#75757C', marginLeft: 10 }}>
+                {editedScreens.length} scene{editedScreens.length !== 1 ? 's' : ''}
+                {totalDuration > 0 && ` · ${totalDuration}s total`}
+              </span>
+            </div>
+            {showReanalyzeConfirm ? (
+              <div style={{ padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, font: '400 13px/1.5 Satoshi', color: '#78350F', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <strong style={{ font: '600 13px/1 Satoshi' }}>Unsaved edits will be lost</strong>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={analyzing}>Re-analyse anyway</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowReanalyzeConfirm(false)}>Cancel</button>
                 </div>
-              )}
+              </div>
+            ) : (
               <button
-                className="btn btn-secondary btn-sm"
-                onClick={handleAnalyze}
+                onClick={() => dirty ? setShowReanalyzeConfirm(true) : handleAnalyze()}
                 disabled={analyzing}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 14px', border: '1px solid #E4E4E0', borderRadius: 8, background: '#fff', font: '500 13px/1 Satoshi', color: '#5E5E65', cursor: 'pointer' }}
               >
                 <IconSparkle />
                 {analyzing ? 'Re-analysing…' : 'Re-analyse'}
               </button>
-            </div>
+            )}
           </div>
-          <div className="card-body" style={{ padding: '0 20px' }}>
-            <div className="scene-list">
-              {editedScreens.map((s, idx) => (
-                <div key={s.id} className="scene-list-row">
-                  {/* Reorder */}
-                  <div className="scene-reorder-btns">
-                    <button
-                      className="scene-reorder-btn"
-                      onClick={() => moveScreen(idx, -1)}
-                      disabled={idx === 0}
-                      title="Move up"
-                    >↑</button>
-                    <button
-                      className="scene-reorder-btn"
-                      onClick={() => moveScreen(idx, 1)}
-                      disabled={idx === editedScreens.length - 1}
-                      title="Move down"
-                    >↓</button>
-                  </div>
 
-                  {/* Number badge */}
-                  <div className="screen-number-badge" style={{ flexShrink: 0, marginTop: 4 }}>{s.screenNumber}</div>
-
-                  {/* Dialogue + duration + remove */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Textarea row with trash */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <textarea
-                        className="form-textarea"
-                        value={s.dialogue}
-                        onChange={(e) => updateDialogue(s.screenNumber, e.target.value)}
-                        rows={2}
-                        placeholder="Enter dialogue for this scene…"
-                        style={{ marginBottom: 0, resize: 'vertical', flex: 1 }}
-                      />
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => removeScreen(s.screenNumber)}
-                        title="Remove scene"
-                        style={{ flexShrink: 0, marginTop: 2, color: 'var(--text-muted)' }}
-                      >
-                        <IconTrash />
-                      </button>
-                    </div>
-                    {/* Duration row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>Duration:</span>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {SUPPORTED_DURATIONS.map((d) => (
-                          <button
-                            key={d}
-                            onClick={() => updateDuration(s.screenNumber, d)}
-                            style={{
-                              fontSize: 11, padding: '2px 7px', borderRadius: 4, border: '1px solid var(--border)',
-                              background: s.durationSeconds === d ? 'var(--brand)' : 'var(--bg-surface)',
-                              color: s.durationSeconds === d ? 'white' : 'var(--text-secondary)',
-                              cursor: 'pointer', fontWeight: s.durationSeconds === d ? 600 : 400,
-                            }}
-                          >{d}s</button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+          {/* Scene list — redesigned */}
+          <div style={{ border: '1px solid #ECECE8', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+            {editedScreens.map((s, idx) => (
+              <div
+                key={s.id}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 14,
+                  padding: '14px 20px',
+                  borderBottom: idx < editedScreens.length - 1 ? '1px solid #F3F3F1' : 'none',
+                  background: '#fff',
+                }}
+              >
+                {/* Number badge */}
+                <div style={{
+                  width: 26, height: 26, borderRadius: 8, background: '#F0F0EC',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  font: '600 12px/1 Satoshi', color: '#5E5E65', flexShrink: 0, marginTop: 7,
+                }}>
+                  {s.screenNumber}
                 </div>
-              ))}
-            </div>
 
-            {/* Add scene */}
-            <div style={{ padding: '12px 0' }}>
+                {/* Dialogue */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <textarea
+                    value={s.dialogue}
+                    onChange={(e) => updateDialogue(s.screenNumber, e.target.value)}
+                    rows={2}
+                    placeholder="Enter dialogue for this scene…"
+                    style={{
+                      width: '100%', border: '1px solid transparent', borderRadius: 8,
+                      padding: '6px 8px', font: '400 14px/1.6 Satoshi', background: 'transparent',
+                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.border = '1px solid #E4E4E0'; e.currentTarget.style.background = '#FAFAF8'; }}
+                    onBlur={(e) => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = 'transparent'; }}
+                  />
+                </div>
+
+                {/* Duration buttons + reorder + remove — right side */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {SUPPORTED_DURATIONS.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => updateDuration(s.screenNumber, d)}
+                        style={{
+                          width: 32, height: 28, borderRadius: 6,
+                          border: `1px solid ${s.durationSeconds === d ? '#6C47FF' : '#E4E4E0'}`,
+                          background: s.durationSeconds === d ? '#6C47FF' : '#fff',
+                          color: s.durationSeconds === d ? '#fff' : '#5E5E65',
+                          font: `${s.durationSeconds === d ? '600' : '400'} 11px/1 Satoshi`,
+                          cursor: 'pointer',
+                        }}
+                      >{d}s</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <button onClick={() => moveScreen(idx, -1)} disabled={idx === 0} style={{ width: 20, height: 14, border: '1px solid #E4E4E0', borderRadius: 3, background: '#fff', cursor: idx === 0 ? 'default' : 'pointer', color: '#9A9AA0', font: '400 9px/1 Satoshi', opacity: idx === 0 ? 0.4 : 1 }}>↑</button>
+                    <button onClick={() => moveScreen(idx, 1)} disabled={idx === editedScreens.length - 1} style={{ width: 20, height: 14, border: '1px solid #E4E4E0', borderRadius: 3, background: '#fff', cursor: idx === editedScreens.length - 1 ? 'default' : 'pointer', color: '#9A9AA0', font: '400 9px/1 Satoshi', opacity: idx === editedScreens.length - 1 ? 0.4 : 1 }}>↓</button>
+                  </div>
+                  <button onClick={() => removeScreen(s.screenNumber)} title="Remove scene" style={{ width: 28, height: 28, border: '1px solid #E4E4E0', borderRadius: 6, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A9AA0' }}>
+                    <IconTrash />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Add scene row */}
+            <div style={{ padding: '10px 20px', borderTop: editedScreens.length > 0 ? '1px solid #F3F3F1' : 'none', background: '#FAFAF8' }}>
               <button
-                className="btn btn-secondary btn-sm"
                 onClick={addScreen}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 12px', border: '1px solid #E4E4E0', borderRadius: 7, background: '#fff', font: '500 13px/1 Satoshi', color: '#5E5E65', cursor: 'pointer' }}
               >
                 <IconPlus />
                 Add scene
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Approve action */}
-        <div className="action-well">
-          <div className="action-well-title">Approve these scenes</div>
-          <div className="action-well-desc">
-            When you approve, the scene list is locked in and you will move on to generating a video clip for each scene, one at a time, starting with Scene 1. You can still view the script later.
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {dirty && (
+          {/* Bottom actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {dirty && (
+                <button
+                  onClick={handleSaveBreakdown}
+                  disabled={saving}
+                  style={{ height: 38, padding: '0 16px', border: '1px solid #E4E4E0', borderRadius: 9, background: '#fff', font: '500 14px/1 Satoshi', color: '#111113', cursor: 'pointer' }}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              )}
               <button
-                className="btn btn-secondary"
-                onClick={handleSaveBreakdown}
-                disabled={saving}
+                onClick={() => dirty ? setShowReanalyzeConfirm(true) : handleAnalyze()}
+                disabled={analyzing}
+                style={{ height: 38, padding: '0 16px', border: '1px solid #E4E4E0', borderRadius: 9, background: '#fff', font: '500 14px/1 Satoshi', color: '#5E5E65', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                {saving ? 'Saving…' : 'Save changes'}
+                <IconSparkle />
+                Re-analyse
               </button>
-            )}
+            </div>
             <button
-              className="btn btn-primary"
               onClick={handleApproveBreakdown}
               disabled={approving || editedScreens.length === 0}
+              style={{
+                height: 40, padding: '0 20px', borderRadius: 10,
+                background: '#6C47FF', color: '#fff', border: 'none',
+                font: '600 14px/1 Satoshi', cursor: 'pointer',
+                opacity: (approving || editedScreens.length === 0) ? 0.6 : 1,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+              }}
             >
-              {approving ? 'Approving…' : `Approve ${editedScreens.length} scene${editedScreens.length !== 1 ? 's' : ''} →`}
+              {approving ? 'Approving…' : 'Approve breakdown'}
+              {!approving && <IconArrow />}
             </button>
           </div>
+
         </div>
       </div>
     </AppShell>

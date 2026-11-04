@@ -90,6 +90,8 @@ export default function ScreenPage() {
   const [projectScopePending, setProjectScopePending] = useState(false);
   const [signedVideoUrls, setSignedVideoUrls] = useState<Record<number, string>>({});
   const [feedbackGenId, setFeedbackGenId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'prompt' | 'requests'>('prompt');
+  const [generatingAll, setGeneratingAll] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function isProjectScopeFeedback(text: string): boolean {
@@ -288,8 +290,24 @@ export default function ScreenPage() {
     (g) => g.generation.status === 'pending' || g.generation.status === 'processing' || g.generation.status === 'queued',
   );
   const hasReadyVideo = generations.some((g) => g.generation.status === 'completed');
+  const approvedCount = project?.screens.filter((s) => !!s.approvedGenerationId).length ?? 0;
 
   const currentScreenNum = parseInt(n, 10);
+
+  async function handleGenerateAllScenes() {
+    if (!activePromptVersionId) return;
+    setGeneratingAll(true);
+    try {
+      await fetch(`/api/v1/video-projects/${id}/screens/${n}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promptVersionId: activePromptVersionId }),
+      });
+      await loadAll();
+    } catch { /* ignore */ } finally {
+      setGeneratingAll(false);
+    }
+  }
 
   if (!project) {
     return (
@@ -317,17 +335,43 @@ export default function ScreenPage() {
     { label: 'Review', status: 'pending' as const },
   ];
 
+  // The latest completed generation for the right panel
+  const latestCompletedGen = generations.find((g) => g.generation.status === 'completed');
+  const displayGen = latestCompletedGen ?? latestGen;
+  if (displayGen?.generation && !signedVideoUrls[displayGen.generation.id]) {
+    void fetchSignedUrl(displayGen.generation.id);
+  }
+
   return (
     <AppShell fullscreen>
-      {/* ── Project header with step indicator ───────────────────────────── */}
       <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
 
-      {/* ── Full-height workspace ───────────────────────────────────────────── */}
       <div className="workspace-shell">
 
-        {/* ── Scene list navigator ───────────────────────────────────────── */}
+        {/* ── Scene nav ─────────────────────────────────────────────────── */}
         <nav className="scene-nav">
-          <div className="scene-nav-header">Scenes</div>
+          {/* Nav header with count + generate-all */}
+          <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #ECECE8' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ font: '600 11px/1 Satoshi', letterSpacing: '0.07em', textTransform: 'uppercase', color: '#9A9AA0' }}>Scenes</span>
+              <span style={{ font: '500 11px/1 Satoshi', color: '#75757C' }}>{approvedCount} / {project.screens.length}</span>
+            </div>
+            <button
+              onClick={handleGenerateAllScenes}
+              disabled={generatingAll || !activePromptVersionId || hasPending}
+              style={{
+                width: '100%', height: 32, borderRadius: 8, border: '1px solid #E4E4E0',
+                background: '#fff', font: '500 12px/1 Satoshi', color: '#5E5E65',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: (generatingAll || !activePromptVersionId || hasPending) ? 0.5 : 1,
+              }}
+            >
+              <IconVideo />
+              {generatingAll ? 'Queuing…' : 'Generate all scenes'}
+            </button>
+          </div>
+
+          {/* Scene items */}
           {project.screens.map((s) => {
             const isActive = s.screenNumber === currentScreenNum;
             return (
@@ -352,310 +396,337 @@ export default function ScreenPage() {
           })}
         </nav>
 
-        {/* ── Main work area ─────────────────────────────────────────────── */}
-        <div className="workspace-main">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Scene {n}</h1>
-            {screen?.dialogue && (
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>· {screen.dialogue.slice(0, 60)}{screen.dialogue.length > 60 ? '…' : ''}</span>
-            )}
-          </div>
+        {/* ── Middle panel ───────────────────────────────────────────────── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #ECECE8' }}>
 
-        {error && (
-          <div className="alert alert-error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span>{error}</span>
-            <button onClick={() => setError('')} style={{ marginLeft: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }} title="Dismiss">×</button>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-            {/* ── Phase 1: No prompt yet ──── */}
-            {promptHistory.length === 0 && (
-              <>
-                <div className="stage-banner stage-banner-purple">
-                  <div className="stage-banner-icon"><IconSparkle /></div>
-                  <div>
-                    <div className="stage-banner-title">Step 3: Write the video prompt</div>
-                    <div className="stage-banner-desc">
-                      Claude will write a detailed video prompt for this scene using the skill and the dialogue above. You can review and edit it before generating anything.
-                    </div>
-                  </div>
-                </div>
-                <div className="action-well">
-                  <div className="action-well-title">Ready to write the prompt</div>
-                  <div className="action-well-desc">
-                    Click <strong>Write prompt</strong> and Claude will create a prompt for this scene. Nothing is sent to the video API yet. You review and generate separately.
-                  </div>
-                  <button className="btn btn-primary" onClick={handleWritePrompt} disabled={writingPrompt} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <IconSparkle />
-                    {writingPrompt ? 'Writing prompt…' : 'Write prompt'}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ── Phase 2+: Has a prompt ─── */}
-            {promptHistory.length > 0 && (
-              <>
-                {/* Approved banner - full width */}
-                {isApproved && (
-                  <div className="stage-banner stage-banner-green">
-                    <div className="stage-banner-icon"><IconCheck /></div>
-                    <div style={{ flex: 1 }}>
-                      <div className="stage-banner-title">Scene {n} is approved</div>
-                      <div className="stage-banner-desc">
-                        {nextScreen
-                          ? `This clip is approved. Move on to Scene ${nextScreen.screenNumber} to continue.`
-                          : 'This is the last scene and it\'s approved. Your video project is complete.'}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button className="btn btn-secondary btn-sm" onClick={handleUnapprove} disabled={approving} title="Revoke approval — keeps all generated clips and history">
-                        {approving ? 'Updating…' : 'Unapprove'}
-                      </button>
-                      {nextScreen && (
-                        <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }}>Scene {nextScreen.screenNumber} →</button>
-                        </Link>
-                      )}
-                    </div>
+          {/* Middle header */}
+          <div style={{ padding: '16px 24px 0', borderBottom: '1px solid #ECECE8', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ font: '700 18px/1.2 Satoshi', letterSpacing: '-0.02em' }}>Scene {n}</div>
+                {screen?.dialogue && (
+                  <div style={{ font: '400 13px/1.4 Satoshi', color: '#75757C', marginTop: 2, maxWidth: 360 }}>
+                    {screen.dialogue.slice(0, 80)}{screen.dialogue.length > 80 ? '…' : ''}
                   </div>
                 )}
+              </div>
+              {/* Scene 1 calibration badge */}
+              {currentScreenNum === 1 && !isApproved && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 10px', borderRadius: 999, background: '#F0F0EC', font: '500 11px/1 Satoshi', color: '#5E5E65', flexShrink: 0 }}>
+                  Calibration scene
+                </span>
+              )}
+            </div>
 
-                {/* ── Side-by-side: prompt panel + video panel ─── */}
-                <div className="screen-panels">
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 0 }}>
+              {(['prompt', 'requests'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    height: 36, padding: '0 16px', border: 'none', background: 'none',
+                    font: `${activeTab === tab ? '600' : '400'} 13px/1 Satoshi`,
+                    color: activeTab === tab ? '#111113' : '#75757C',
+                    borderBottom: `2px solid ${activeTab === tab ? '#6C47FF' : 'transparent'}`,
+                    cursor: 'pointer', textTransform: 'capitalize',
+                  }}
+                >
+                  {tab === 'prompt' ? 'Prompt' : 'Requests'}
+                  {tab === 'requests' && promptHistory.length > 1 && (
+                    <span style={{ marginLeft: 5, background: '#F0F0EC', borderRadius: 10, padding: '1px 6px', font: '500 10px/1 Satoshi', color: '#75757C' }}>
+                      {promptHistory.length - 1}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                  {/* Prompt panel */}
-                  <div className="card">
-                    <div className="card-header">
-                      <div>
-                        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          Prompt
-                          {latestVersion && <span className="badge badge-purple">v{latestVersion.version}</span>}
-                        </div>
-                        <div className="card-subtitle">
-                          {latestVersion && currentPrompt !== latestVersion.promptText
-                            ? <span style={{ color: 'var(--warning-text, #92400e)', fontWeight: 500 }}>Unsaved changes — save before generating</span>
-                            : 'Exactly what will be sent to Google Flow'}
-                        </div>
+          {/* Middle body — scrollable */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+
+            {error && (
+              <div style={{ marginBottom: 16, padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#991B1B', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{error}</span>
+                <button onClick={() => setError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }}>×</button>
+              </div>
+            )}
+
+            {/* Prompt tab */}
+            {activeTab === 'prompt' && (
+              <>
+                {promptHistory.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '48px 0' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F0F0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <IconSparkle />
+                    </div>
+                    <div style={{ font: '600 15px/1.3 Satoshi', marginBottom: 6 }}>Write the video prompt</div>
+                    <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', maxWidth: 300, marginBottom: 20 }}>
+                      Claude will write a detailed prompt for this scene using the dialogue above. Nothing is sent to the video API yet.
+                    </div>
+                    <button
+                      onClick={handleWritePrompt}
+                      disabled={writingPrompt}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 18px', borderRadius: 10, background: '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', opacity: writingPrompt ? 0.6 : 1 }}
+                    >
+                      <IconSparkle />
+                      {writingPrompt ? 'Writing prompt…' : 'Write prompt'}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ font: '600 13px/1 Satoshi' }}>Prompt</span>
+                        {latestVersion && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', height: 20, padding: '0 8px', borderRadius: 10, background: '#EDE9FF', font: '500 11px/1 Satoshi', color: '#6C47FF' }}>
+                            v{latestVersion.version}
+                          </span>
+                        )}
+                        {hasUnsavedPromptEdits && (
+                          <span style={{ font: '400 12px/1 Satoshi', color: '#92400E' }}>Unsaved changes</span>
+                        )}
                       </div>
-                      <button className="btn btn-secondary btn-sm" onClick={handleSaveManualEdit} disabled={isSaveDisabled} title={currentPrompt === latestVersion?.promptText ? 'No changes to save' : undefined}>
+                      <button
+                        onClick={handleSaveManualEdit}
+                        disabled={isSaveDisabled}
+                        style={{ height: 28, padding: '0 12px', border: '1px solid #E4E4E0', borderRadius: 7, background: '#fff', font: '500 12px/1 Satoshi', color: '#5E5E65', cursor: isSaveDisabled ? 'default' : 'pointer', opacity: isSaveDisabled ? 0.5 : 1 }}
+                      >
                         {savingPrompt ? 'Saving…' : 'Save edit'}
                       </button>
                     </div>
-                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <textarea className="form-textarea" value={currentPrompt} onChange={(e) => setCurrentPrompt(e.target.value)} rows={9} />
 
-                      {validation && (validation.issues.length > 0 || validation.warnings.length > 0) && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {validation.issues.map((issue, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, fontSize: 13, color: '#991B1B' }}>
-                              <span style={{ flexShrink: 0 }}>!</span><span>{issue}</span>
-                            </div>
-                          ))}
-                          {validation.warnings.map((warn, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, fontSize: 13, color: '#92400E' }}>
-                              <span style={{ flexShrink: 0 }}>~</span><span>{warn}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <textarea
+                      value={currentPrompt}
+                      onChange={(e) => setCurrentPrompt(e.target.value)}
+                      rows={12}
+                      style={{
+                        width: '100%', border: '1px solid #E4E4E0', borderRadius: 10,
+                        padding: '12px 14px', font: '400 13px/1.6 Satoshi', background: '#fff',
+                        outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
+                    />
 
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Request a change…"
-                          value={feedback}
-                          onChange={(e) => { setFeedback(e.target.value); setProjectScopePending(false); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && !writingPrompt) handleWritePrompt(); }}
-                          style={{ flex: 1, marginBottom: 0 }}
-                        />
-                        <button
-                          onClick={handleWritePrompt}
-                          disabled={writingPrompt}
-                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 13, fontWeight: 500, cursor: writingPrompt ? 'not-allowed' : 'pointer', opacity: writingPrompt ? 0.6 : 1, whiteSpace: 'nowrap' }}
-                        >
-                          <IconSparkle />
-                          {writingPrompt ? 'Revising…' : 'Revise'}
-                        </button>
-                      </div>
-
-                      {projectScopePending && (
-                        <div style={{ padding: '12px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <p style={{ margin: 0, fontSize: 13, color: '#78350F', fontWeight: 500 }}>
-                            This looks like a project-wide change. Applying it will update the creative brief and may affect prompts for all scenes.
-                          </p>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn btn-primary btn-sm" onClick={handleWritePrompt} disabled={writingPrompt}>Apply project-wide</button>
-                            <button className="btn btn-secondary btn-sm" onClick={() => setProjectScopePending(false)}>Cancel</button>
-                          </div>
-                        </div>
-                      )}
-
-                      {promptHistory.length > 1 && (
-                        <div>
-                          <button className="collapsible-trigger" onClick={() => setShowHistory((v) => !v)}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-                              <polyline points="9 18 15 12 9 6"/>
-                            </svg>
-                            {promptHistory.length} prompt versions
-                          </button>
-                          {showHistory && (
-                            <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                              {promptHistory.map((v, idx) => (
-                                <div
-                                  key={v.id}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: idx > 0 ? '1px solid var(--border)' : 'none', padding: '9px 14px', background: activePromptVersionId === v.id ? 'var(--brand-light)' : 'transparent', cursor: 'pointer' }}
-                                  onClick={() => { setCurrentPrompt(v.promptText); setActivePromptVersionId(v.id); }}
-                                >
-                                  <span className="badge badge-purple">v{v.version}</span>
-                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{v.source === 'claude' ? 'Written by Claude' : 'Manual edit'}</span>
-                                  {v.nlFeedback && (
-                                    <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>· {v.nlFeedback}</span>
-                                  )}
-                                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{new Date(v.createdAt).toLocaleString()}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Video panel */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-                    {/* Generating spinner */}
-                    {hasPending && (
-                      <div className="card">
-                        <div className="card-body">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                            <div className="pulse-dots">
-                              <div className="pulse-dot" />
-                              <div className="pulse-dot" />
-                              <div className="pulse-dot" />
-                            </div>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>Generating your video clip…</span>
-                          </div>
-                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-                            This usually takes 1–3 minutes. The page will update automatically when it's ready.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Video ready / approved */}
-                    {!hasPending && hasReadyVideo && generations.map(({ generation: g, promptVersion: pv }, idx) => {
-                      if (g.status !== 'completed' || !g.videoStoragePath) return null;
-                      const thisIsApproved = g.id === screen?.approvedGenerationId;
-                      if (!signedVideoUrls[g.id]) { void fetchSignedUrl(g.id); }
-                      return (
-                        <div key={g.id} className="card">
-                          <div className="card-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <IconVideo />
-                                {idx + 1 < generations.filter((g2) => g2.generation.status === 'completed').length ? 'Earlier clip' : 'Latest clip'}
-                              </div>
-                              <span className="badge badge-purple">Prompt v{pv.version}</span>
-                              {(g.durationSeconds ?? screen?.durationSeconds) && (
-                                <span className="badge" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                                  {g.durationSeconds ?? screen?.durationSeconds}s
-                                </span>
-                              )}
-                              {thisIsApproved && <span className="badge badge-green"><span className="dot dot-green" />Approved</span>}
-                            </div>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(g.createdAt).toLocaleString()}</span>
-                          </div>
-                          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div className="video-result">
-                              {signedVideoUrls[g.id] ? (
-                                <video src={signedVideoUrls[g.id]} controls />
-                              ) : (
-                                <div className="skeleton" style={{ height: 200, borderRadius: 8 }} />
-                              )}
-                            </div>
-                            {!isApproved && (
-                              <div className="action-well">
-                                <div className="action-well-title">Approve this clip?</div>
-                                <div className="action-well-desc">
-                                  {parseInt(n, 10) === 1
-                                    ? 'Approving locks in Scene 1 and lets you move on to the remaining scenes.'
-                                    : 'Approving this clip marks Scene ' + n + ' as done.'}
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <button onClick={() => handleApprove(g.id)} disabled={approving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#111113', color: '#fff', border: 'none', borderRadius: 'var(--radius-btn)', fontSize: 14, fontWeight: 500, cursor: approving ? 'not-allowed' : 'pointer', opacity: approving ? 0.6 : 1 }}>
-                                    <IconCheck />
-                                    {approving ? 'Approving…' : 'Approve this clip'}
-                                  </button>
-                                  <button className="btn btn-secondary" onClick={handleGenerateVideo} disabled={submitting || hasUnsavedPromptEdits}>
-                                    {submitting ? 'Generating…' : 'Generate another'}
-                                  </button>
-                                  {hasUnsavedPromptEdits && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save prompt first</span>}
-                                  {SUPPORTED_DURATIONS.filter((d) => d !== (g.durationSeconds ?? screen?.durationSeconds)).map((d) => (
-                                    <button key={d} className="btn btn-secondary" onClick={() => handleGenerateWithDuration(d)} disabled={submitting || hasUnsavedPromptEdits} title={hasUnsavedPromptEdits ? 'Save your prompt edits first' : `Regenerate at ${d}s`}>
-                                      {submitting ? 'Generating…' : `${d}s`}
-                                    </button>
-                                  ))}
-                                  <button className="btn btn-secondary" onClick={() => setFeedbackGenId(g.id)}>Rate this clip</button>
-                                </div>
-                              </div>
-                            )}
-                            {thisIsApproved && (
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                                <button className="btn btn-secondary btn-sm" onClick={() => setFeedbackGenId(g.id)}>Rate this clip</button>
-                                {nextScreen && (
-                                  <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`}>
-                                    <button className="btn btn-primary btn-sm">Continue to Scene {nextScreen.screenNumber} →</button>
-                                  </Link>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Generate action (when no gens or all failed) */}
-                    {!hasPending && !hasReadyVideo && (
-                      <div className="action-well">
-                        <div className="action-well-title">
-                          {generations.length === 0 ? 'Generate the video clip' : 'Try again'}
-                        </div>
-                        <div className="action-well-desc">
-                          {generations.length === 0
-                            ? 'The prompt is ready. Click below to send it to the video generator. Usually takes 1–3 minutes.'
-                            : 'The previous generation failed. Click below to try again.'}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          <button className="btn btn-primary" onClick={handleGenerateVideo} disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <IconVideo />
-                            {submitting ? 'Submitting…' : 'Generate video clip'}
-                          </button>
-                          {hasUnsavedPromptEdits && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Save your prompt edits first</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Failed generations */}
-                    {generations.some((g) => g.generation.status === 'failed') && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {generations.filter((g) => g.generation.status === 'failed').map(({ generation: g }) => (
-                          <div key={g.id} className="alert alert-error" style={{ fontSize: 13 }}>
-                            A generation attempt failed at {new Date(g.createdAt).toLocaleTimeString()}.
-                          </div>
+                    {validation && (validation.issues.length > 0 || validation.warnings.length > 0) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {validation.issues.map((issue, i) => (
+                          <div key={i} style={{ padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, font: '400 13px/1.4 Satoshi', color: '#991B1B' }}>{issue}</div>
+                        ))}
+                        {validation.warnings.map((warn, i) => (
+                          <div key={i} style={{ padding: '8px 10px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, font: '400 13px/1.4 Satoshi', color: '#92400E' }}>{warn}</div>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
+                )}
               </>
+            )}
+
+            {/* Requests tab */}
+            {activeTab === 'requests' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {promptHistory.length <= 1 ? (
+                  <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', textAlign: 'center', padding: '32px 0' }}>No revision requests yet.</div>
+                ) : (
+                  promptHistory.slice(1).map((v, idx) => (
+                    <div
+                      key={v.id}
+                      style={{ padding: '10px 14px', border: '1px solid #ECECE8', borderRadius: 10, cursor: 'pointer', background: activePromptVersionId === v.id ? '#F5F3FF' : '#fff' }}
+                      onClick={() => { setCurrentPrompt(v.promptText); setActivePromptVersionId(v.id); setActiveTab('prompt'); }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', height: 18, padding: '0 6px', borderRadius: 10, background: '#EDE9FF', font: '500 10px/1 Satoshi', color: '#6C47FF' }}>v{v.version}</span>
+                        <span style={{ font: '400 12px/1 Satoshi', color: '#75757C' }}>{v.source === 'claude' ? 'Claude revision' : 'Manual edit'}</span>
+                        <span style={{ marginLeft: 'auto', font: '400 11px/1 Satoshi', color: '#9A9AA0' }}>{new Date(v.createdAt).toLocaleString()}</span>
+                      </div>
+                      {v.nlFeedback && (
+                        <div style={{ font: '400 13px/1.4 Satoshi', color: '#5E5E65', marginTop: 6 }}>{v.nlFeedback}</div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Middle footer — Request a change + Generate video */}
+          {promptHistory.length > 0 && (
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #ECECE8', background: '#fff', flexShrink: 0 }}>
+              {projectScopePending && (
+                <div style={{ marginBottom: 10, padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, font: '400 13px/1.4 Satoshi', color: '#78350F' }}>
+                  <div style={{ font: '600 13px/1 Satoshi', marginBottom: 6 }}>Apply project-wide?</div>
+                  <div style={{ marginBottom: 8 }}>This looks like a project-wide change. It will update the creative brief and may affect all scenes.</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary btn-sm" onClick={handleWritePrompt} disabled={writingPrompt}>Apply project-wide</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setProjectScopePending(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <input
+                  type="text"
+                  placeholder="Request a change…"
+                  value={feedback}
+                  onChange={(e) => { setFeedback(e.target.value); setProjectScopePending(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !writingPrompt) handleWritePrompt(); }}
+                  style={{
+                    flex: 1, height: 38, border: '1px solid #E4E4E0', borderRadius: 9,
+                    padding: '0 14px', font: '400 14px/1 Satoshi', background: '#fff', outline: 'none',
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
+                />
+                <button
+                  onClick={handleWritePrompt}
+                  disabled={writingPrompt}
+                  style={{ height: 38, padding: '0 16px', borderRadius: 9, background: '#111113', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', opacity: writingPrompt ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                >
+                  <IconSparkle />
+                  {writingPrompt ? 'Revising…' : 'Revise'}
+                </button>
+              </div>
+              <button
+                onClick={handleGenerateVideo}
+                disabled={submitting || !activePromptVersionId || hasUnsavedPromptEdits || hasPending}
+                style={{
+                  width: '100%', height: 42, borderRadius: 10,
+                  background: '#6C47FF', color: '#fff', border: 'none',
+                  font: '600 15px/1 Satoshi', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  opacity: (submitting || !activePromptVersionId || hasUnsavedPromptEdits || hasPending) ? 0.5 : 1,
+                }}
+              >
+                <IconVideo />
+                {submitting ? 'Generating…' : hasPending ? 'Generation in progress…' : 'Generate video'}
+              </button>
+              {hasUnsavedPromptEdits && (
+                <div style={{ font: '400 11px/1 Satoshi', color: '#75757C', marginTop: 6, textAlign: 'center' }}>Save your prompt edits first</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Right video panel ──────────────────────────────────────────── */}
+        <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#1A1A1E', overflow: 'hidden' }}>
+
+          {/* Video area */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 16 }}>
+            {hasPending ? (
+              <div style={{ textAlign: 'center' }}>
+                <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 12 }}>
+                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                </div>
+                <div style={{ font: '600 14px/1.3 Satoshi', color: '#E8E8F0' }}>Generating clip…</div>
+                <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
+              </div>
+            ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
+              <div style={{ width: '100%' }}>
+                {signedVideoUrls[displayGen.generation.id] ? (
+                  <video
+                    src={signedVideoUrls[displayGen.generation.id]}
+                    controls
+                    style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }}
+                  />
+                ) : (
+                  <div style={{ width: '100%', paddingBottom: '177.78%', background: '#2A2A30', borderRadius: 10, position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ font: '400 12px/1 Satoshi', color: '#75757C' }}>Loading…</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ width: '100%', paddingBottom: '177.78%', background: '#2A2A30', borderRadius: 10, position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10 }}>
+                  <IconVideo />
+                  <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', textAlign: 'center', maxWidth: 180 }}>
+                    {promptHistory.length === 0 ? 'Write a prompt first' : 'Generate a video to see it here'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Thumbnail strip for earlier clips */}
+            {generations.filter((g) => g.generation.status === 'completed' && g.generation.videoStoragePath).length > 1 && (
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', width: '100%' }}>
+                {generations.filter((g) => g.generation.status === 'completed' && g.generation.videoStoragePath).map(({ generation: g }) => (
+                  <div
+                    key={g.id}
+                    onClick={() => { void fetchSignedUrl(g.id); }}
+                    style={{
+                      width: 52, height: 80, borderRadius: 6, background: '#2A2A30', flexShrink: 0, cursor: 'pointer',
+                      border: `2px solid ${g.id === displayGen?.generation.id ? '#6C47FF' : 'transparent'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <IconVideo />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right panel footer — approve / unapprove / next */}
+          <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            {isApproved ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                  <span style={{ font: '500 13px/1 Satoshi', color: '#E8E8F0' }}>Scene {n} approved</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleUnapprove}
+                    disabled={approving}
+                    style={{ flex: 1, height: 36, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, background: 'transparent', font: '500 13px/1 Satoshi', color: '#A3A3A9', cursor: 'pointer' }}
+                  >
+                    {approving ? 'Updating…' : 'Unapprove'}
+                  </button>
+                  {nextScreen && (
+                    <Link href={`/video-projects/${id}/screens/${nextScreen.screenNumber}`} style={{ flex: 1 }}>
+                      <button style={{ width: '100%', height: 36, borderRadius: 8, background: '#6C47FF', color: '#fff', border: 'none', font: '600 13px/1 Satoshi', cursor: 'pointer' }}>
+                        Scene {nextScreen.screenNumber} →
+                      </button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ) : displayGen?.generation.status === 'completed' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  onClick={() => handleApprove(displayGen.generation.id)}
+                  disabled={approving}
+                  style={{ width: '100%', height: 40, borderRadius: 10, background: '#22c55e', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: approving ? 0.6 : 1 }}
+                >
+                  <IconCheck />
+                  {approving ? 'Approving…' : 'Approve clip'}
+                </button>
+                <button
+                  onClick={handleGenerateVideo}
+                  disabled={submitting || hasUnsavedPromptEdits || hasPending}
+                  style={{ width: '100%', height: 36, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, background: 'transparent', font: '500 13px/1 Satoshi', color: '#A3A3A9', cursor: 'pointer', opacity: (submitting || hasUnsavedPromptEdits || hasPending) ? 0.5 : 1 }}
+                >
+                  {submitting ? 'Generating…' : 'Generate another'}
+                </button>
+                {generations.some((g) => g.generation.status === 'failed') && (
+                  <div style={{ font: '400 11px/1.3 Satoshi', color: '#EF4444', textAlign: 'center' }}>
+                    {generations.filter((g) => g.generation.status === 'failed').length} generation{generations.filter((g) => g.generation.status === 'failed').length > 1 ? 's' : ''} failed
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ font: '400 12px/1.5 Satoshi', color: '#75757C', textAlign: 'center' }}>
+                {promptHistory.length === 0 ? 'Write a prompt to get started' : 'Generate a video clip to approve it'}
+              </div>
             )}
           </div>
         </div>
+
       </div>
 
       {feedbackGenId != null && (
