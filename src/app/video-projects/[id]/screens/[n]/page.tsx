@@ -118,6 +118,7 @@ export default function ScreenPage() {
       fetch(`/api/v1/video-projects/${id}/screens/${n}/prompt-history`),
       fetch(`/api/v1/video-projects/${id}/screens/${n}/generations`),
     ]);
+    if (!projRes.ok || !histRes.ok || !genRes.ok) return;
     const proj: VideoProject = await projRes.json();
     const hist: PromptVersion[] = await histRes.json();
     const gens: Generation[] = await genRes.json();
@@ -161,8 +162,7 @@ export default function ScreenPage() {
           pollRef.current = null;
           // Reload project to pick up approvedGenerationId changes
           const projRes = await fetch(`/api/v1/video-projects/${id}`);
-          const proj = await projRes.json();
-          setProject(proj);
+          if (projRes.ok) { const proj = await projRes.json(); setProject(proj); }
         }
       }, 5000);
     }

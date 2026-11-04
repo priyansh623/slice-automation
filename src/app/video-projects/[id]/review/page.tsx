@@ -66,8 +66,9 @@ export default function ReviewPage() {
 
   useEffect(() => {
     fetch(`/api/v1/video-projects/${id}`)
-      .then((r) => r.json())
-      .then(setProject);
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setProject(d); })
+      .catch(() => {});
     loadCompilation();
   }, [id, cid]);
 

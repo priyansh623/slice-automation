@@ -160,6 +160,7 @@ export default function VideoProjectPage() {
       fetch(`/api/v1/video-projects/${id}`),
       fetch(`/api/v1/video-projects/${id}/prompt-tasks`),
     ]);
+    if (!res.ok) { setLoading(false); return; }
     const data = await res.json();
     setProject(data);
     setEditedScreens(data.screens ?? []);
