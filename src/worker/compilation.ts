@@ -1,31 +1,34 @@
 /**
- * FFmpeg video compilation worker.
+ * Video compilation worker using useapi.net concatenate endpoint.
  *
  * Picks up pending videoCompilations rows, resolves scene selections from
- * compilationSceneSelections, downloads each clip from Supabase Storage,
- * concatenates with filter_complex (normalised timestamps + audio padding
- * + silence for audio-less clips), uploads the result, then marks the row
- * completed.
+ * compilationSceneSelections, calls POST /v1/google-flow/videos/concatenate
+ * with the mediaGenerationId for each clip, decodes the returned base64 MP4,
+ * uploads the result to Supabase Storage, then marks the row completed.
+ *
+ * Requirements:
+ *  - Each selected generation must have mediaGenerationId populated
+ *    (stored when the generation completed via the useapi provider).
+ *  - 2–10 clips supported by the concatenate endpoint.
  */
 
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { db } from '../db';
 import {
-  adminSettings,
   videoCompilations,
   compilationSceneSelections,
   videoGenerations,
-  videoProjects,
   videoScreens,
 } from '../db/schema.pg';
 import { and, asc, eq, lt } from 'drizzle-orm';
-import { runFfmpegFilterComplex } from './ffmpeg-utils';
 
 const COMPILATION_LEASE_MS = 30 * 60 * 1000;
 const BUCKET_VIDEOS = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
+const CONCATENATE_URL = 'https://api.useapi.net/v1/google-flow/videos/concatenate';
+
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${process.env.USEAPI_TOKEN}` };
+}
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -86,22 +89,9 @@ export async function processPendingCompilation(): Promise<boolean> {
 // ── Internal implementation ───────────────────────────────────────────────────
 
 async function runCompilation(projectId: number, compilationId: number): Promise<string> {
-  await db
-    .select({ id: videoProjects.id })
-    .from(videoProjects)
-    .where(eq(videoProjects.id, projectId))
-    .limit(1)
-    .then((rows) => {
-      if (!rows[0]) throw new Error(`Project ${projectId} not found`);
-    });
-
-  const settingsRows = await db.select().from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
-  const crf = settingsRows[0]?.compilationCrf ?? 23;
-
   // Fetch scene selections ordered by screen position
   const selections = await db
     .select({
-      videoScreenId: compilationSceneSelections.videoScreenId,
       videoGenerationId: compilationSceneSelections.videoGenerationId,
       position: videoScreens.position,
     })
@@ -111,52 +101,72 @@ async function runCompilation(projectId: number, compilationId: number): Promise
     .orderBy(asc(videoScreens.position));
 
   if (selections.length === 0) throw new Error(`Compilation ${compilationId} has no scene selections`);
+  if (selections.length < 2) throw new Error(`Compilation ${compilationId} needs at least 2 clips (got ${selections.length})`);
+  if (selections.length > 10) throw new Error(`Compilation ${compilationId} has too many clips (${selections.length}); max is 10`);
 
-  const storagePaths: string[] = [];
+  // Resolve mediaGenerationId for each clip
+  const mediaGenerationIds: string[] = [];
   for (const sel of selections) {
     const genRows = await db
-      .select({ videoStoragePath: videoGenerations.videoStoragePath })
+      .select({ mediaGenerationId: videoGenerations.mediaGenerationId, videoStoragePath: videoGenerations.videoStoragePath })
       .from(videoGenerations)
       .where(eq(videoGenerations.id, sel.videoGenerationId))
       .limit(1);
     const gen = genRows[0];
     if (!gen) throw new Error(`Generation ${sel.videoGenerationId} not found`);
-    if (!gen.videoStoragePath) {
-      throw new Error(`Generation ${sel.videoGenerationId} has no video in storage (still processing?)`);
+    if (!gen.mediaGenerationId) {
+      throw new Error(
+        `Generation ${sel.videoGenerationId} is missing mediaGenerationId — ` +
+        `it may have been created before concatenate support was added. ` +
+        `Please re-generate this scene and approve the new version.`,
+      );
     }
-    storagePaths.push(gen.videoStoragePath);
+    mediaGenerationIds.push(gen.mediaGenerationId);
   }
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `compilation-${compilationId}-`));
-  try {
-    const supabase = serviceClient();
-    const localPaths: string[] = [];
+  // Call useapi.net concatenate endpoint (synchronous, ~15-25s)
+  console.log(`[compilation] Calling concatenate for job ${compilationId} with ${mediaGenerationIds.length} clips`);
+  const res = await fetch(CONCATENATE_URL, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clips: mediaGenerationIds.map((id) => ({ mediaGenerationId: id })) }),
+  });
 
-    for (let i = 0; i < storagePaths.length; i++) {
-      const storagePath = storagePaths[i];
-      const { data, error } = await supabase.storage.from(BUCKET_VIDEOS).download(storagePath);
-      if (error || !data) {
-        throw new Error(`Failed to download clip ${storagePath}: ${error?.message ?? 'no data'}`);
-      }
-      const localPath = path.join(tmpDir, `clip-${String(i).padStart(3, '0')}.mp4`);
-      await fs.writeFile(localPath, Buffer.from(await data.arrayBuffer()));
-      localPaths.push(localPath);
-    }
-
-    const outputPath = path.join(tmpDir, 'output.mp4');
-    runFfmpegFilterComplex(localPaths, outputPath, crf);
-
-    const outputBuffer = await fs.readFile(outputPath);
-    const outputStoragePath = `compilations/${projectId}/${Date.now()}-compilation-${compilationId}.mp4`;
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_VIDEOS)
-      .upload(outputStoragePath, outputBuffer, { contentType: 'video/mp4', upsert: false });
-    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-    return outputStoragePath;
-  } finally {
-    fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Concatenate API error ${res.status}: ${text}`);
   }
+
+  const json = (await res.json()) as Record<string, unknown>;
+  console.log('[compilation] concatenate response keys:', Object.keys(json));
+
+  // Extract the base64-encoded MP4 from the response
+  // useapi.net returns the video as a base64 string in a `video` or `videoBase64` field,
+  // or possibly as a `videoUrl` for a hosted file.
+  const videoBase64 = (json.video ?? json.videoBase64) as string | undefined;
+  const videoUrl = json.videoUrl as string | undefined;
+
+  let videoBuffer: Buffer;
+  if (videoBase64) {
+    videoBuffer = Buffer.from(videoBase64, 'base64');
+  } else if (videoUrl) {
+    // Some versions return a URL instead of base64
+    const dlRes = await fetch(videoUrl);
+    if (!dlRes.ok) throw new Error(`Failed to download concatenated video: ${dlRes.status}`);
+    videoBuffer = Buffer.from(await dlRes.arrayBuffer());
+  } else {
+    throw new Error(`Concatenate response missing video data. Keys: ${Object.keys(json).join(', ')}`);
+  }
+
+  // Upload to Supabase Storage
+  const outputStoragePath = `compilations/${projectId}/${Date.now()}-compilation-${compilationId}.mp4`;
+  const supabase = serviceClient();
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET_VIDEOS)
+    .upload(outputStoragePath, videoBuffer, { contentType: 'video/mp4', upsert: false });
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+  return outputStoragePath;
 }
 
 function serviceClient() {

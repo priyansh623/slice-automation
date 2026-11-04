@@ -734,7 +734,7 @@ export async function submitQueuedGeneration(
       }
       await db
         .update(videoGenerations)
-        .set({ jobId: result.jobId, status: 'completed', videoStoragePath: storagePath, updatedAt: now })
+        .set({ jobId: result.jobId, status: 'completed', videoStoragePath: storagePath, mediaGenerationId: result.mediaGenerationId ?? null, updatedAt: now })
         .where(eq(videoGenerations.id, generationId));
     } else {
       await db

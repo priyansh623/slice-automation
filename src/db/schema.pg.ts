@@ -108,6 +108,7 @@ export const videoGenerations = pgTable('video_generations', {
   jobId: text('job_id'),
   status: text('status').notNull().default('pending'),    // pending | processing | completed | failed
   videoStoragePath: text('video_storage_path'),           // Supabase Storage path (replaces local path)
+  mediaGenerationId: text('media_generation_id'),         // useapi.net mediaGenerationId for concatenate
   durationSeconds: integer('duration_seconds'),
   errorMessage: text('error_message'),
   creatorFeedback: text('creator_feedback'),

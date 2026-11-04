@@ -296,7 +296,7 @@ async function pollInFlightGenerations(): Promise<void> {
           }
           await db
             .update(videoGenerations)
-            .set({ status: 'completed', videoStoragePath: storagePath, claimedAt: null, updatedAt: now })
+            .set({ status: 'completed', videoStoragePath: storagePath, mediaGenerationId: result.outputMediaGenerationId ?? null, claimedAt: null, updatedAt: now })
             .where(eq(videoGenerations.id, gen.id));
           console.log(`[worker] Gen ${gen.id} completed → ${storagePath}`);
         } catch (dlErr: unknown) {
