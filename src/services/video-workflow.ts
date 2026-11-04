@@ -414,7 +414,7 @@ export async function generateScreen1Prompt(
       `Here is the original video script and the reference image of the creator.` +
       `\nUse the reference image to understand the creator's visible appearance.` +
       `\nUsing the UGC skill, generate the Google Flow video prompt for Scene 1 only.` +
-      `\nReturn only the formatted scene prompt. Do not include scene breakdown, analysis, or content for other scenes.` +
+      `\nReturn only the formatted scene prompt. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or any commentary after the prompt.` +
       `\nPreserve the original dialogue exactly.` +
       creatorDescPart +
       hookBlock +
@@ -453,6 +453,7 @@ export async function generateInitialScreenPrompt(
   const userMessage =
     `Here is the original video script and the reference image of the creator.` +
     `\nUsing the UGC skill, generate the Google Flow video prompt for Scene ${screen.screenNumber} only.` +
+    `\nReturn only the formatted scene prompt. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or any commentary after the prompt.` +
     `\nPreserve the original dialogue exactly.` +
     creativeDirectionBlock +
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
@@ -558,6 +559,7 @@ export async function revisePrompt(
 
   const userMessage =
     `Revise the Scene ${screen.screenNumber} prompt based on this feedback: ${nlFeedback}\n\n` +
+    `Return only the formatted scene prompt. Do not add a Notes section or any commentary after the prompt.\n\n` +
     `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
     `Scene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
