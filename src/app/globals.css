@@ -872,6 +872,11 @@ input, textarea, select { font-family: var(--font); }
 .scene-reorder-btn:hover { background: var(--border); }
 .scene-reorder-btn:disabled { opacity: 0.3; cursor: default; }
 
+/* ── Spinner ───────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 680px) {
   .screen-workspace { grid-template-columns: 1fr; }
