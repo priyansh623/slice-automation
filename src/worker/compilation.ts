@@ -116,9 +116,8 @@ async function runCompilation(projectId: number, compilationId: number): Promise
     if (!gen) throw new Error(`Generation ${sel.videoGenerationId} not found`);
     if (!gen.mediaGenerationId) {
       throw new Error(
-        `Generation ${sel.videoGenerationId} is missing mediaGenerationId — ` +
-        `it may have been created before concatenate support was added. ` +
-        `Please re-generate this scene and approve the new version.`,
+        `Scene ${sel.position + 1} clip is missing its media ID (generation ${sel.videoGenerationId}). ` +
+        `Please generate a new clip for this scene and approve it, then try compiling again.`,
       );
     }
     mediaGenerationIds.push(gen.mediaGenerationId);
