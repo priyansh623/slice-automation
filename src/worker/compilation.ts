@@ -128,7 +128,7 @@ async function runCompilation(projectId: number, compilationId: number): Promise
   const res = await fetch(CONCATENATE_URL, {
     method: 'POST',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clips: mediaGenerationIds.map((id) => ({ mediaGenerationId: id })) }),
+    body: JSON.stringify({ media: mediaGenerationIds.map((id) => ({ mediaGenerationId: id })) }),
   });
 
   if (!res.ok) {
