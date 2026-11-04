@@ -114,25 +114,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'baseImagePath is required' }, { status: 400 });
   }
 
-  // Snapshot the current scene1HookInstruction at creation time
-  const settingsRows = await db.select().from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
-  const scene1HookSnapshot = settingsRows[0]?.scene1HookInstruction ?? null;
+  try {
+    const settingsRows = await db.select().from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
+    const scene1HookSnapshot = settingsRows[0]?.scene1HookInstruction ?? null;
 
-  const now = Date.now();
-  const inserted = await db
-    .insert(videoProjects)
-    .values({
-      userId: user.id,
-      name: body.name,
-      baseImagePath: body.baseImagePath,
-      originalScript: body.originalScript,
-      skillVersion: body.skillVersion ?? 'v1',
-      creatorDescription: body.creatorDescription?.trim() || null,
-      scene1HookSnapshot,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
+    const now = Date.now();
+    const inserted = await db
+      .insert(videoProjects)
+      .values({
+        userId: user.id,
+        name: body.name,
+        baseImagePath: body.baseImagePath,
+        originalScript: body.originalScript,
+        skillVersion: body.skillVersion ?? 'v1',
+        creatorDescription: body.creatorDescription?.trim() || null,
+        scene1HookSnapshot,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
 
-  return NextResponse.json(inserted[0], { status: 201 });
+    return NextResponse.json(inserted[0], { status: 201 });
+  } catch (err) {
+    console.error('[POST /api/v1/video-projects]', err);
+    return NextResponse.json({ error: 'Failed to create project' }, { status: 500 });
+  }
 }
