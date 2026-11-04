@@ -96,7 +96,10 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
     const immediateMediaId = firstMedia?.mediaGenerationId as string | undefined;
     const isImmediate = firstMedia?.mediaMetadata?.mediaStatus?.mediaGenerationStatus === 'MEDIA_GENERATION_STATUS_SUCCESSFUL';
 
-    return { jobId, videoUrl: isImmediate ? immediateVideoUrl : undefined, mediaGenerationId: isImmediate ? immediateMediaId : undefined };
+    // Return video + mediaGenerationId when either the status flag confirms success
+    // or when both a URL and a mediaGenerationId are present (some responses omit the status field).
+    const hasImmediateVideo = isImmediate || (!!immediateVideoUrl && !!immediateMediaId);
+    return { jobId, videoUrl: hasImmediateVideo ? immediateVideoUrl : undefined, mediaGenerationId: hasImmediateVideo ? immediateMediaId : undefined };
   }
 
   async pollJob(jobId: string): Promise<{

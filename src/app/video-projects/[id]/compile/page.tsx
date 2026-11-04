@@ -25,6 +25,7 @@ interface Compilation {
   id: number;
   videoProjectId: number;
   status: string;
+  errorMessage?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -268,7 +269,9 @@ export default function CompilePage() {
           {isFailed && (
             <div style={{ marginTop: 16 }}>
               <div style={{ font: '400 14px/1.5 Satoshi', color: '#DC2626', marginBottom: 12 }}>
-                Compilation failed. Please try again.
+                {latestComp?.errorMessage?.includes('missing mediaGenerationId')
+                  ? latestComp.errorMessage
+                  : 'Compilation failed. Please try again.'}
               </div>
               <button
                 onClick={() => setShowModal(true)}
