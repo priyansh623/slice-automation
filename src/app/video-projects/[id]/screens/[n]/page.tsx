@@ -766,55 +766,54 @@ export default function ScreenPage() {
             </div>
           )}
 
-          {/* Video area */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '16px 20px', gap: 12, overflowY: 'auto', background: '#FAFAF9' }}>
-            {hasPending ? (
-              <div style={{ height: 290, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1A1A1E', borderRadius: 14 }}>
-                <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 12 }}>
-                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
-                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
-                  <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+          {/* Video area — fills the panel, no container background */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Video / state takes all available flex space */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {hasPending ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  <div className="pulse-dots" style={{ justifyContent: 'center', marginBottom: 4 }}>
+                    <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                    <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                    <div className="pulse-dot" style={{ background: '#6C47FF' }} />
+                  </div>
+                  <div style={{ font: '600 14px/1.3 Satoshi', color: '#111113' }}>Generating clip…</div>
+                  <div style={{ font: '400 12px/1.4 Satoshi', color: '#9A9AA0' }}>Usually 1–3 minutes</div>
                 </div>
-                <div style={{ font: '600 14px/1.3 Satoshi', color: '#E8E8F0' }}>Generating clip…</div>
-                <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', marginTop: 6 }}>Usually 1–3 minutes</div>
-              </div>
-            ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
-              <div style={{ height: 290, background: '#1A1A1E', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {signedVideoUrls[displayGen.generation.id] ? (
+              ) : displayGen?.generation.status === 'completed' && displayGen.generation.videoStoragePath ? (
+                signedVideoUrls[displayGen.generation.id] ? (
                   <video
                     key={displayGen.generation.id}
                     src={signedVideoUrls[displayGen.generation.id]}
                     controls
-                    style={{ height: '100%', width: 'auto', borderRadius: 10, background: '#000', display: 'block' }}
+                    style={{ height: '100%', width: 'auto', maxWidth: '100%', display: 'block' }}
                   />
                 ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                    <div style={{
-                      width: 56, height: 56, borderRadius: '50%', background: 'rgba(255,255,255,0.15)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-                    }}>
-                      <IconPlay />
-                    </div>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%', background: '#F0F0EC',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6C47FF',
+                  }}>
+                    <IconPlay />
                   </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ height: 290, background: '#1A1A1E', borderRadius: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%', background: 'rgba(255,255,255,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)',
-                }}>
-                  <IconPlay />
+                )
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%', background: '#F0F0EC',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A9AA0',
+                  }}>
+                    <IconPlay />
+                  </div>
+                  <div style={{ font: '400 12px/1.4 Satoshi', color: '#9A9AA0', textAlign: 'center', maxWidth: 160 }}>
+                    {promptHistory.length === 0 ? 'Write a prompt first' : 'Generate a video to see it here'}
+                  </div>
                 </div>
-                <div style={{ font: '400 12px/1.4 Satoshi', color: '#75757C', textAlign: 'center', maxWidth: 160 }}>
-                  {promptHistory.length === 0 ? 'Write a prompt first' : 'Generate a video to see it here'}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Thumbnail strip */}
             {completedGens.length > 0 && (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flexShrink: 0, display: 'flex', gap: 8, padding: '10px 20px', borderTop: '1px solid #ECECE8' }}>
                 {completedGens.map(({ generation: g }) => {
                   const isSelected = g.id === resolvedDisplayGenId;
                   const num = genIndex(g.id);
@@ -825,7 +824,7 @@ export default function ScreenPage() {
                       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' }}
                     >
                       <div style={{
-                        width: 60, height: 80, borderRadius: 8, background: '#1A1A1E', flexShrink: 0,
+                        width: 56, height: 76, borderRadius: 8, background: '#1A1A1E', flexShrink: 0,
                         border: `2px solid ${isSelected ? '#6C47FF' : 'transparent'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden',
                       }}>
