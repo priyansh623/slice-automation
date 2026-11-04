@@ -142,7 +142,7 @@ async function runCompilation(projectId: number, compilationId: number): Promise
   // Extract the base64-encoded MP4 from the response
   // useapi.net returns the video as a base64 string in a `video` or `videoBase64` field,
   // or possibly as a `videoUrl` for a hosted file.
-  const videoBase64 = (json.video ?? json.videoBase64) as string | undefined;
+  const videoBase64 = (json.encodedVideo ?? json.video ?? json.videoBase64) as string | undefined;
   const videoUrl = json.videoUrl as string | undefined;
 
   let videoBuffer: Buffer;
