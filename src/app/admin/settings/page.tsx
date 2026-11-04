@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { FileText, Video, Layers, MessageCircle, Info } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { FileText, Video, Layers, MessageCircle, Info, RefreshCw } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 
 interface AdminSettings {
@@ -51,6 +51,22 @@ export default function AdminSettingsPage() {
   const [saveMsg, setSaveMsg] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const [credits, setCredits] = useState<number | null | undefined>(undefined); // undefined = loading, null = unknown
+  const [creditsLoading, setCreditsLoading] = useState(false);
+
+  const fetchCredits = useCallback(async () => {
+    setCreditsLoading(true);
+    try {
+      const res = await fetch('/api/v1/admin/credits');
+      if (!res.ok) { setCredits(null); return; }
+      const data = await res.json() as { remainingCredits: number | null };
+      setCredits(data.remainingCredits);
+    } catch {
+      setCredits(null);
+    } finally {
+      setCreditsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/v1/admin/settings')
@@ -64,7 +80,8 @@ export default function AdminSettingsPage() {
         setCompilationCrf(data.compilationCrf ?? 18);
       })
       .catch(() => {});
-  }, []);
+    void fetchCredits();
+  }, [fetchCredits]);
 
   async function handleSave() {
     setSaving(true);
@@ -250,6 +267,40 @@ export default function AdminSettingsPage() {
                       {testResult.detail}
                     </div>
                   )}
+                </div>
+
+                {/* Credits card */}
+                <div style={{ border: '1px solid #ECECE8', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+                  <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ font: '600 14px/1 Satoshi', marginBottom: 4 }}>Google Flow credits</div>
+                      <div style={{ font: '400 12px/1 Satoshi', color: '#75757C' }}>Remaining balance on your useapi.net account</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      {creditsLoading ? (
+                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Loading…</span>
+                      ) : credits === undefined || credits === null ? (
+                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Unavailable</span>
+                      ) : (
+                        <span style={{ font: '700 22px/1 Satoshi', color: '#111113' }}>
+                          {credits.toLocaleString()}
+                          <span style={{ font: '400 12px/1 Satoshi', color: '#75757C', marginLeft: 4 }}>credits</span>
+                        </span>
+                      )}
+                      <button
+                        onClick={() => void fetchCredits()}
+                        disabled={creditsLoading}
+                        title="Refresh"
+                        style={{
+                          width: 32, height: 32, border: '1px solid #E4E4E0', borderRadius: 8,
+                          background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          opacity: creditsLoading ? 0.4 : 1,
+                        }}
+                      >
+                        <RefreshCw size={14} color="#5E5E65" style={{ animation: creditsLoading ? 'spin 0.75s linear infinite' : 'none' }} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Settings rows */}
