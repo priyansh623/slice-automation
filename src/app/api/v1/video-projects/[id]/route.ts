@@ -38,7 +38,7 @@ export async function GET(
 
   // DB-backed signed URL cache: skip Storage call when the cached URL is still fresh.
   const ONE_HOUR_MS = 3_600_000;
-  const URL_TTL_S = 7 * 24 * 3600;
+  const URL_TTL_S = 24 * 3600; // 24-hour TTL; refresh 1 h before expiry
   const nowMs = Date.now();
   let baseImagePreviewUrl: string | null = null;
   if (

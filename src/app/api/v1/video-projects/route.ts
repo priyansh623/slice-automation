@@ -41,7 +41,7 @@ export async function GET(): Promise<NextResponse> {
     { auth: { persistSession: false } },
   );
   const ONE_HOUR_MS = 3_600_000;
-  const URL_TTL_S = 7 * 24 * 3600; // 7-day TTL; refresh 1 h before expiry
+  const URL_TTL_S = 24 * 3600; // 24-hour TTL; refresh 1 h before expiry
   const now = Date.now();
 
   const needsRefresh = rows.filter(
