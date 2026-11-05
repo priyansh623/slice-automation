@@ -47,15 +47,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to create upload URL' }, { status: 500 });
   }
 
-  // Pre-generate the read URL — valid once the file is uploaded.
-  const { data: previewData } = await serviceClient.storage
-    .from(bucket)
-    .createSignedUrl(path, 24 * 3600);
-
   return NextResponse.json({
     signedUploadUrl: uploadData.signedUrl,
     path,
     filename,
-    previewUrl: previewData?.signedUrl ?? null,
   });
 }

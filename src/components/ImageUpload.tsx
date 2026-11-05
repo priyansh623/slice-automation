@@ -40,10 +40,9 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
         setLocalPreview(null);
         return;
       }
-      const { signedUploadUrl, path, previewUrl } = await initRes.json() as {
+      const { signedUploadUrl, path } = await initRes.json() as {
         signedUploadUrl: string;
         path: string;
-        previewUrl: string | null;
       };
 
       // Step 2: PUT the file directly to Supabase Storage
@@ -59,9 +58,10 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
         return;
       }
 
-      URL.revokeObjectURL(objectUrl);
+      // Use the blob URL as the in-page preview — it stays valid for this session.
+      // The backend stores storedPath and generates fresh signed URLs from there.
       setLocalPreview(null);
-      onChange({ storedPath: path, previewUrl: previewUrl ?? '', filename: file.name });
+      onChange({ storedPath: path, previewUrl: objectUrl, filename: file.name });
     } catch (err: unknown) {
       setError(String(err));
       URL.revokeObjectURL(objectUrl);
