@@ -29,20 +29,39 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
     const objectUrl = URL.createObjectURL(file);
     setLocalPreview(objectUrl);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/v1/uploads', { method: 'POST', body: form });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error ?? `Upload failed (${res.status})`);
+      // Step 1: get a presigned upload URL (avoids the 4.5 MB Vercel body limit)
+      const initRes = await fetch(
+        `/api/v1/uploads/init?contentType=${encodeURIComponent(file.type)}`,
+      );
+      if (!initRes.ok) {
+        const d = await initRes.json().catch(() => ({})) as { error?: string };
+        setError(d.error ?? `Upload init failed (${initRes.status})`);
         URL.revokeObjectURL(objectUrl);
         setLocalPreview(null);
         return;
       }
-      const data = (await res.json()) as UploadResult;
+      const { signedUploadUrl, path, previewUrl } = await initRes.json() as {
+        signedUploadUrl: string;
+        path: string;
+        previewUrl: string | null;
+      };
+
+      // Step 2: PUT the file directly to Supabase Storage
+      const uploadRes = await fetch(signedUploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        setError(`Upload failed (${uploadRes.status})`);
+        URL.revokeObjectURL(objectUrl);
+        setLocalPreview(null);
+        return;
+      }
+
       URL.revokeObjectURL(objectUrl);
       setLocalPreview(null);
-      onChange(data);
+      onChange({ storedPath: path, previewUrl: previewUrl ?? '', filename: file.name });
     } catch (err: unknown) {
       setError(String(err));
       URL.revokeObjectURL(objectUrl);

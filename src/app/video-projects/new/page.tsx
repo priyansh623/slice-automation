@@ -155,7 +155,7 @@ export default function NewVideoProjectPage() {
               <div>
                 <ImageUpload
                   label=""
-                  hint="Drop an image here, or browse. JPEG, PNG or WEBP up to 10 MB."
+                  hint="Drop an image here, or browse. JPEG, PNG or WEBP up to 50 MB."
                   value={baseImage}
                   onChange={setBaseImage}
                 />
