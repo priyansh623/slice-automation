@@ -65,6 +65,7 @@ export default function AdminDashboardPage() {
   const [lastRefreshed, setLastRefreshed] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [filterStep, setFilterStep] = useState<FunnelStep | 'all'>('all');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function load(quiet = false) {
@@ -223,17 +224,22 @@ export default function AdminDashboardPage() {
                 const hasError = row.failedGenerations > 0 || row.compilationStatus === 'failed';
                 const hasInFlight = row.inFlightGenerations > 0 || row.compilationStatus === 'pending' || row.compilationStatus === 'processing';
 
+                const isExpanded = expandedId === row.id;
+                const errorDetail = row.lastGenerationError || row.compilationError;
+                const isClickable = !!errorDetail;
+
                 return (
+                  <div key={row.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #F3F3F1' : 'none' }}>
                   <div
-                    key={row.id}
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 160px 110px 150px 100px 90px',
                       alignItems: 'center',
                       padding: '12px 16px',
-                      borderBottom: i < filtered.length - 1 ? '1px solid #F3F3F1' : 'none',
                       gap: 8,
+                      cursor: isClickable ? 'pointer' : 'default',
                     }}
+                    onClick={() => isClickable && setExpandedId(isExpanded ? null : row.id)}
                     onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAF8')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
@@ -334,6 +340,39 @@ export default function AdminDashboardPage() {
                     <div style={{ font: '400 11px/1 Satoshi', color: '#9A9AA0', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {relativeTime(row.lastActivityAt)}
                     </div>
+                  </div>
+
+                  {/* Expanded error detail */}
+                  {isExpanded && errorDetail && (
+                    <div style={{
+                      margin: '0 16px 12px',
+                      padding: '12px 14px',
+                      background: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      borderRadius: 10,
+                    }}>
+                      {row.lastGenerationError && (
+                        <div style={{ marginBottom: row.compilationError ? 10 : 0 }}>
+                          <div style={{ font: '600 11px/1 Satoshi', color: '#991B1B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Generation error
+                          </div>
+                          <div style={{ font: '400 12px/1.6 Satoshi', color: '#7F1D1D', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {row.lastGenerationError}
+                          </div>
+                        </div>
+                      )}
+                      {row.compilationError && (
+                        <div>
+                          <div style={{ font: '600 11px/1 Satoshi', color: '#991B1B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Compilation error
+                          </div>
+                          <div style={{ font: '400 12px/1.6 Satoshi', color: '#7F1D1D', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {row.compilationError}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   </div>
                 );
               })}

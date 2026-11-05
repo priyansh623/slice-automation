@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, Settings2, MessageSquare, Users } from 'lucide-react';
+import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -10,6 +10,7 @@ export default function Sidebar() {
   const projectsActive = pathname.startsWith('/video-projects');
   const settingsActive = pathname.startsWith('/admin/settings');
   const usersActive = pathname.startsWith('/admin/users');
+  const dashboardActive = pathname.startsWith('/admin/dashboard');
 
   const navBg = (active: boolean) => active ? '#F0F0EC' : 'transparent';
   const navFg = (active: boolean) => active ? '#111113' : '#75757C';
@@ -81,6 +82,27 @@ export default function Sidebar() {
         }}>
           <Settings2 size={19} />
           Settings
+        </button>
+      </Link>
+
+      {/* Dashboard */}
+      <Link href="/admin/dashboard" style={{ textDecoration: 'none' }}>
+        <button style={{
+          width: 60,
+          padding: '9px 0 8px',
+          border: 'none',
+          borderRadius: 10,
+          background: navBg(dashboardActive),
+          color: navFg(dashboardActive),
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          cursor: 'pointer',
+          font: '500 11px/1 Satoshi',
+        }}>
+          <LayoutDashboard size={19} />
+          Testers
         </button>
       </Link>
 
