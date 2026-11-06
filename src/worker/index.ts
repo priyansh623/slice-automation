@@ -315,10 +315,21 @@ async function pollInFlightGenerations(): Promise<void> {
           }
         }
       } else if (result.status === 'completed' && !result.videoUrl) {
-        await db
-          .update(videoGenerations)
-          .set({ status: 'failed', errorMessage: 'Video completed but URL was not returned by provider', claimedAt: null, updatedAt: now })
-          .where(eq(videoGenerations.id, gen.id));
+        if (gen.videoStoragePath) {
+          // The synchronous submit path already downloaded and stored the video.
+          // The poll saw 'completed' but no URL because the signed URL expired.
+          // Trust the stored path and mark it done.
+          await db
+            .update(videoGenerations)
+            .set({ status: 'completed', errorMessage: null, claimedAt: null, updatedAt: now })
+            .where(eq(videoGenerations.id, gen.id));
+          console.log(`[worker] Gen ${gen.id} already stored at ${gen.videoStoragePath}, marking completed`);
+        } else {
+          await db
+            .update(videoGenerations)
+            .set({ status: 'failed', errorMessage: 'Video completed but URL was not returned by provider', claimedAt: null, updatedAt: now })
+            .where(eq(videoGenerations.id, gen.id));
+        }
       } else if (result.status === 'failed') {
         await db
           .update(videoGenerations)
