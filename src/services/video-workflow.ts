@@ -925,27 +925,40 @@ export async function submitVideoGeneration(
       outputMediaGenerationId: result.mediaGenerationId ?? null,
       jobCompletedAt: now,
     });
-    let storagePath: string;
-    try {
-      storagePath = await uploadVideoToStorage(downloaded.tempPath, videoScreenId, 0);
-    } catch (uploadErr: unknown) {
-      fs.unlink(downloaded.tempPath, () => {});
-      throw uploadErr;
-    }
+    // Insert the row first so we have the real generation ID for the storage path.
+    // Also saves mediaGenerationId here — previously this was omitted, causing
+    // compilation to fail with "clip is missing its media ID".
     const inserted = await db
       .insert(videoGenerations)
       .values({
         videoScreenId,
         promptVersionId,
         jobId: result.jobId ?? null,
-        status: 'completed',
-        videoStoragePath: storagePath,
+        status: 'processing',
+        videoStoragePath: null,
+        mediaGenerationId: result.mediaGenerationId ?? null,
         durationSeconds: duration,
         createdAt: now,
         updatedAt: now,
       })
       .returning({ id: videoGenerations.id });
-    return { generationId: inserted[0].id };
+    const generationId = inserted[0].id;
+    let storagePath: string;
+    try {
+      storagePath = await uploadVideoToStorage(downloaded.tempPath, videoScreenId, generationId);
+    } catch (uploadErr: unknown) {
+      fs.unlink(downloaded.tempPath, () => {});
+      await db
+        .update(videoGenerations)
+        .set({ status: 'failed', errorMessage: (uploadErr instanceof Error ? uploadErr.message : String(uploadErr)), updatedAt: Date.now() })
+        .where(eq(videoGenerations.id, generationId));
+      throw uploadErr;
+    }
+    await db
+      .update(videoGenerations)
+      .set({ status: 'completed', videoStoragePath: storagePath, updatedAt: Date.now() })
+      .where(eq(videoGenerations.id, generationId));
+    return { generationId };
   }
 
   const inserted = await db
