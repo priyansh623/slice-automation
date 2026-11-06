@@ -407,26 +407,21 @@ export async function generateScreen1Prompt(
         .where(eq(videoGenerations.id, reviewingGenerationId));
     }
   } else {
-    const creatorDescPart = project.creatorDescription
-      ? `\n\nCreator description: ${project.creatorDescription}`
-      : '';
+    const characterPart = project.creatorDescription
+      ? `This is my character and ${project.creatorDescription}`
+      : `This is my character — see the reference image for their appearance.`;
 
-    // Inject scene1 hook — use project snapshot if set, otherwise fall back to default
-    const DEFAULT_SCENE1_HOOK = `Treat Scene 1 as the hook. Deliver it with high energy, strong curiosity, an engaging influencer-style tone, and expressive but natural facial expressions and gestures. Make the opening immediately attention-grabbing and give the viewer a reason to keep watching.`;
+    const DEFAULT_SCENE1_HOOK = `Scene 1 needs to be punchier with better emotions to address the hook. The character needs to keep the audience engaged and interested with the hook.`;
     const hookText = project.scene1HookSnapshot ?? DEFAULT_SCENE1_HOOK;
-    const hookBlock = `\n\n[SCENE 1 HOOK — PERFORMANCE DIRECTION ONLY]\nThis is a starting-point direction for how the creator performs — not dialogue to add or change. Do not alter the script. Apply it to energy, tone, expression, and body language only. Treat it as a default: if feedback asks to tone something down (e.g. less expressive), adjust that dimension while retaining the rest. Explicit revision feedback always takes priority over this direction.\n${hookText}`;
 
     userMessage =
-      `Here is the original video script and the reference image of the creator.` +
-      `\nUse the reference image to understand the creator's visible appearance.` +
-      `\nUsing the UGC skill, generate the Google Flow video prompt for Scene 1 only.` +
-      `\nReturn only the formatted scene prompt. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or any commentary after the prompt.` +
-      `\nPreserve the original dialogue exactly.` +
-      creatorDescPart +
-      hookBlock +
-      `\n\nFull script:\n${project.approvedScript ?? project.originalScript}` +
-      `\n\nScene 1 dialogue: "${screen.dialogue}"` +
-      (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
+      `${characterPart}\n` +
+      `Use the skill to write out the prompt for Google Flow.\n` +
+      `Return only the formatted scene prompt. Preserve the original dialogue exactly. Do not add a Notes section or any commentary after the prompt.\n\n` +
+      `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
+      `Script for Scene 1: "${screen.dialogue}"` +
+      (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
+      `\n\n${hookText}`;
   }
 
   const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));

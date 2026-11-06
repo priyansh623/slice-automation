@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { claudeConversations } from '@/db/schema.pg';
 import { and, eq, isNull } from 'drizzle-orm';
 
-const MODEL = () => process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5';
+const MODEL = () => process.env.ANTHROPIC_MODEL ?? 'claude-opus-5-5';
 
 let _client: Anthropic | null = null;
 
@@ -179,6 +179,7 @@ export async function callClaude(
   const response = await getClient().messages.create({
     model: MODEL(),
     max_tokens: 8192,
+    thinking: { type: 'adaptive' },
     system: systemPrompt,
     messages,
   });
