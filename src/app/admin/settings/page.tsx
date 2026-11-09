@@ -52,17 +52,28 @@ export default function AdminSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [credits, setCredits] = useState<number | null | undefined>(undefined); // undefined = loading, null = unknown
+  const [creditsError, setCreditsError] = useState<string | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(false);
 
   const fetchCredits = useCallback(async () => {
     setCreditsLoading(true);
+    setCreditsError(null);
     try {
       const res = await fetch('/api/v1/admin/credits');
-      if (!res.ok) { setCredits(null); return; }
-      const data = await res.json() as { remainingCredits: number | null };
-      setCredits(data.remainingCredits);
-    } catch {
+      const data = await res.json() as { remainingCredits?: number | null; error?: string; raw?: unknown };
+      if (!res.ok || data.error) {
+        setCredits(null);
+        setCreditsError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setCredits(data.remainingCredits ?? null);
+      if (data.remainingCredits === null || data.remainingCredits === undefined) {
+        // Show raw so we can see what fields came back
+        setCreditsError(`No credits field found. Raw: ${JSON.stringify(data.raw).slice(0, 200)}`);
+      }
+    } catch (e) {
       setCredits(null);
+      setCreditsError(e instanceof Error ? e.message : String(e));
     } finally {
       setCreditsLoading(false);
     }
@@ -279,13 +290,17 @@ export default function AdminSettingsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                       {creditsLoading ? (
                         <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Loading…</span>
-                      ) : credits === undefined || credits === null ? (
-                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Unavailable</span>
-                      ) : (
+                      ) : credits !== null && credits !== undefined ? (
                         <span style={{ font: '700 22px/1 Satoshi', color: '#111113' }}>
                           {credits.toLocaleString()}
                           <span style={{ font: '400 12px/1 Satoshi', color: '#75757C', marginLeft: 4 }}>credits</span>
                         </span>
+                      ) : creditsError ? (
+                        <span style={{ font: '400 11px/1.4 Satoshi', color: '#DC2626', maxWidth: 260, wordBreak: 'break-word' }} title={creditsError}>
+                          {creditsError.length > 80 ? creditsError.slice(0, 80) + '…' : creditsError}
+                        </span>
+                      ) : (
+                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Unavailable</span>
                       )}
                       <button
                         onClick={() => void fetchCredits()}

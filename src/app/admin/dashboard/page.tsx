@@ -182,10 +182,9 @@ export default function AdminDashboardPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
             {stats.map((s) => (
               <div key={s.label} style={{
-                background: '#fff',
+                background: s.alert ? '#FFF5F5' : '#fff',
                 border: s.alert ? '1px solid #FECACA' : '1px solid #ECECE8',
                 borderRadius: 12, padding: '18px 20px',
-                background: s.alert ? '#FFF5F5' : '#fff',
               }}>
                 <div style={{ font: '700 26px/1 Satoshi', letterSpacing: '-0.02em', color: s.alert ? '#DC2626' : '#111113' }}>{s.value}</div>
                 <div style={{ font: '400 12px/1.3 Satoshi', color: s.alert ? '#DC2626' : '#75757C', marginTop: 6 }}>{s.label}</div>
