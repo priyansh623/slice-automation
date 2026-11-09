@@ -467,7 +467,7 @@ export default function AdminDashboardPage() {
                               Creator feedback
                             </div>
                             {row.scenes.filter((s) => s.creatorFeedback).map((s) => (
-                              <div key={s.screenNumber} style={{ marginBottom: 6, lastChild: { marginBottom: 0 } }}>
+                              <div key={s.screenNumber} style={{ marginBottom: 6 }}>
                                 <span style={{ font: '600 11px/1 Satoshi', color: '#7C3AED' }}>Scene {s.screenNumber}: </span>
                                 <span style={{ font: '400 12px/1.5 Satoshi', color: '#4C1D95' }}>{s.creatorFeedback}</span>
                               </div>
