@@ -68,9 +68,10 @@ export default function AdminSettingsPage() {
       }
       setCredits(data.remainingCredits ?? null);
       if (data.remainingCredits === null || data.remainingCredits === undefined) {
-        const acct = (data as Record<string, unknown>).firstAccount;
-        const keys = acct ? Object.keys(acct as object).join(', ') : 'none';
-        setCreditsError(`No credits field. Account keys: ${keys}`);
+        const acct = (data as Record<string, unknown>).firstAccount as Record<string, unknown> | undefined;
+        const keys = acct ? Object.keys(acct).join(', ') : 'none';
+        const vals = acct ? JSON.stringify(acct) : '{}';
+        setCreditsError(`Keys: ${keys} | Full: ${vals}`);
       }
     } catch (e) {
       setCredits(null);
@@ -297,8 +298,8 @@ export default function AdminSettingsPage() {
                           <span style={{ font: '400 12px/1 Satoshi', color: '#75757C', marginLeft: 4 }}>credits</span>
                         </span>
                       ) : creditsError ? (
-                        <span style={{ font: '400 11px/1.4 Satoshi', color: '#DC2626', maxWidth: 260, wordBreak: 'break-word' }} title={creditsError}>
-                          {creditsError.length > 80 ? creditsError.slice(0, 80) + '…' : creditsError}
+                        <span style={{ font: '400 11px/1.4 Satoshi', color: '#DC2626', maxWidth: 400, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                          {creditsError}
                         </span>
                       ) : (
                         <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Unavailable</span>
