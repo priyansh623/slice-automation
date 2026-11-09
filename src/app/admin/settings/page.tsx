@@ -52,30 +52,19 @@ export default function AdminSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [credits, setCredits] = useState<number | null | undefined>(undefined); // undefined = loading, null = unknown
-  const [creditsError, setCreditsError] = useState<string | null>(null);
+  const [creditsLastSeen, setCreditsLastSeen] = useState<number | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(false);
 
   const fetchCredits = useCallback(async () => {
     setCreditsLoading(true);
-    setCreditsError(null);
     try {
       const res = await fetch('/api/v1/admin/credits');
-      const data = await res.json() as { remainingCredits?: number | null; error?: string; raw?: unknown };
-      if (!res.ok || data.error) {
-        setCredits(null);
-        setCreditsError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
+      if (!res.ok) { setCredits(null); return; }
+      const data = await res.json() as { remainingCredits: number | null; lastSeenAt: number | null };
       setCredits(data.remainingCredits ?? null);
-      if (data.remainingCredits === null || data.remainingCredits === undefined) {
-        const acct = (data as Record<string, unknown>).firstAccount as Record<string, unknown> | undefined;
-        const keys = acct ? Object.keys(acct).join(', ') : 'none';
-        const vals = acct ? JSON.stringify(acct) : '{}';
-        setCreditsError(`Keys: ${keys} | Full: ${vals}`);
-      }
-    } catch (e) {
+      setCreditsLastSeen(data.lastSeenAt ?? null);
+    } catch {
       setCredits(null);
-      setCreditsError(e instanceof Error ? e.message : String(e));
     } finally {
       setCreditsLoading(false);
     }
@@ -293,16 +282,24 @@ export default function AdminSettingsPage() {
                       {creditsLoading ? (
                         <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Loading…</span>
                       ) : credits !== null && credits !== undefined ? (
-                        <span style={{ font: '700 22px/1 Satoshi', color: '#111113' }}>
-                          {credits.toLocaleString()}
-                          <span style={{ font: '400 12px/1 Satoshi', color: '#75757C', marginLeft: 4 }}>credits</span>
-                        </span>
-                      ) : creditsError ? (
-                        <span style={{ font: '400 11px/1.4 Satoshi', color: '#DC2626', maxWidth: 400, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
-                          {creditsError}
+                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span style={{ font: '700 22px/1 Satoshi', color: '#111113' }}>
+                            {credits.toLocaleString()}
+                            <span style={{ font: '400 12px/1 Satoshi', color: '#75757C', marginLeft: 4 }}>credits</span>
+                          </span>
+                          {creditsLastSeen && (
+                            <span style={{ font: '400 11px/1 Satoshi', color: '#9A9AA0' }}>
+                              last seen {(() => {
+                                const diffMs = Date.now() - creditsLastSeen;
+                                const h = Math.floor(diffMs / 3600000);
+                                const m = Math.floor((diffMs % 3600000) / 60000);
+                                return h > 0 ? `${h}h ago` : m > 0 ? `${m}m ago` : 'just now';
+                              })()}
+                            </span>
+                          )}
                         </span>
                       ) : (
-                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>Unavailable</span>
+                        <span style={{ font: '400 13px/1 Satoshi', color: '#9A9AA0' }}>No data yet — will update after next generation</span>
                       )}
                       <button
                         onClick={() => void fetchCredits()}

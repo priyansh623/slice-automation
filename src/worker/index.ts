@@ -13,6 +13,7 @@ import {
   promptGenerationTasks,
   videoScreens,
   screenPromptVersions,
+  adminSettings,
 } from '../db/schema.pg';
 import { eq, inArray, isNull, lt, and } from 'drizzle-orm';
 import { useapiProvider } from '../providers/useapi/provider';
@@ -277,6 +278,13 @@ async function pollInFlightGenerations(): Promise<void> {
     try {
       const result = await useapiProvider.pollJob(gen.jobId);
       const now = Date.now();
+
+      if (typeof result.remainingCredits === 'number') {
+        db.update(adminSettings)
+          .set({ lastSeenCredits: result.remainingCredits, lastSeenCreditsAt: now })
+          .where(eq(adminSettings.id, 1))
+          .catch(() => {});
+      }
 
       if (result.status === 'completed' && result.videoUrl) {
         try {

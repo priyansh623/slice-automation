@@ -162,6 +162,8 @@ export const adminSettings = pgTable('admin_settings', {
   scene1HookInstruction: text('scene1_hook_instruction'), // default hook injected into Scene 1
   compilationCrf: integer('compilation_crf').notNull().default(23),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+  lastSeenCredits: integer('last_seen_credits'),
+  lastSeenCreditsAt: bigint('last_seen_credits_at', { mode: 'number' }),
 });
 
 // ── Video compilations ────────────────────────────────────────────────────────
