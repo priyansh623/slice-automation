@@ -5,6 +5,7 @@ import {
   videoScreens,
   videoGenerations,
   videoCompilations,
+  screenPromptVersions,
 } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAdmin, requireUser } from '@/lib/api-auth';
@@ -27,6 +28,7 @@ export async function GET(): Promise<NextResponse> {
     .select({
       videoProjectId: videoScreens.videoProjectId,
       id: videoScreens.id,
+      screenNumber: videoScreens.screenNumber,
       approvedGenerationId: videoScreens.approvedGenerationId,
     })
     .from(videoScreens)
@@ -34,6 +36,7 @@ export async function GET(): Promise<NextResponse> {
 
   type ScreenSummary = { total: number; approved: number; ids: number[] };
   const screensByProject = new Map<number, ScreenSummary>();
+  const screenNumberById = new Map<number, number>();
   for (const s of screenRows) {
     const existing = screensByProject.get(s.videoProjectId) ?? { total: 0, approved: 0, ids: [] };
     screensByProject.set(s.videoProjectId, {
@@ -41,6 +44,7 @@ export async function GET(): Promise<NextResponse> {
       approved: existing.approved + (s.approvedGenerationId ? 1 : 0),
       ids: [...existing.ids, s.id],
     });
+    screenNumberById.set(s.id, s.screenNumber);
   }
 
   // ── Aggregate generations per project ─────────────────────────────────────
@@ -48,12 +52,17 @@ export async function GET(): Promise<NextResponse> {
   type GenSummary = { total: number; completed: number; failed: number; inFlight: number; lastError: string | null; lastUpdated: number };
   const gensByProject = new Map<number, GenSummary>();
 
+  // Per-screen gen detail for expand panel
+  type ScreenGenDetail = { genCount: number; failedCount: number; lastFeedback: string | null };
+  const genDetailByScreen = new Map<number, ScreenGenDetail>();
+
   if (allScreenIds.length > 0) {
     const genRows = await db
       .select({
         videoScreenId: videoGenerations.videoScreenId,
         status: videoGenerations.status,
         errorMessage: videoGenerations.errorMessage,
+        creatorFeedback: videoGenerations.creatorFeedback,
         updatedAt: videoGenerations.updatedAt,
       })
       .from(videoGenerations)
@@ -74,6 +83,32 @@ export async function GET(): Promise<NextResponse> {
         lastError: g.status === 'failed' && g.errorMessage ? g.errorMessage : ex.lastError,
         lastUpdated: Math.max(ex.lastUpdated, g.updatedAt),
       });
+
+      // Per-screen detail
+      const sd = genDetailByScreen.get(g.videoScreenId) ?? { genCount: 0, failedCount: 0, lastFeedback: null };
+      genDetailByScreen.set(g.videoScreenId, {
+        genCount: sd.genCount + 1,
+        failedCount: sd.failedCount + (g.status === 'failed' ? 1 : 0),
+        lastFeedback: g.creatorFeedback ?? sd.lastFeedback,
+      });
+    }
+  }
+
+  // ── Prompt revision counts per project ────────────────────────────────────
+  const promptRevByProject = new Map<number, number>();
+  if (allScreenIds.length > 0) {
+    const pvRows = await db
+      .select({ videoScreenId: screenPromptVersions.videoScreenId, version: screenPromptVersions.version })
+      .from(screenPromptVersions)
+      .where(inArray(screenPromptVersions.videoScreenId, allScreenIds));
+
+    const screenToProject = new Map<number, number>();
+    for (const s of screenRows) screenToProject.set(s.id, s.videoProjectId);
+
+    for (const pv of pvRows) {
+      const pid = screenToProject.get(pv.videoScreenId);
+      if (!pid) continue;
+      promptRevByProject.set(pid, (promptRevByProject.get(pid) ?? 0) + 1);
     }
   }
 
@@ -100,7 +135,6 @@ export async function GET(): Promise<NextResponse> {
 
   const uniqueUserIds = [...new Set(projects.map((p) => p.userId))];
   const emailByUserId = new Map<string, string>();
-  // Supabase admin.listUsers paginates — fetch up to 1000 at a time
   let page = 1;
   while (true) {
     const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 1000 });
@@ -122,15 +156,17 @@ export async function GET(): Promise<NextResponse> {
     comp: typeof compilationRows[number] | undefined,
   ): FunnelStep {
     if (comp?.status === 'completed') return 'review';
-    if (comp) return 'compile';                                   // pending/processing/failed compile
+    if (comp) return 'compile';
     const sc = screens?.total ?? 0;
     const ap = screens?.approved ?? 0;
     const totalGens = gens?.total ?? 0;
-    if (sc > 0 && ap === sc) return 'compile';                    // all approved, no compile yet
+    if (sc > 0 && ap === sc) return 'compile';
     if (totalGens > 0) return ap > 0 ? 'approving' : 'generating';
     if (p.breakdownApprovedAt) return 'breakdown';
     return 'created';
   }
+
+  const now = Date.now();
 
   const result = projects.map((p) => {
     const screens = screensByProject.get(p.id);
@@ -141,6 +177,34 @@ export async function GET(): Promise<NextResponse> {
       gens?.lastUpdated ?? 0,
       comp?.updatedAt ?? 0,
     );
+    const step = funnelStep(p, screens, gens, comp);
+    const stuckMs = step !== 'review' ? now - lastActivity : null;
+    const stuckHours = stuckMs !== null ? Math.floor(stuckMs / 3_600_000) : null;
+    const isStuck = stuckHours !== null && stuckHours >= 12;
+
+    const screenCount = screens?.total ?? 0;
+    const totalGens = gens?.total ?? 0;
+    const avgGensPerScene = screenCount > 0 && totalGens > 0
+      ? Math.round((totalGens / screenCount) * 10) / 10
+      : 0;
+
+    const promptRevisionCount = promptRevByProject.get(p.id) ?? 0;
+
+    // Per-screen detail for expand panel
+    const projectScreens = screenRows.filter((s) => s.videoProjectId === p.id);
+    const scenesDetail = projectScreens.map((s) => {
+      const sd = genDetailByScreen.get(s.id) ?? { genCount: 0, failedCount: 0, lastFeedback: null };
+      return {
+        screenNumber: s.screenNumber,
+        approved: !!s.approvedGenerationId,
+        genCount: sd.genCount,
+        failedCount: sd.failedCount,
+        creatorFeedback: sd.lastFeedback,
+      };
+    }).sort((a, b) => a.screenNumber - b.screenNumber);
+
+    const creatorFeedbackCount = scenesDetail.filter((s) => s.creatorFeedback).length;
+
     return {
       id: p.id,
       name: p.name,
@@ -150,17 +214,23 @@ export async function GET(): Promise<NextResponse> {
       updatedAt: p.updatedAt,
       lastActivityAt: lastActivity,
       hasBreakdown: !!p.breakdownApprovedAt,
-      screenCount: screens?.total ?? 0,
+      screenCount,
       approvedScreenCount: screens?.approved ?? 0,
-      totalGenerations: gens?.total ?? 0,
+      totalGenerations: totalGens,
       completedGenerations: gens?.completed ?? 0,
       failedGenerations: gens?.failed ?? 0,
       inFlightGenerations: gens?.inFlight ?? 0,
+      avgGensPerScene,
+      promptRevisionCount,
       lastGenerationError: gens?.lastError ?? null,
       compilationStatus: comp?.status ?? null,
       compilationError: comp?.errorMessage ?? null,
       compilationCreatedAt: comp?.createdAt ?? null,
-      funnelStep: funnelStep(p, screens, gens, comp),
+      funnelStep: step,
+      stuckHours,
+      isStuck,
+      creatorFeedbackCount,
+      scenes: scenesDetail,
     };
   });
 
