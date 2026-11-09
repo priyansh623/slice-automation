@@ -3,6 +3,8 @@ import { db } from '@/db';
 import { videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
+
+export const maxDuration = 60;
 import {
   generateScreen1Prompt,
   generateInitialScreenPrompt,

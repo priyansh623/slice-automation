@@ -3,6 +3,8 @@ import { db } from '@/db';
 import { videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { eq } from 'drizzle-orm';
+
+export const maxDuration = 60;
 import { analyzeScript } from '@/services/video-workflow';
 
 export async function POST(
