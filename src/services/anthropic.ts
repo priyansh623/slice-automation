@@ -149,6 +149,8 @@ export interface CallClaudeOptions {
   videoScreenId?: number;
   fresh?: boolean;
   image?: EncodedImage;
+  model?: string;
+  thinking?: boolean;
 }
 
 export async function callClaude(
@@ -157,7 +159,7 @@ export async function callClaude(
   systemPrompt?: string,
   options?: CallClaudeOptions,
 ): Promise<string> {
-  const { videoScreenId, fresh = false, image } = options ?? {};
+  const { videoScreenId, fresh = false, image, model, thinking = true } = options ?? {};
 
   const history = fresh ? [] : await loadConversation(videoProjectId, videoScreenId);
 
@@ -177,9 +179,9 @@ export async function callClaude(
   ];
 
   const response = await getClient().messages.create({
-    model: MODEL(),
+    model: model ?? MODEL(),
     max_tokens: 8192,
-    thinking: { type: 'adaptive' },
+    ...(thinking ? { thinking: { type: 'adaptive' } } : {}),
     system: systemPrompt,
     messages,
   });

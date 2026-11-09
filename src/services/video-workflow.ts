@@ -182,7 +182,11 @@ export async function analyzeScript(videoProjectId: number): Promise<{
   if (!project) throw new Error(`Video project ${videoProjectId} not found`);
 
   const userMessage = `Script:\n${project.approvedScript ?? project.originalScript}`;
-  const response = await callClaude(videoProjectId, userMessage, ANALYSIS_SYSTEM_PROMPT, { fresh: true });
+  const response = await callClaude(videoProjectId, userMessage, ANALYSIS_SYSTEM_PROMPT, {
+    fresh: true,
+    model: 'claude-sonnet-5-5',
+    thinking: false,
+  });
 
   const jsonMatch = response.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Claude did not return valid JSON for script breakdown');
