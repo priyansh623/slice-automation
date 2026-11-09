@@ -85,13 +85,16 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterStep, setFilterStep] = useState<FunnelStep | 'all' | 'stuck'>('all');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archiving, setArchiving] = useState<Record<number, boolean>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  async function load(quiet = false) {
+  async function load(quiet = false, archived = showArchived) {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch('/api/v1/admin/dashboard');
+      const url = `/api/v1/admin/dashboard${archived ? '?archived=1' : ''}`;
+      const res = await fetch(url);
       if (!res.ok) { setError('Failed to load dashboard'); return; }
       setRows(await res.json());
       setLastRefreshed(Date.now());
@@ -102,11 +105,34 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function archiveProject(id: number) {
+    setArchiving((prev) => ({ ...prev, [id]: true }));
+    try {
+      await fetch(`/api/v1/admin/projects/${id}/archive`, { method: 'POST' });
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      if (expandedId === id) setExpandedId(null);
+    } finally {
+      setArchiving((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  async function unarchiveProject(id: number) {
+    setArchiving((prev) => ({ ...prev, [id]: true }));
+    try {
+      await fetch(`/api/v1/admin/projects/${id}/archive`, { method: 'DELETE' });
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      if (expandedId === id) setExpandedId(null);
+    } finally {
+      setArchiving((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
   useEffect(() => {
-    load();
-    intervalRef.current = setInterval(() => load(true), 30_000);
+    void load(false, showArchived);
+    intervalRef.current = setInterval(() => load(true, showArchived), 30_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const filtered = filterStep === 'all'
     ? rows
@@ -160,20 +186,35 @@ export default function AdminDashboardPage() {
                 {lastRefreshed > 0 && `Last refreshed ${relativeTime(lastRefreshed)}`}
               </div>
             </div>
-            <button
-              onClick={() => load(true)}
-              disabled={refreshing}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                height: 36, padding: '0 14px', borderRadius: 9,
-                background: '#fff', border: '1px solid #E4E4E0',
-                font: '500 13px/1 Satoshi', cursor: refreshing ? 'default' : 'pointer',
-                color: '#111113',
-              }}
-            >
-              <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-              Refresh
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  height: 36, padding: '0 14px', borderRadius: 9,
+                  background: showArchived ? '#F0F0EC' : '#fff',
+                  border: showArchived ? '1px solid #C4C4C9' : '1px solid #E4E4E0',
+                  font: '500 13px/1 Satoshi', cursor: 'pointer',
+                  color: showArchived ? '#5E5E65' : '#111113',
+                }}
+              >
+                {showArchived ? 'Show active' : 'Show archived'}
+              </button>
+              <button
+                onClick={() => load(true)}
+                disabled={refreshing}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  height: 36, padding: '0 14px', borderRadius: 9,
+                  background: '#fff', border: '1px solid #E4E4E0',
+                  font: '500 13px/1 Satoshi', cursor: refreshing ? 'default' : 'pointer',
+                  color: '#111113',
+                }}
+              >
+                <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {error && <div className="alert alert-error" style={{ marginBottom: 24 }}>{error}</div>}
@@ -492,6 +533,27 @@ export default function AdminDashboardPage() {
                             )}
                           </div>
                         )}
+
+                        {/* Archive / unarchive */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (showArchived) void unarchiveProject(row.id);
+                              else void archiveProject(row.id);
+                            }}
+                            disabled={archiving[row.id]}
+                            style={{
+                              height: 30, padding: '0 12px', borderRadius: 7,
+                              border: '1px solid #E4E4E0', background: '#fff',
+                              font: '500 12px/1 Satoshi', color: '#75757C',
+                              cursor: archiving[row.id] ? 'default' : 'pointer',
+                              opacity: archiving[row.id] ? 0.5 : 1,
+                            }}
+                          >
+                            {archiving[row.id] ? '…' : showArchived ? 'Unarchive' : 'Archive'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

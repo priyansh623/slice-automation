@@ -68,6 +68,7 @@ export const videoProjects = pgTable('video_projects', {
   scene1HookSnapshot: text('scene1_hook_snapshot'),       // snapshot of default hook at project start
   baseImageSignedUrl: text('base_image_signed_url'),       // cached signed URL (see migration 0015)
   baseImageSignedUrlExpiresAt: bigint('base_image_signed_url_expires_at', { mode: 'number' }), // Unix ms
+  archivedAt: bigint('archived_at', { mode: 'number' }),   // set when admin archives the project
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });

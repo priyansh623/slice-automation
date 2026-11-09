@@ -9,16 +9,23 @@ import {
 } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireAdmin, requireUser } from '@/lib/api-auth';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: Request): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
   const adminError = await requireAdmin(authResult.user.id);
   if (adminError) return adminError;
 
-  // ── Fetch all projects ────────────────────────────────────────────────────
-  const projects = await db.select().from(videoProjects).orderBy(sql`${videoProjects.createdAt} DESC`);
+  const { searchParams } = new URL(req.url);
+  const showArchived = searchParams.get('archived') === '1';
+
+  // ── Fetch projects (archived excluded by default) ─────────────────────────
+  const projects = await db
+    .select()
+    .from(videoProjects)
+    .where(showArchived ? isNotNull(videoProjects.archivedAt) : isNull(videoProjects.archivedAt))
+    .orderBy(sql`${videoProjects.createdAt} DESC`);
   if (projects.length === 0) return NextResponse.json([]);
 
   const projectIds = projects.map((p) => p.id);
