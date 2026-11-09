@@ -455,7 +455,7 @@ export default function AdminDashboardPage() {
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#DCFCE7', display: 'inline-block' }} />Approved</span>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#EDE9FE', display: 'inline-block' }} />In progress</span>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#FEE2E2', display: 'inline-block' }} />All failed</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#6C47FF', display: 'inline-block', borderRadius: '50%' }} />Has feedback</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6C47FF', display: 'inline-block' }} />Has feedback</span>
                             </div>
                           </div>
                         )}
