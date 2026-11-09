@@ -68,8 +68,9 @@ export default function AdminSettingsPage() {
       }
       setCredits(data.remainingCredits ?? null);
       if (data.remainingCredits === null || data.remainingCredits === undefined) {
-        // Show raw so we can see what fields came back
-        setCreditsError(`No credits field found. Raw: ${JSON.stringify(data.raw).slice(0, 200)}`);
+        const acct = (data as Record<string, unknown>).firstAccount;
+        const keys = acct ? Object.keys(acct as object).join(', ') : 'none';
+        setCreditsError(`No credits field. Account keys: ${keys}`);
       }
     } catch (e) {
       setCredits(null);
