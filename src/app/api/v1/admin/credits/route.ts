@@ -25,13 +25,19 @@ export async function GET(): Promise<NextResponse> {
 
     const json = await res.json() as Record<string, unknown>;
 
-    // The response shape varies; try several known field names
+    // Response is { "email@...": { remainingCredits, backend, ... }, ... }
+    // Try top-level fields first, then dig into the first account entry
+    type AccountEntry = { remainingCredits?: number; remaining_credits?: number; credits?: number };
+    const firstAccount = Object.values(json).find((v) => v && typeof v === 'object') as AccountEntry | undefined;
+
     const remaining =
       (json.remainingCredits as number | undefined) ??
       (json.remaining_credits as number | undefined) ??
-      ((json.accounts as { remainingCredits?: number }[] | undefined)?.[0]?.remainingCredits);
+      firstAccount?.remainingCredits ??
+      firstAccount?.remaining_credits ??
+      firstAccount?.credits;
 
-    return NextResponse.json({ remainingCredits: remaining ?? null, raw: json });
+    return NextResponse.json({ remainingCredits: remaining ?? null, firstAccount, raw: json });
   } catch (err: unknown) {
     return NextResponse.json({ error: (err instanceof Error ? err.message : String(err)) }, { status: 502 });
   }
