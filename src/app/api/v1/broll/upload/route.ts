@@ -14,26 +14,59 @@ const ALLOWED_VIDEO_TYPES: Record<string, string> = {
   'video/x-msvideo': 'avi',
 };
 
-// Best-effort 9:16 aspect ratio check using ffprobe
+// Best-effort 9:16 aspect ratio check using ffprobe.
+// Returns display dimensions (after applying rotation metadata) so portrait
+// videos recorded by iPhones as coded-landscape with a rotate tag are accepted.
 async function checkAspectRatio(tmpPath: string): Promise<{ width: number; height: number } | null> {
   try {
     const { spawnSync } = await import('node:child_process');
-    // Try to get ffprobe-static path the same way ffmpeg-utils does
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffprobeStaticModule = require('ffprobe-static') as string | { path: string };
     const ffprobePath = typeof ffprobeStaticModule === 'string' ? ffprobeStaticModule : ffprobeStaticModule.path;
     if (!ffprobePath) return null;
+    // Use JSON output so we get tags (rotate) and side_data_list (Display Matrix)
     const result = spawnSync(
       ffprobePath,
-      ['-v', 'quiet', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', tmpPath],
+      ['-v', 'quiet', '-select_streams', 'v:0', '-show_streams', '-of', 'json', tmpPath],
       { stdio: 'pipe' },
     );
     if (result.status !== 0) return null;
-    const parts = result.stdout?.toString().trim().split(',');
-    if (!parts || parts.length < 2) return null;
-    const width = parseInt(parts[0], 10);
-    const height = parseInt(parts[1], 10);
-    if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) return null;
+    const output = result.stdout?.toString().trim();
+    if (!output) return null;
+
+    interface FfprobeStream {
+      width?: number;
+      height?: number;
+      tags?: Record<string, string>;
+      side_data_list?: Array<{ side_data_type?: string; rotation?: number }>;
+    }
+    const json = JSON.parse(output) as { streams?: FfprobeStream[] };
+    const stream = json.streams?.[0];
+    if (!stream) return null;
+
+    let { width, height } = stream;
+    if (!width || !height || width <= 0 || height <= 0) return null;
+
+    // Determine rotation from container metadata.
+    // tags.rotate (MOV/MP4 from iPhones): string like "90", "-90", "270"
+    // side_data_list Display Matrix: numeric rotation field
+    let rotation = 0;
+    if (stream.tags?.rotate) {
+      rotation = parseInt(stream.tags.rotate, 10);
+    }
+    const displayMatrix = stream.side_data_list?.find((sd) => sd.side_data_type === 'Display Matrix');
+    if (displayMatrix?.rotation !== undefined) {
+      rotation = displayMatrix.rotation;
+    }
+
+    // Normalize to [0, 360)
+    rotation = ((rotation % 360) + 360) % 360;
+
+    // 90° or 270°: coded dimensions are transposed — swap to get display dimensions
+    if (rotation === 90 || rotation === 270) {
+      [width, height] = [height, width];
+    }
+
     return { width, height };
   } catch {
     return null;

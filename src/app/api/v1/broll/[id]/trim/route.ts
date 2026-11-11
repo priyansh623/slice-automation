@@ -48,9 +48,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: signedData } = await service.storage.from(bucket).createSignedUrl(clip.storagePath, 300);
   if (!signedData?.signedUrl) return NextResponse.json({ error: 'Could not generate download URL' }, { status: 500 });
 
+  // Map MIME types to temp file extensions so FFmpeg gets the right demuxer
+  const MIME_TO_EXT: Record<string, string> = {
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+    'video/x-msvideo': 'avi',
+  };
+  // MP4 and MOV (MPEG-4 family) can be stream-copied into an MP4 output safely.
+  // WebM (VP8/VP9 + Opus/Vorbis) and AVI need re-encoding to H.264+AAC for MP4 output.
+  const STREAM_COPY_MIME = new Set(['video/mp4', 'video/quicktime']);
+
+  const sourceExt = MIME_TO_EXT[clip.mimeType] ?? 'mp4';
+  const useCopy = STREAM_COPY_MIME.has(clip.mimeType);
+
   // Download original to temp file
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'broll-trim-'));
-  const inputPath = path.join(tmpDir, 'input.mp4');
+  const inputPath = path.join(tmpDir, `input.${sourceExt}`);
   const outputPath = path.join(tmpDir, 'trimmed.mp4');
 
   try {
@@ -66,12 +80,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { spawnSync } = await import('node:child_process');
     const duration = outPoint - inPoint;
+    const encodeArgs = useCopy
+      ? ['-c', 'copy']
+      : ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'];
     const args = [
       '-y',
       '-ss', String(inPoint),
       '-i', inputPath,
       '-t', String(duration),
-      '-c', 'copy',
+      ...encodeArgs,
       outputPath,
     ];
 
