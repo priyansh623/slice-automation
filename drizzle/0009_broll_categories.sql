@@ -26,6 +26,10 @@ CREATE TABLE broll_clip_categories (
 
 CREATE INDEX broll_clip_categories_category_id_idx ON broll_clip_categories(category_id);
 
+-- No policies: the app reaches these tables through its server-side connection only
+ALTER TABLE broll_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE broll_clip_categories ENABLE ROW LEVEL SECURITY;
+
 -- ── Seed: Soma-wide taxonomy (idempotent — WHERE NOT EXISTS guards against re-run) ───
 
 INSERT INTO broll_categories (name, slug, scope, parent_id, sort_order, created_at, updated_at)

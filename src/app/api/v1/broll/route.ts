@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { brollClips } from '@/db/schema.pg';
+import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 
 const ONE_HOUR_MS = 3_600_000;
 const URL_TTL_S = 24 * 3600;
@@ -37,6 +37,19 @@ export async function GET(): Promise<NextResponse> {
 
   const now = Date.now();
 
+  // Load category assignments for all clips in one query
+  const clipIds = rows.map((c) => c.id);
+  const categoryRows = clipIds.length > 0
+    ? await db.select({ clipId: brollClipCategories.clipId, categoryId: brollClipCategories.categoryId })
+        .from(brollClipCategories)
+        .where(inArray(brollClipCategories.clipId, clipIds))
+    : [];
+  const categoryMap = new Map<number, number[]>();
+  for (const r of categoryRows) {
+    if (!categoryMap.has(r.clipId)) categoryMap.set(r.clipId, []);
+    categoryMap.get(r.clipId)!.push(r.categoryId);
+  }
+
   const result = await Promise.all(rows.map(async (clip) => {
     let signedUrl = clip.signedUrl;
     let signedUrlExpiresAt = clip.signedUrlExpiresAt;
@@ -48,7 +61,7 @@ export async function GET(): Promise<NextResponse> {
         await db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
       }
     }
-    return { ...clip, signedUrl };
+    return { ...clip, signedUrl, categoryIds: categoryMap.get(clip.id) ?? [] };
   }));
 
   return NextResponse.json(result);

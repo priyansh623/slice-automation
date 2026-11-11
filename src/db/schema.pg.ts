@@ -258,6 +258,25 @@ export const brollClips = pgTable('broll_clips', {
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
 
+export const brollCategories = pgTable('broll_categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),
+  description: text('description'),
+  scope: text('scope').notNull().default('soma'),  // 'soma' | 'brand'
+  brandScope: text('brand_scope'),                  // non-null when scope='brand'
+  parentId: integer('parent_id'),                   // self-ref; no Drizzle FK to avoid circular type
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const brollClipCategories = pgTable('broll_clip_categories', {
+  clipId: integer('clip_id').notNull().references(() => brollClips.id, { onDelete: 'cascade' }),
+  categoryId: integer('category_id').notNull().references(() => brollCategories.id, { onDelete: 'cascade' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
 export const brollFeedback = pgTable('broll_feedback', {
   id: serial('id').primaryKey(),
   userId: uuid('user_id').notNull(),

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { ArrowLeft, Download, Trash2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, RotateCcw, X } from 'lucide-react';
 
 interface BrollClip {
   id: number;
@@ -21,6 +21,24 @@ interface BrollClip {
   description: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+interface CategoryNode {
+  id: number;
+  name: string;
+  slug: string;
+  scope: string;
+  brandScope: string | null;
+  parentId: number | null;
+  sortOrder: number;
+  children: CategoryNode[];
+}
+
+function flattenCategories(nodes: CategoryNode[]): CategoryNode[] {
+  const result: CategoryNode[] = [];
+  function walk(list: CategoryNode[]) { for (const n of list) { result.push(n); walk(n.children); } }
+  walk(nodes);
+  return result;
 }
 
 function parseTags(raw: string | null): string[] {
@@ -118,6 +136,19 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Category state
+  const [allCategories, setAllCategories] = useState<CategoryNode[]>([]);
+  const [clipCategoryIds, setClipCategoryIds] = useState<number[]>([]);
+  const [catSearchOpen, setCatSearchOpen] = useState(false);
+  const [catSearch, setCatSearch] = useState('');
+  const catRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function h(e: MouseEvent) { if (catRef.current && !catRef.current.contains(e.target as Node)) setCatSearchOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
   useEffect(() => {
     fetch(`/api/v1/broll/${id}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<BrollClip>; })
@@ -129,7 +160,30 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
         setLoading(false);
       })
       .catch(() => { setLoading(false); router.push('/broll'); });
+    fetch('/api/v1/broll/categories')
+      .then((r) => r.json()).then((data: CategoryNode[]) => setAllCategories(data)).catch(() => {});
+    fetch(`/api/v1/broll/${id}/categories`)
+      .then((r) => r.json()).then((ids: number[]) => setClipCategoryIds(ids)).catch(() => {});
   }, [id, router]);
+
+  async function toggleCategory(catId: number) {
+    const has = clipCategoryIds.includes(catId);
+    if (has) {
+      await fetch(`/api/v1/broll/${id}/categories`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: [catId] }),
+      });
+      setClipCategoryIds((prev) => prev.filter((x) => x !== catId));
+    } else {
+      await fetch(`/api/v1/broll/${id}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: [catId] }),
+      });
+      setClipCategoryIds((prev) => [...prev, catId]);
+    }
+  }
 
   const duration = clip?.durationSeconds ?? 0;
 
@@ -356,6 +410,59 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                   </div>
                 )}
               </div>
+
+              {/* Categories */}
+              {allCategories.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '16px 18px' }}>
+                  <div style={{ font: '600 14px/1 Satoshi', marginBottom: 10 }}>Categories</div>
+                  {clipCategoryIds.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                      {clipCategoryIds.map((cid) => {
+                        const cat = flattenCategories(allCategories).find((c) => c.id === cid);
+                        return cat ? (
+                          <span key={cid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: 7, background: '#EFEBFF', color: '#6C47FF', font: '500 12px/24px Satoshi' }}>
+                            {cat.name}
+                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  <div ref={catRef} style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setCatSearchOpen((o) => !o)}
+                      style={{ height: 30, padding: '0 12px', border: '1px dashed #D6D6D1', borderRadius: 8, background: '#fff', font: '400 12px/1 Satoshi', color: '#75757C', cursor: 'pointer' }}
+                    >
+                      + Add category
+                    </button>
+                    {catSearchOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 220, maxHeight: 260, overflowY: 'auto', padding: '6px 0' }}>
+                        <div style={{ padding: '0 8px 6px', borderBottom: '1px solid #ECECE8', marginBottom: 2 }}>
+                          <input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)} placeholder="Search categories…" style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }} />
+                        </div>
+                        {flattenCategories(allCategories)
+                          .filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
+                          .map((c) => {
+                            const checked = clipCategoryIds.includes(c.id);
+                            const isRoot = c.parentId === null;
+                            return (
+                              <button key={c.id} onClick={() => toggleCategory(c.id)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: `7px 12px 7px ${isRoot ? 12 : 24}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: '#111113', font: `${isRoot ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer' }}
+                                onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
+                                onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
+                                </span>
+                                {c.name}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Downloads */}
               <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>

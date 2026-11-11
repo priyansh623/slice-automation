@@ -4,6 +4,7 @@ dist/
 data/
 storage/
 scripts/output/
+broll-import/
 *.db
 *.db-shm
 *.db-wal
