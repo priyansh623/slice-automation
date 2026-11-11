@@ -2,7 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { and, eq } from 'drizzle-orm';
+
+const ONE_HOUR_MS = 3_600_000;
+const URL_TTL_S = 24 * 3600;
+
+async function refreshSignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
+  if (!storagePath) return null;
+  try {
+    const service = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
+    const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
+    const { data } = await service.storage.from(bucket).createSignedUrl(storagePath, URL_TTL_S);
+    if (!data?.signedUrl) return null;
+    return { url: data.signedUrl, expiresAt: Date.now() + URL_TTL_S * 1000 };
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const supabase = await createClient();
@@ -21,7 +42,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json(clip);
+  // Refresh signed URL if needed
+  const now = Date.now();
+  let signedUrl = clip.signedUrl;
+  if (!clip.signedUrlExpiresAt || clip.signedUrlExpiresAt < now + ONE_HOUR_MS) {
+    const fresh = await refreshSignedUrl(clip.storagePath);
+    if (fresh) {
+      signedUrl = fresh.url;
+      await db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
+    }
+  }
+
+  return NextResponse.json({ ...clip, signedUrl });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -35,12 +67,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   let body: Partial<{
     title: string;
-    category: string;
-    notes: string;
     userTags: string[];
-    qualityRating: number;
-    reviewStatus: string;
-    processingStatus: string;
+    subject: string | null;
+    activity: string | null;
+    setting: string | null;
+    brand: string | null;
+    description: string | null;
     durationSeconds: number;
   }>;
   try {
@@ -53,17 +85,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const updates: Record<string, unknown> = { updatedAt: now };
 
   if (body.title !== undefined) updates.title = body.title;
-  if (body.category !== undefined) updates.category = body.category;
-  if (body.notes !== undefined) updates.notes = body.notes;
   if (body.userTags !== undefined) updates.userTags = JSON.stringify(body.userTags);
-  if (body.qualityRating !== undefined) updates.qualityRating = body.qualityRating;
+  if (body.subject !== undefined) updates.subject = body.subject;
+  if (body.activity !== undefined) updates.activity = body.activity;
+  if (body.setting !== undefined) updates.setting = body.setting;
+  if (body.brand !== undefined) updates.brand = body.brand;
+  if (body.description !== undefined) updates.description = body.description;
   if (body.durationSeconds !== undefined) updates.durationSeconds = body.durationSeconds;
-  if (body.reviewStatus !== undefined) {
-    updates.reviewStatus = body.reviewStatus;
-    updates.reviewedAt = now;
-    updates.reviewedBy = user.id;
-  }
-  if (body.processingStatus !== undefined) updates.processingStatus = body.processingStatus;
 
   const [updated] = await db
     .update(brollClips)

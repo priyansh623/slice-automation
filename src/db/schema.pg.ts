@@ -249,8 +249,22 @@ export const brollClips = pgTable('broll_clips', {
   category: text('category'),
   notes: text('notes'),
   qualityRating: integer('quality_rating'),    // 1–5
+  subject: text('subject'),
+  activity: text('activity'),
+  setting: text('setting'),
+  brand: text('brand'),
+  description: text('description'),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const brollFeedback = pgTable('broll_feedback', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  clipId: integer('clip_id').references(() => brollClips.id, { onDelete: 'set null' }),
+  text: text('text').notNull(),
+  nextAction: text('next_action').notNull(), // 'Film it' | 'Generate it' | 'Fix the details' | 'Replace the clip' | 'Remove the clip'
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 });
 
 // ── Analytics ─────────────────────────────────────────────────────────────────

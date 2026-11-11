@@ -37,12 +37,6 @@ export async function GET(): Promise<NextResponse> {
     .orderBy(desc(brollClips.createdAt));
 
   const now = Date.now();
-  const service = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
 
   const result = await Promise.all(rows.map(async (clip) => {
     let signedUrl = clip.signedUrl;
@@ -55,17 +49,7 @@ export async function GET(): Promise<NextResponse> {
         await db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
       }
     }
-
-    let thumbnailSignedUrl = clip.thumbnailSignedUrl;
-    if (clip.thumbnailStoragePath && (!clip.thumbnailSignedUrlExpiresAt || clip.thumbnailSignedUrlExpiresAt < now + ONE_HOUR_MS)) {
-      const fresh = await refreshSignedUrl(clip.thumbnailStoragePath);
-      if (fresh) {
-        thumbnailSignedUrl = fresh.url;
-        await db.update(brollClips).set({ thumbnailSignedUrl: fresh.url, thumbnailSignedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
-      }
-    }
-
-    return { ...clip, signedUrl, thumbnailSignedUrl };
+    return { ...clip, signedUrl };
   }));
 
   return NextResponse.json(result);
@@ -76,7 +60,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { title: string; storagePath: string; thumbnailStoragePath?: string; mimeType?: string; fileSizeBytes?: number; signedUrl?: string; thumbnailSignedUrl?: string };
+  let body: {
+    title: string;
+    storagePath: string;
+    mimeType?: string;
+    fileSizeBytes?: number;
+    durationSeconds?: number | null;
+    signedUrl?: string;
+    userTags?: string[];
+    subject?: string | null;
+    activity?: string | null;
+    setting?: string | null;
+    brand?: string | null;
+    description?: string | null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -94,14 +91,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     userId: user.id,
     title: body.title,
     storagePath: body.storagePath,
-    thumbnailStoragePath: body.thumbnailStoragePath ?? null,
     signedUrl: body.signedUrl ?? null,
     signedUrlExpiresAt: body.signedUrl ? expiresAt : null,
-    thumbnailSignedUrl: body.thumbnailSignedUrl ?? null,
-    thumbnailSignedUrlExpiresAt: body.thumbnailSignedUrl ? expiresAt : null,
     mimeType: body.mimeType ?? 'video/mp4',
     fileSizeBytes: body.fileSizeBytes ?? null,
-    processingStatus: 'pending',
+    durationSeconds: body.durationSeconds ?? null,
+    userTags: body.userTags ? JSON.stringify(body.userTags) : null,
+    subject: body.subject ?? null,
+    activity: body.activity ?? null,
+    setting: body.setting ?? null,
+    brand: body.brand ?? null,
+    description: body.description ?? null,
+    processingStatus: 'completed',
     reviewStatus: 'unreviewed',
     createdAt: now,
     updatedAt: now,

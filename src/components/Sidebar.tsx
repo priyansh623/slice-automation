@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard, Film } from 'lucide-react';
+import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard, LibraryBig } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -81,7 +81,7 @@ export default function Sidebar() {
           cursor: 'pointer',
           font: '500 11px/1 Satoshi',
         }}>
-          <Film size={19} />
+          <LibraryBig size={19} />
           B-roll
         </button>
       </Link>
