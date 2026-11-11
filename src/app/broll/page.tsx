@@ -19,7 +19,19 @@ interface BrollClip {
   setting: string | null;
   brand: string | null;
   description: string | null;
+  categoryIds: number[];
   createdAt: number;
+}
+
+interface CategoryNode {
+  id: number;
+  name: string;
+  slug: string;
+  scope: string;
+  brandScope: string | null;
+  parentId: number | null;
+  sortOrder: number;
+  children: CategoryNode[];
 }
 
 interface BrollFeedbackItem {
@@ -50,6 +62,24 @@ function formatDuration(s: number | null): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return m > 0 ? `${m}:${sec.toString().padStart(2, '0')}` : `0:${sec.toString().padStart(2, '0')}`;
+}
+
+function flattenCategories(nodes: CategoryNode[]): CategoryNode[] {
+  const result: CategoryNode[] = [];
+  function walk(list: CategoryNode[]) {
+    for (const n of list) { result.push(n); walk(n.children); }
+  }
+  walk(nodes);
+  return result;
+}
+
+function getCategoryDescendantIds(node: CategoryNode): number[] {
+  const ids: number[] = [node.id];
+  function walk(list: CategoryNode[]) {
+    for (const n of list) { ids.push(n.id); walk(n.children); }
+  }
+  walk(node.children);
+  return ids;
 }
 
 function collectDistinctValues(clips: BrollClip[], field: keyof BrollClip): string[] {
@@ -102,6 +132,185 @@ function FilterDropdown({ label, options, value, onChange }: { label: string; op
               {opt}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryFilterMultiSelect({ categories, value, onChange }: { categories: CategoryNode[]; value: number[]; onChange: (v: number[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const flat = flattenCategories(categories);
+  const q = search.toLowerCase();
+
+  function toggle(id: number) {
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  }
+
+  const active = value.length > 0;
+  const label = active
+    ? (value.length === 1
+        ? `Category: ${flat.find((c) => c.id === value[0])?.name ?? '?'}`
+        : `Category (${value.length})`)
+    : 'Category';
+
+  function renderTree(nodes: CategoryNode[], depth = 0): React.ReactNode {
+    return nodes.map((n) => {
+      const checked = value.includes(n.id);
+      return (
+        <div key={n.id}>
+          <button
+            onClick={() => toggle(n.id)}
+            style={{ display: 'flex', width: '100%', textAlign: 'left', alignItems: 'center', padding: `6px 12px 6px ${12 + depth * 14}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: checked ? '#6C47FF' : '#111113', font: `${depth === 0 ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer', gap: 6 }}
+            onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
+            onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
+          >
+            {depth > 0 && <span style={{ color: '#C4C4CC', fontSize: 10 }}>└</span>}
+            <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
+            </span>
+            {n.name}
+          </button>
+          {!q && n.children.length > 0 && renderTree(n.children, depth + 1)}
+        </div>
+      );
+    });
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5, height: 34, padding: '0 11px',
+          border: `1px solid ${active ? '#6C47FF' : '#E4E4E0'}`, borderRadius: 8,
+          background: active ? '#EFEBFF' : '#fff',
+          color: active ? '#6C47FF' : '#5E5E65', font: '500 13px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+        {active ? (
+          <X size={12} onClick={(e) => { e.stopPropagation(); onChange([]); setOpen(false); }} style={{ cursor: 'pointer' }} />
+        ) : (
+          <ChevronDown size={12} />
+        )}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 220, padding: '6px 0', maxHeight: 320, overflowY: 'auto' }}>
+          <div style={{ padding: '0 8px 6px', borderBottom: '1px solid #ECECE8', marginBottom: 2 }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search categories…"
+              style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          {q
+            ? flat.filter((n) => n.name.toLowerCase().includes(q)).map((n) => {
+                const checked = value.includes(n.id);
+                return (
+                  <button key={n.id} onClick={() => toggle(n.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: checked ? '#6C47FF' : '#111113', font: '400 13px/1.4 Satoshi', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
+                    onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
+                    </span>
+                    {n.name}
+                  </button>
+                );
+              })
+            : renderTree(categories)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryMultiSelect({ categories, value, onChange }: { categories: CategoryNode[]; value: number[]; onChange: (v: number[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const flat = flattenCategories(categories);
+  const q = search.toLowerCase();
+  const displayList = q ? flat.filter((c) => c.name.toLowerCase().includes(q)) : flat;
+
+  function toggle(id: number) {
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  }
+
+  const selectedNames = value.map((id) => flat.find((c) => c.id === id)?.name ?? id).join(', ');
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: 38, padding: '0 12px', border: '1px solid #E4E4E0', borderRadius: 8, background: '#fff', font: '400 14px/1 Satoshi', cursor: 'pointer', textAlign: 'left', color: value.length ? '#111113' : '#A3A3A9', marginBottom: 14 }}
+        onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
+        onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {value.length ? selectedNames : 'Select categories…'}
+        </span>
+        <ChevronDown size={13} style={{ flexShrink: 0, color: '#75757C', marginLeft: 6 }} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', maxHeight: 260, overflowY: 'auto', marginBottom: 14 }}>
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid #ECECE8' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search categories…"
+              style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          {displayList.map((n) => {
+            const checked = value.includes(n.id);
+            const isRoot = n.parentId === null;
+            return (
+              <button key={n.id} type="button" onClick={() => toggle(n.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: `7px 12px 7px ${isRoot ? 12 : 24}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: '#111113', font: `${isRoot ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer' }}
+                onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
+                onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span style={{ width: 16, height: 16, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 4, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                </span>
+                {n.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {value.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: -10, marginBottom: 8 }}>
+          {value.map((id) => {
+            const cat = flat.find((c) => c.id === id);
+            return cat ? (
+              <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: 7, background: '#EFEBFF', color: '#6C47FF', font: '500 12px/24px Satoshi' }}>
+                {cat.name}
+                <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggle(id)} />
+              </span>
+            ) : null;
+          })}
         </div>
       )}
     </div>
@@ -236,10 +445,12 @@ export default function BrollLibraryPage() {
   const router = useRouter();
   const [tab, setTab] = useState<'library' | 'feedback'>('library');
   const [clips, setClips] = useState<BrollClip[]>([]);
+  const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [feedback, setFeedback] = useState<BrollFeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [categoryFilters, setCategoryFilters] = useState<number[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -253,6 +464,7 @@ export default function BrollLibraryPage() {
   const [uploadSetting, setUploadSetting] = useState('');
   const [uploadBrand, setUploadBrand] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadCategoryIds, setUploadCategoryIds] = useState<number[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -270,6 +482,13 @@ export default function BrollLibraryPage() {
       .catch(() => setLoading(false));
   }, []);
 
+  const fetchCategories = useCallback(() => {
+    fetch('/api/v1/broll/categories')
+      .then((r) => r.json())
+      .then((data: CategoryNode[]) => setCategories(data))
+      .catch(() => {});
+  }, []);
+
   const fetchFeedback = useCallback(() => {
     fetch('/api/v1/broll/feedback')
       .then((r) => r.json())
@@ -277,7 +496,7 @@ export default function BrollLibraryPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => { fetchClips(); fetchFeedback(); }, [fetchClips, fetchFeedback]);
+  useEffect(() => { fetchClips(); fetchCategories(); fetchFeedback(); }, [fetchClips, fetchCategories, fetchFeedback]);
 
   function openVideoFile(file: File) {
     setPendingVideoFile(file);
@@ -288,6 +507,7 @@ export default function BrollLibraryPage() {
     setUploadSetting('');
     setUploadBrand('');
     setUploadDescription('');
+    setUploadCategoryIds([]);
     setUploadError(null);
     setShowUploadModal(true);
   }
@@ -345,6 +565,15 @@ export default function BrollLibraryPage() {
         }),
       });
       if (!createRes.ok) throw new Error('Failed to create clip record');
+      const created = await createRes.json() as { id: number };
+
+      if (uploadCategoryIds.length > 0) {
+        await fetch(`/api/v1/broll/${created.id}/categories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoryIds: uploadCategoryIds }),
+        });
+      }
 
       setShowUploadModal(false);
       setPendingVideoFile(null);
@@ -379,6 +608,18 @@ export default function BrollLibraryPage() {
     }
   }
 
+  // Category filter: union of selected nodes + all their descendants (OR semantics)
+  const activeCategoryIds: Set<number> | null = (() => {
+    if (categoryFilters.length === 0) return null;
+    const flat = flattenCategories(categories);
+    const ids = new Set<number>();
+    for (const filterId of categoryFilters) {
+      const node = flat.find((c) => c.id === filterId);
+      if (node) getCategoryDescendantIds(node).forEach((id) => ids.add(id));
+    }
+    return ids;
+  })();
+
   // Filter clips
   const filtered = clips.filter((c) => {
     const q = search.toLowerCase();
@@ -399,10 +640,13 @@ export default function BrollLibraryPage() {
         if (c[field] !== fv) return false;
       }
     }
+    if (activeCategoryIds !== null) {
+      if (!c.categoryIds.some((id) => activeCategoryIds.has(id))) return false;
+    }
     return true;
   });
 
-  const hasActiveFilters = Object.values(filters).some(Boolean);
+  const hasActiveFilters = Object.values(filters).some(Boolean) || categoryFilters.length > 0;
 
   return (
     <AppShell>
@@ -420,18 +664,28 @@ export default function BrollLibraryPage() {
               );
             })}
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: dragOver ? '#5A36E8' : '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', flexShrink: 0 }}
-            onMouseEnter={(e) => { if (!dragOver) e.currentTarget.style.background = '#5A36E8'; }}
-            onMouseLeave={(e) => { if (!dragOver) e.currentTarget.style.background = '#6C47FF'; }}
-          >
-            <Upload size={15} />
-            Upload B-roll
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => router.push('/broll/categories')}
+              style={{ height: 38, padding: '0 14px', borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', color: '#5E5E65', font: '500 13px/1 Satoshi', cursor: 'pointer', flexShrink: 0 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#F6F6F4')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+            >
+              Manage categories
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: dragOver ? '#5A36E8' : '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', flexShrink: 0 }}
+              onMouseEnter={(e) => { if (!dragOver) e.currentTarget.style.background = '#5A36E8'; }}
+              onMouseLeave={(e) => { if (!dragOver) e.currentTarget.style.background = '#6C47FF'; }}
+            >
+              <Upload size={15} />
+              Upload B-roll
+            </button>
+          </div>
           <input ref={fileInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) openVideoFile(f); e.target.value = ''; }} />
         </div>
 
@@ -459,8 +713,15 @@ export default function BrollLibraryPage() {
                     onChange={(v) => setFilters((prev) => ({ ...prev, [field]: v }))}
                   />
                 ))}
+                {categories.length > 0 && (
+                  <CategoryFilterMultiSelect
+                    categories={categories}
+                    value={categoryFilters}
+                    onChange={setCategoryFilters}
+                  />
+                )}
                 {hasActiveFilters && (
-                  <button onClick={() => setFilters({})} style={{ height: 34, padding: '0 10px', border: 'none', background: 'transparent', color: '#75757C', font: '400 13px/1 Satoshi', cursor: 'pointer', textDecoration: 'underline' }}>
+                  <button onClick={() => { setFilters({}); setCategoryFilters([]); }} style={{ height: 34, padding: '0 10px', border: 'none', background: 'transparent', color: '#75757C', font: '400 13px/1 Satoshi', cursor: 'pointer', textDecoration: 'underline' }}>
                     Clear filters
                   </button>
                 )}
@@ -617,6 +878,14 @@ export default function BrollLibraryPage() {
             <label style={{ display: 'block', font: '500 13px/1 Satoshi', marginBottom: 6 }}>Brand <span style={{ color: '#A3A3A9', fontWeight: 400 }}>(optional)</span></label>
             <input value={uploadBrand} onChange={(e) => setUploadBrand(e.target.value)} placeholder={collectDistinctValues(clips, 'brand')[0] ?? 'e.g. Soma'} list="broll-brands" style={{ width: '100%', height: 38, border: '1px solid #E4E4E0', borderRadius: 8, padding: '0 12px', font: '400 14px/1 Satoshi', marginBottom: 14, outline: 'none', boxSizing: 'border-box' }} onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')} onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')} />
             <datalist id="broll-brands">{collectDistinctValues(clips, 'brand').map((v) => <option key={v} value={v} />)}</datalist>
+
+            {/* Categories */}
+            {categories.length > 0 && (
+              <>
+                <label style={{ display: 'block', font: '500 13px/1 Satoshi', marginBottom: 6 }}>Categories <span style={{ color: '#A3A3A9', fontWeight: 400 }}>(optional)</span></label>
+                <CategoryMultiSelect categories={categories} value={uploadCategoryIds} onChange={setUploadCategoryIds} />
+              </>
+            )}
 
             {/* Description */}
             <label style={{ display: 'block', font: '500 13px/1 Satoshi', marginBottom: 6 }}>Description <span style={{ color: '#A3A3A9', fontWeight: 400 }}>(optional — for search)</span></label>
