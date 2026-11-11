@@ -54,7 +54,7 @@ export const videoProjects = sqliteTable('video_projects', {
   baseImageMediaId: text('base_image_media_id'),       // cached useapi.net mediaGenerationId after first upload
   originalScript: text('original_script').notNull(),
   approvedScript: text('approved_script'),               // typo-corrected version of originalScript; null = same as original
-  skillVersion: text('skill_version').notNull().default('v1'),
+  skillVersion: text('skill_version').notNull().default('v3'),
   breakdownApprovedAt: integer('breakdown_approved_at'), // null = not yet approved
   creatorDescription: text('creator_description'),      // original text entered by creator at project creation
   creativeBrief: text('creative_brief'),                // JSON: structured creative decisions only (no creatorDescription)

@@ -61,7 +61,7 @@ export const videoProjects = pgTable('video_projects', {
   baseImageMediaId: text('base_image_media_id'),
   originalScript: text('original_script').notNull(),
   approvedScript: text('approved_script'),
-  skillVersion: text('skill_version').notNull().default('v1'),
+  skillVersion: text('skill_version').notNull().default('v3'),
   breakdownApprovedAt: bigint('breakdown_approved_at', { mode: 'number' }),
   creatorDescription: text('creator_description'),
   creativeBrief: text('creative_brief'),

@@ -126,7 +126,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         name: body.name,
         baseImagePath: body.baseImagePath,
         originalScript: body.originalScript,
-        skillVersion: body.skillVersion ?? 'v1',
+        skillVersion: body.skillVersion ?? 'v3',
         creatorDescription: body.creatorDescription?.trim() || null,
         scene1HookSnapshot,
         createdAt: now,
