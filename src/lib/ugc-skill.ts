@@ -113,6 +113,7 @@ Always write audio as its own section. Key rules:
 - Match voice descriptor to the character's nationality and persona as specified by user (e.g. "warm Brazilian accent", "composed British voice", "upbeat Australian tone")
 - If baby is in scene: explicitly write "Baby quiet and settled in arms — no crying, no fussing"
 - If green screen: "Clean handheld audio" — never describe room ambience
+- Always end the Audio section with: "No on-screen text: no subtitles, no captions, no words on screen, no burned-in text, no lower thirds, no watermarks, no logos."
 
 ---
 
