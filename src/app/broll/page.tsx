@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { Search, Upload, Download, ChevronDown, X, LibraryBig } from 'lucide-react';
+import { Search, Upload, Download, ChevronDown, X, LibraryBig, SlidersHorizontal } from 'lucide-react';
 
 interface BrollClip {
   id: number;
@@ -138,102 +138,28 @@ function FilterDropdown({ label, options, value, onChange }: { label: string; op
   );
 }
 
-function CategoryFilterMultiSelect({ categories, value, onChange }: { categories: CategoryNode[]; value: number[]; onChange: (v: number[]) => void }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+function normalizeBrand(b: string | null | undefined): string | null {
+  const n = (b ?? '').trim().toLowerCase();
+  return n || null;
+}
 
-  const flat = flattenCategories(categories);
-  const q = search.toLowerCase();
-
-  function toggle(id: number) {
-    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
-  }
-
-  const active = value.length > 0;
-  const label = active
-    ? (value.length === 1
-        ? `Category: ${flat.find((c) => c.id === value[0])?.name ?? '?'}`
-        : `Category (${value.length})`)
-    : 'Category';
-
-  function renderTree(nodes: CategoryNode[], depth = 0): React.ReactNode {
-    return nodes.map((n) => {
-      const checked = value.includes(n.id);
-      return (
-        <div key={n.id}>
-          <button
-            onClick={() => toggle(n.id)}
-            style={{ display: 'flex', width: '100%', textAlign: 'left', alignItems: 'center', padding: `6px 12px 6px ${12 + depth * 14}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: checked ? '#6C47FF' : '#111113', font: `${depth === 0 ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer', gap: 6 }}
-            onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
-            onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
-          >
-            {depth > 0 && <span style={{ color: '#C4C4CC', fontSize: 10 }}>└</span>}
-            <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-              {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
-            </span>
-            {n.name}
-          </button>
-          {!q && n.children.length > 0 && renderTree(n.children, depth + 1)}
-        </div>
-      );
-    });
-  }
-
+function CategoryChip({ label, active, small, onClick }: { label: string; active: boolean; small?: boolean; onClick: () => void }) {
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5, height: 34, padding: '0 11px',
-          border: `1px solid ${active ? '#6C47FF' : '#E4E4E0'}`, borderRadius: 8,
-          background: active ? '#EFEBFF' : '#fff',
-          color: active ? '#6C47FF' : '#5E5E65', font: '500 13px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-        {active ? (
-          <X size={12} onClick={(e) => { e.stopPropagation(); onChange([]); setOpen(false); }} style={{ cursor: 'pointer' }} />
-        ) : (
-          <ChevronDown size={12} />
-        )}
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 220, padding: '6px 0', maxHeight: 320, overflowY: 'auto' }}>
-          <div style={{ padding: '0 8px 6px', borderBottom: '1px solid #ECECE8', marginBottom: 2 }}>
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search categories…"
-              style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-          {q
-            ? flat.filter((n) => n.name.toLowerCase().includes(q)).map((n) => {
-                const checked = value.includes(n.id);
-                return (
-                  <button key={n.id} onClick={() => toggle(n.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: checked ? '#6C47FF' : '#111113', font: '400 13px/1.4 Satoshi', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
-                    onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
-                    </span>
-                    {n.name}
-                  </button>
-                );
-              })
-            : renderTree(categories)}
-        </div>
-      )}
-    </div>
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        height: small ? 28 : 34, padding: small ? '0 10px' : '0 13px',
+        border: `1px solid ${active ? '#6C47FF' : '#E4E4E0'}`, borderRadius: 8,
+        background: active ? '#EFEBFF' : '#fff',
+        color: active ? '#6C47FF' : '#3A3A3F', font: `${active ? 600 : 500} ${small ? 12 : 13}px/1 Satoshi`,
+        cursor: 'pointer', whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = '#F6F6F4'; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = '#fff'; }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -451,6 +377,7 @@ export default function BrollLibraryPage() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [categoryFilters, setCategoryFilters] = useState<number[]>([]);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -608,28 +535,80 @@ export default function BrollLibraryPage() {
     }
   }
 
-  // Category filter: union of selected nodes + all their descendants (OR semantics)
+  const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
+  const categoryById = useMemo(() => new Map(flatCategories.map((c) => [c.id, c])), [flatCategories]);
+  const selectedCategoryIds = new Set(categoryFilters);
+
+  // Brand-specific categories appear alongside Soma-wide ones, narrowed to one brand when the Brand filter is set
+  const brandFilter = normalizeBrand(filters.brand);
+  const primaryCategories = categories.filter(
+    (c) => c.scope !== 'brand' || !brandFilter || normalizeBrand(c.brandScope) === brandFilter,
+  );
+
+  function hasSelectedDescendant(node: CategoryNode): boolean {
+    return getCategoryDescendantIds(node).some((id) => id !== node.id && selectedCategoryIds.has(id));
+  }
+
+  function toggleCategory(node: CategoryNode) {
+    if (selectedCategoryIds.has(node.id)) {
+      const drop = new Set(getCategoryDescendantIds(node));
+      setCategoryFilters((prev) => prev.filter((id) => !drop.has(id)));
+    } else {
+      setCategoryFilters((prev) => [...prev, node.id]);
+    }
+  }
+
+  function clearSubcategories(node: CategoryNode) {
+    const drop = new Set(getCategoryDescendantIds(node).filter((id) => id !== node.id));
+    setCategoryFilters((prev) => prev.filter((id) => !drop.has(id)));
+  }
+
+  // Each selected category that has children gets a row for navigating into them
+  const openCategories: CategoryNode[] = [];
+  (function walk(nodes: CategoryNode[]) {
+    for (const n of nodes) {
+      if (selectedCategoryIds.has(n.id) && n.children.length > 0) {
+        openCategories.push(n);
+        walk(n.children);
+      }
+    }
+  })(primaryCategories);
+
+  // A selected category matches itself and its descendants, unless narrowed by a selected subcategory.
+  // Separate selections combine with OR.
   const activeCategoryIds: Set<number> | null = (() => {
     if (categoryFilters.length === 0) return null;
-    const flat = flattenCategories(categories);
     const ids = new Set<number>();
     for (const filterId of categoryFilters) {
-      const node = flat.find((c) => c.id === filterId);
-      if (node) getCategoryDescendantIds(node).forEach((id) => ids.add(id));
+      const node = categoryById.get(filterId);
+      if (!node || hasSelectedDescendant(node)) continue;
+      getCategoryDescendantIds(node).forEach((id) => ids.add(id));
     }
     return ids;
   })();
 
+  function categoryNamesFor(clip: BrollClip): string[] {
+    const names: string[] = [];
+    for (const id of clip.categoryIds ?? []) {
+      let node = categoryById.get(id);
+      while (node) {
+        names.push(node.name);
+        node = node.parentId !== null ? categoryById.get(node.parentId) : undefined;
+      }
+    }
+    return names;
+  }
+
   // Filter clips
   const filtered = clips.filter((c) => {
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     if (q) {
-      const inTitle = c.title.toLowerCase().includes(q);
-      const inTags = parseTags(c.userTags).some((t) => t.toLowerCase().includes(q));
-      const inSubject = (c.subject ?? '').toLowerCase().includes(q);
-      const inActivity = (c.activity ?? '').toLowerCase().includes(q);
-      const inDesc = (c.description ?? '').toLowerCase().includes(q);
-      if (!inTitle && !inTags && !inSubject && !inActivity && !inDesc) return false;
+      const haystack = [
+        c.title, c.subject, c.activity, c.setting, c.brand, c.description,
+        ...parseTags(c.userTags),
+        ...categoryNamesFor(c),
+      ];
+      if (!haystack.some((v) => (v ?? '').toLowerCase().includes(q))) return false;
     }
     for (const [field, _label] of FILTER_DEFS) {
       const fv = filters[field];
@@ -641,12 +620,24 @@ export default function BrollLibraryPage() {
       }
     }
     if (activeCategoryIds !== null) {
-      if (!c.categoryIds.some((id) => activeCategoryIds.has(id))) return false;
+      if (!(c.categoryIds ?? []).some((id) => activeCategoryIds.has(id))) return false;
     }
     return true;
   });
 
-  const hasActiveFilters = Object.values(filters).some(Boolean) || categoryFilters.length > 0;
+  const activeMoreFilterCount = Object.values(filters).filter(Boolean).length;
+  const hasActiveFilters = activeMoreFilterCount > 0 || categoryFilters.length > 0;
+
+  function setMetadataFilter(field: string, value: string) {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+    const brand = field === 'brand' ? normalizeBrand(value) : null;
+    if (brand) {
+      setCategoryFilters((prev) => prev.filter((id) => {
+        const node = categoryById.get(id);
+        return !node || node.scope !== 'brand' || normalizeBrand(node.brandScope) === brand;
+      }));
+    }
+  }
 
   return (
     <AppShell>
@@ -692,40 +683,85 @@ export default function BrollLibraryPage() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 60px' }}>
           {tab === 'library' ? (
             <>
-              {/* Search + filters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
+              {/* Search + more filters */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 380 }}>
                   <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: '#A3A3A9', pointerEvents: 'none' }} />
                   <input
                     value={search} onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search clips…"
-                    style={{ width: 220, height: 34, border: '1px solid #E4E4E0', borderRadius: 8, padding: '0 10px 0 32px', font: '400 13px/1 Satoshi', background: '#fff', outline: 'none' }}
+                    placeholder="Search clips, tags or categories…"
+                    style={{ width: '100%', height: 34, border: '1px solid #E4E4E0', borderRadius: 8, padding: '0 10px 0 32px', font: '400 13px/1 Satoshi', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
                     onFocus={(e) => (e.currentTarget.style.borderColor = '#6C47FF')}
                     onBlur={(e) => (e.currentTarget.style.borderColor = '#E4E4E0')}
                   />
                 </div>
-                {FILTER_DEFS.map(([field, label]) => (
-                  <FilterDropdown
-                    key={field}
-                    label={label}
-                    options={collectDistinctValues(clips, field)}
-                    value={filters[field] ?? ''}
-                    onChange={(v) => setFilters((prev) => ({ ...prev, [field]: v }))}
-                  />
-                ))}
-                {categories.length > 0 && (
-                  <CategoryFilterMultiSelect
-                    categories={categories}
-                    value={categoryFilters}
-                    onChange={setCategoryFilters}
-                  />
-                )}
+                <button
+                  onClick={() => setShowMoreFilters((o) => !o)}
+                  aria-expanded={showMoreFilters}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 11px',
+                    border: `1px solid ${activeMoreFilterCount > 0 ? '#6C47FF' : '#E4E4E0'}`, borderRadius: 8,
+                    background: activeMoreFilterCount > 0 ? '#EFEBFF' : '#fff',
+                    color: activeMoreFilterCount > 0 ? '#6C47FF' : '#5E5E65', font: '500 13px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <SlidersHorizontal size={13} />
+                  More filters{activeMoreFilterCount > 0 ? ` (${activeMoreFilterCount})` : ''}
+                  <ChevronDown size={12} style={{ transform: showMoreFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.12s' }} />
+                </button>
                 {hasActiveFilters && (
                   <button onClick={() => { setFilters({}); setCategoryFilters([]); }} style={{ height: 34, padding: '0 10px', border: 'none', background: 'transparent', color: '#75757C', font: '400 13px/1 Satoshi', cursor: 'pointer', textDecoration: 'underline' }}>
-                    Clear filters
+                    Clear all
                   </button>
                 )}
               </div>
+
+              {showMoreFilters && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {FILTER_DEFS.map(([field, label]) => (
+                    <FilterDropdown
+                      key={field}
+                      label={label}
+                      options={collectDistinctValues(clips, field)}
+                      value={filters[field] ?? ''}
+                      onChange={(v) => setMetadataFilter(field, v)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Browse categories */}
+              {primaryCategories.length > 0 && (
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ font: '600 12px/1 Satoshi', color: '#75757C', marginBottom: 9 }}>Browse categories</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <CategoryChip label="All clips" active={categoryFilters.length === 0} onClick={() => setCategoryFilters([])} />
+                    {primaryCategories.map((c) => (
+                      <CategoryChip
+                        key={c.id}
+                        label={c.scope === 'brand' && c.brandScope ? `${c.name} · ${c.brandScope}` : c.name}
+                        active={selectedCategoryIds.has(c.id)}
+                        onClick={() => toggleCategory(c)}
+                      />
+                    ))}
+                  </div>
+                  {openCategories.map((parent) => (
+                    <div key={parent.id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid #ECECE8' }}>
+                      <span style={{ font: '500 12px/1 Satoshi', color: '#75757C', marginRight: 4 }}>{parent.name}</span>
+                      <CategoryChip small label="All" active={!hasSelectedDescendant(parent)} onClick={() => clearSubcategories(parent)} />
+                      {parent.children.map((child) => (
+                        <CategoryChip
+                          key={child.id}
+                          small
+                          label={child.name}
+                          active={selectedCategoryIds.has(child.id)}
+                          onClick={() => toggleCategory(child)}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {loading ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(196px, 1fr))', gap: '24px 16px' }}>
