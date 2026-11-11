@@ -3,7 +3,8 @@ import { db } from '@/db';
 import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { HIDDEN_BROLL_REVIEW_STATUSES } from '@/lib/broll-visibility';
 
 const ONE_HOUR_MS = 3_600_000;
 const URL_TTL_S = 24 * 3600;
@@ -33,6 +34,7 @@ export async function GET(): Promise<NextResponse> {
   const rows = await db
     .select()
     .from(brollClips)
+    .where(notInArray(brollClips.reviewStatus, HIDDEN_BROLL_REVIEW_STATUSES))
     .orderBy(desc(brollClips.createdAt));
 
   const now = Date.now();

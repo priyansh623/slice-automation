@@ -242,7 +242,7 @@ export const brollClips = pgTable('broll_clips', {
   processingStatus: text('processing_status').notNull().default('pending'), // pending | processing | completed | failed | skipped
   processingError: text('processing_error'),
   claimedAt: bigint('claimed_at', { mode: 'number' }),
-  reviewStatus: text('review_status').notNull().default('unreviewed'),     // unreviewed | approved | rejected
+  reviewStatus: text('review_status').notNull().default('unreviewed'),     // unreviewed | approved | rejected | on_hold | archived
   reviewedAt: bigint('reviewed_at', { mode: 'number' }),
   reviewedBy: uuid('reviewed_by'),
   userTags: text('user_tags'),                 // JSON string[]
