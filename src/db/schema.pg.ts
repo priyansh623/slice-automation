@@ -219,6 +219,40 @@ export const projectTesters = pgTable('project_testers', {
   uniqueProjectUser: unique().on(table.videoProjectId, table.userId),
 }));
 
+// ── B-roll Library ───────────────────────────────────────────────────────────
+
+export const brollClips = pgTable('broll_clips', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  title: text('title').notNull(),
+  storagePath: text('storage_path').notNull(),
+  thumbnailStoragePath: text('thumbnail_storage_path'),
+  signedUrl: text('signed_url'),
+  signedUrlExpiresAt: bigint('signed_url_expires_at', { mode: 'number' }),
+  thumbnailSignedUrl: text('thumbnail_signed_url'),
+  thumbnailSignedUrlExpiresAt: bigint('thumbnail_signed_url_expires_at', { mode: 'number' }),
+  mimeType: text('mime_type').notNull().default('video/mp4'),
+  fileSizeBytes: bigint('file_size_bytes', { mode: 'number' }),
+  durationSeconds: integer('duration_seconds'),
+  aiTags: text('ai_tags'),                    // JSON string[]
+  aiMood: text('ai_mood'),
+  aiSceneType: text('ai_scene_type'),
+  aiSubjects: text('ai_subjects'),             // JSON string[]
+  aiSummary: text('ai_summary'),
+  processingStatus: text('processing_status').notNull().default('pending'), // pending | processing | completed | failed | skipped
+  processingError: text('processing_error'),
+  claimedAt: bigint('claimed_at', { mode: 'number' }),
+  reviewStatus: text('review_status').notNull().default('unreviewed'),     // unreviewed | approved | rejected
+  reviewedAt: bigint('reviewed_at', { mode: 'number' }),
+  reviewedBy: uuid('reviewed_by'),
+  userTags: text('user_tags'),                 // JSON string[]
+  category: text('category'),
+  notes: text('notes'),
+  qualityRating: integer('quality_rating'),    // 1–5
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 export const analyticsEvents = pgTable('analytics_events', {

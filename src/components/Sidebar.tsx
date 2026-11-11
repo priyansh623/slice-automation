@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard } from 'lucide-react';
+import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard, Film } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   const projectsActive = pathname.startsWith('/video-projects');
+  const brollActive = pathname.startsWith('/broll');
   const settingsActive = pathname.startsWith('/admin/settings');
   const usersActive = pathname.startsWith('/admin/users');
   const dashboardActive = pathname.startsWith('/admin/dashboard');
@@ -61,6 +62,27 @@ export default function Sidebar() {
         }}>
           <FolderOpen size={19} />
           Projects
+        </button>
+      </Link>
+
+      {/* B-roll Library */}
+      <Link href="/broll" style={{ textDecoration: 'none' }}>
+        <button style={{
+          width: 60,
+          padding: '9px 0 8px',
+          border: 'none',
+          borderRadius: 10,
+          background: navBg(brollActive),
+          color: navFg(brollActive),
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          cursor: 'pointer',
+          font: '500 11px/1 Satoshi',
+        }}>
+          <Film size={19} />
+          B-roll
         </button>
       </Link>
 

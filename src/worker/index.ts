@@ -23,6 +23,7 @@ import {
   generateInitialScreenPrompt,
   submitQueuedGeneration,
 } from '../services/video-workflow';
+import { processPendingBrollClips } from '../services/broll-processing';
 import { createClient } from '@supabase/supabase-js';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -90,6 +91,7 @@ async function runLoop(): Promise<void> {
 async function tick(): Promise<void> {
   await processPromptTasks();
   await processQueuedGenerations();
+  await processPendingBrollClips();
 
   if (process.env.MOCK_USEAPI === 'true') return;
 
