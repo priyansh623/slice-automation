@@ -33,7 +33,6 @@ export async function GET(): Promise<NextResponse> {
   const rows = await db
     .select()
     .from(brollClips)
-    .where(eq(brollClips.userId, user.id))
     .orderBy(desc(brollClips.createdAt));
 
   const now = Date.now();
