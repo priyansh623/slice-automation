@@ -48,6 +48,7 @@ export interface CreativeBrief {
   voiceIdentity?: string;
   characterAppearance?: string;
   performanceStyle?: string;
+  emotionalDirection?: string;
   gestureIntensity?: 'low' | 'medium' | 'high';
   camera?: string;
   setting?: string;
@@ -213,6 +214,7 @@ Return ONLY valid JSON with these fields (use null for any field you cannot dete
   "voiceIdentity": "voice texture, pace, tone, and any specific accent or register established",
   "characterAppearance": "character description locked from the reference image and any approved adjustments",
   "performanceStyle": "overall performance energy, delivery approach, and any specific calibration outcomes",
+  "emotionalDirection": "specific emotional expressions, facial expressions, moods, or feeling-based directions the creator locked in (e.g. 'confident but warm', 'dry humour delivery', 'genuine excitement not performed excitement', 'soft and relatable not high energy')",
   "gestureIntensity": "low" or "medium" or "high",
   "camera": "framing or shot style confirmed in the approved prompt",
   "setting": "any setting details confirmed",
@@ -276,6 +278,7 @@ export async function extractAndStoreCreativeBrief(
     voiceIdentity: (extracted.voiceIdentity as string | undefined) ?? undefined,
     characterAppearance: (extracted.characterAppearance as string | undefined) ?? undefined,
     performanceStyle: (extracted.performanceStyle as string | undefined) ?? undefined,
+    emotionalDirection: (extracted.emotionalDirection as string | undefined) ?? undefined,
     gestureIntensity: (extracted.gestureIntensity as CreativeBrief['gestureIntensity']) ?? undefined,
     camera: (extracted.camera as string | undefined) ?? undefined,
     setting: (extracted.setting as string | undefined) ?? undefined,
@@ -297,10 +300,12 @@ const SELF_CONTAINED_PROMPT_INSTRUCTION =
   `- Audio section: write the full voice description, accent, tone and delivery style every time. NEVER write "Same voice" or reference Scene 1 — it will be ignored.\n` +
   `The reference image (sent as referenceImage_1 in R2V mode) handles visual appearance. Your prompt must carry everything else explicitly.`;
 
-function buildCreativeDirectionBlock(brief: CreativeBrief, screen1PromptText: string | null): string {
+function buildCreativeDirectionBlock(brief: CreativeBrief, screen1PromptText: string | null, creatorDescription?: string | null): string {
   const parts: string[] = [];
   if (brief.voiceIdentity) parts.push(`Voice: ${brief.voiceIdentity}`);
   if (brief.performanceStyle) parts.push(`Performance: ${brief.performanceStyle}`);
+  if (brief.emotionalDirection) parts.push(`Emotional direction: ${brief.emotionalDirection}`);
+  if (creatorDescription) parts.push(`Creator's character notes: ${creatorDescription}`);
   if (brief.gestureIntensity) parts.push(`Gesture intensity: ${brief.gestureIntensity}`);
   if (brief.camera) parts.push(`Camera/framing: ${brief.camera}`);
   if (brief.characterAppearance) parts.push(`Character: ${brief.characterAppearance}`);
@@ -397,9 +402,21 @@ export async function generateScreen1Prompt(
       .where(eq(screenPromptVersions.videoScreenId, videoScreenId));
     const latestVersion = allVersions.sort((a, b) => b.version - a.version)[0];
 
+    const scene1Brief = parseBrief(project.creativeBrief);
+    const scene1CreativeNotes: string[] = [];
+    if (project.creatorDescription) scene1CreativeNotes.push(`Creator's character notes: ${project.creatorDescription}`);
+    if (scene1Brief.emotionalDirection) scene1CreativeNotes.push(`Emotional direction: ${scene1Brief.emotionalDirection}`);
+    if (scene1Brief.performanceStyle) scene1CreativeNotes.push(`Performance: ${scene1Brief.performanceStyle}`);
+    if (scene1Brief.voiceIdentity) scene1CreativeNotes.push(`Voice: ${scene1Brief.voiceIdentity}`);
+    const scene1CreativeBlock = scene1CreativeNotes.length > 0
+      ? `\n\nCreative direction to maintain:\n${scene1CreativeNotes.join('\n')}`
+      : '';
+
     userMessage =
       `Revise the Scene 1 prompt based on this feedback: ${nlFeedback}\n\n` +
-      `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
+      `Return only the formatted scene prompt. Do not add a Notes section or any commentary after the prompt.` +
+      scene1CreativeBlock +
+      `\n\nFull script:\n${project.approvedScript ?? project.originalScript}\n\n` +
       `Scene 1 dialogue: "${screen.dialogue}"` +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
       (latestVersion ? `\n\nCurrent prompt:\n${latestVersion.promptText}` : '');
@@ -452,7 +469,7 @@ export async function generateInitialScreenPrompt(
   const brief = parseBrief(project.creativeBrief);
   const image = await encodeImageFromStorage(project.baseImagePath, UPLOADS_BUCKET());
   const screen1Info = await getScreen1ApprovedPromptInfo(videoProjectId);
-  const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null);
+  const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null, project.creatorDescription);
   const projectFeedback = await gatherProjectScopeFeedback(videoProjectId);
 
   const userMessage =
@@ -495,7 +512,7 @@ export async function generateRemainingPrompts(
   const brief = parseBrief(project.creativeBrief);
   const image = await encodeImageFromStorage(project.baseImagePath, UPLOADS_BUCKET());
   const screen1Info = await getScreen1ApprovedPromptInfo(videoProjectId);
-  const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null);
+  const creativeDirectionBlock = buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null, project.creatorDescription);
   const projectFeedback = await gatherProjectScopeFeedback(videoProjectId);
 
   const results: Array<{ videoScreenId: number; promptText: string; version: number }> = [];
@@ -555,7 +572,7 @@ export async function revisePrompt(
 
   const screen1Info = screen.screenNumber > 1 ? await getScreen1ApprovedPromptInfo(videoProjectId) : null;
   const creativeDirectionBlock = screen.screenNumber > 1
-    ? buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null)
+    ? buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null, project.creatorDescription)
     : '';
 
   const projectFeedback = feedbackScope === 'scene'
