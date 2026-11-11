@@ -414,7 +414,7 @@ export async function generateScreen1Prompt(
 
     userMessage =
       `Revise the Scene 1 prompt based on this feedback: ${nlFeedback}\n\n` +
-      `Return only the formatted scene prompt. Do not add a Notes section or any commentary after the prompt.` +
+      `Return the full formatted scene prompt. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.` +
       scene1CreativeBlock +
       `\n\nFull script:\n${project.approvedScript ?? project.originalScript}\n\n` +
       `Scene 1 dialogue: "${screen.dialogue}"` +
@@ -438,7 +438,7 @@ export async function generateScreen1Prompt(
     userMessage =
       `${characterPart}\n` +
       `Use the skill to write out the prompt for Google Flow.\n` +
-      `Return only the formatted scene prompt. Preserve the original dialogue exactly. Do not add a Notes section or any commentary after the prompt.\n\n` +
+      `Return the full formatted scene prompt. Preserve the original dialogue exactly. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.\n\n` +
       `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
       `Script for Scene 1: "${screen.dialogue}"` +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
@@ -475,7 +475,7 @@ export async function generateInitialScreenPrompt(
   const userMessage =
     `Here is the original video script and the reference image of the creator.` +
     `\nUsing the UGC skill, generate the Google Flow video prompt for Scene ${screen.screenNumber} only.` +
-    `\nReturn only the formatted scene prompt. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or any commentary after the prompt.` +
+    `\nReturn the full formatted scene prompt for this scene only. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or commentary after the prompt.` +
     `\nPreserve the original dialogue exactly.` +
     creativeDirectionBlock +
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
@@ -581,7 +581,7 @@ export async function revisePrompt(
 
   const userMessage =
     `Revise the Scene ${screen.screenNumber} prompt based on this feedback: ${nlFeedback}\n\n` +
-    `Return only the formatted scene prompt. Do not add a Notes section or any commentary after the prompt.\n\n` +
+    `Return the full formatted scene prompt. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.\n\n` +
     `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
     `Scene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
