@@ -2,62 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { and, desc, eq, inArray } from 'drizzle-orm';
-import { activeBrollLibraryCondition, effectiveClearance, effectiveClearanceCondition, isBrollClearanceStatus, isUsableFootage } from '@/lib/broll-visibility';
+import { desc, inArray } from 'drizzle-orm';
+import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
 import { loadClipBrands } from '@/lib/broll-brands';
+import { isAdminUser } from '@/lib/api-auth';
+import { clipForViewer } from '@/lib/broll-access';
+import { BROLL_URL_TTL_S, currentSignedUrl } from '@/lib/broll-signed-url';
 
-const ONE_HOUR_MS = 3_600_000;
-const URL_TTL_S = 24 * 3600;
+const URL_TTL_S = BROLL_URL_TTL_S;
 
-async function refreshSignedUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
-  if (!storagePath) return null;
-  try {
-    const service = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } },
-    );
-    const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-    const { data } = await service.storage.from(bucket).createSignedUrl(storagePath, URL_TTL_S);
-    if (!data?.signedUrl) return null;
-    return { url: data.signedUrl, expiresAt: Date.now() + URL_TTL_S * 1000 };
-  } catch {
-    return null;
-  }
-}
-
-// Returns the active library: classified clips that are not on hold, archived or rejected.
-// Visibility is not clearance. Each clip reports:
-//   clearanceStatus     the clip-level decision
-//   effectiveClearance  cleared only if the clip and every brand on it are cleared; not_cleared if the
-//                       clip or any brand is not cleared; otherwise unresolved
-//   clearedForUse       true only when usable (effectiveClearance is cleared)
-//   notCleared          true when effectiveClearance is not_cleared
-// ?clearance=cleared returns usable footage only; ?clearance=not_cleared and ?clearance=unresolved
-// filter on effectiveClearance, so the three filters partition the library.
-export async function GET(req: NextRequest): Promise<NextResponse> {
+// The shared library: classified clips that are not on hold, archived or rejected. Every signed-in user gets
+// the same clips; the viewer's role only decides how much of each clip is returned (non-admins do not receive
+// internal notes, the uploader id, storage paths or unnamed brand observations).
+// Admins find unclassified uploads and held or archived clips through the management endpoints instead.
+export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const clearanceParam = req.nextUrl.searchParams.get('clearance');
-  if (clearanceParam !== null && !isBrollClearanceStatus(clearanceParam)) {
-    return NextResponse.json({ error: "clearance must be 'unresolved', 'cleared' or 'not_cleared'" }, { status: 400 });
-  }
+  const isAdmin = await isAdminUser(user.id);
 
   const rows = await db
     .select()
     .from(brollClips)
-    .where(and(
-      activeBrollLibraryCondition(),
-      clearanceParam ? effectiveClearanceCondition(clearanceParam) : undefined,
-    ))
+    .where(activeBrollLibraryCondition())
     .orderBy(desc(brollClips.createdAt));
 
-  const now = Date.now();
-
-  // Load category assignments for all clips in one query
   const clipIds = rows.map((c) => c.id);
   const categoryRows = clipIds.length > 0
     ? await db.select({ clipId: brollClipCategories.clipId, categoryId: brollClipCategories.categoryId })
@@ -72,30 +42,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const brandMap = await loadClipBrands(db, clipIds);
 
   const result = await Promise.all(rows.map(async (clip) => {
-    let signedUrl = clip.signedUrl;
-    let signedUrlExpiresAt = clip.signedUrlExpiresAt;
-    if (!signedUrlExpiresAt || signedUrlExpiresAt < now + ONE_HOUR_MS) {
-      const fresh = await refreshSignedUrl(clip.storagePath);
-      if (fresh) {
-        signedUrl = fresh.url;
-        signedUrlExpiresAt = fresh.expiresAt;
-        await db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
-      }
-    }
+    const signedUrl = await currentSignedUrl(clip);
     const categoryIds = categoryMap.get(clip.id) ?? [];
-    const brands = brandMap.get(clip.id) ?? [];
-    const brandClearanceStatuses = brands.map((b) => b.clearanceStatus);
-    const effective = effectiveClearance(clip.clearanceStatus, brandClearanceStatuses);
-    return {
-      ...clip,
-      signedUrl,
-      categoryIds,
-      classificationStatus: 'classified' as const,
-      effectiveClearance: effective,
-      clearedForUse: isUsableFootage({ reviewStatus: clip.reviewStatus, categoryCount: categoryIds.length, clearanceStatus: clip.clearanceStatus, brandClearanceStatuses }),
-      notCleared: effective === 'not_cleared',
-      brands,
-    };
+    return clipForViewer(clip, { categoryIds, categoryCount: categoryIds.length, brands: brandMap.get(clip.id) ?? [], signedUrl }, isAdmin);
   }));
 
   return NextResponse.json(result);
@@ -105,6 +54,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Only administrators add footage to the library.
+  if (!(await isAdminUser(user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: {
     title: string;
@@ -154,5 +105,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     updatedAt: now,
   }).returning();
 
-  return NextResponse.json(inserted, { status: 201 });
+  return NextResponse.json(
+    clipForViewer(inserted, { categoryCount: 0, brands: [], signedUrl: inserted.signedUrl }, true),
+    { status: 201 },
+  );
 }

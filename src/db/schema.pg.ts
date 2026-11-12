@@ -245,7 +245,9 @@ export const brollClips = pgTable('broll_clips', {
   reviewStatus: text('review_status').notNull().default('unreviewed'),     // unreviewed | approved | rejected | on_hold | archived
   reviewedAt: bigint('reviewed_at', { mode: 'number' }),
   reviewedBy: uuid('reviewed_by'),
-  clearanceStatus: text('clearance_status').notNull().default('unresolved'), // unresolved | cleared | not_cleared
+  // Legacy: migration 0022 added a clearance_status column to broll_clips. The library no longer has a clearance
+  // concept, so it is deliberately not declared here and the application never reads or writes it. The column is
+  // left in the database (dropping it would be a needless destructive change); it keeps its default.
   userTags: text('user_tags'),                 // JSON string[]
   category: text('category'),
   notes: text('notes'),
@@ -278,15 +280,15 @@ export const brollClipCategories = pgTable('broll_clip_categories', {
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 });
 
-// One row per brand or brand-like element visible in a clip. broll_clips.brand keeps the hero
-// brand for the brand filter and brand-scoped categories. role and clearance_status are
-// independent. brandName is null when the identity is unknown. See migration 0022 for constraints.
+// One row per brand or brand-like element visible in a clip. Descriptive metadata that helps people understand
+// and find footage; it has no approval status. broll_clips.brand keeps the hero brand for the brand filter and
+// brand-scoped categories. brandName is null when the identity is unknown. See migration 0022 for constraints.
+// Legacy: the table also has a clearance_status column (migration 0022). It is not declared here and is unused.
 export const brollClipBrands = pgTable('broll_clip_brands', {
   id: serial('id').primaryKey(),
   clipId: integer('clip_id').notNull().references(() => brollClips.id, { onDelete: 'cascade' }),
   brandName: text('brand_name'),                                            // null when the identity is unknown
   role: text('role').notNull(),                                             // hero | incidental | client_product | unresolved
-  clearanceStatus: text('clearance_status').notNull().default('unresolved'), // unresolved | cleared | not_cleared
   note: text('note'),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),

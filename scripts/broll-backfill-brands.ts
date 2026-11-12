@@ -1,6 +1,6 @@
 /**
  * Copies brand details from broll_clips.notes into broll_clip_brands.
- * Requires migration drizzle/pg/0022_broll_clearance_and_brands.sql for --apply.
+ * Requires the broll_clip_brands table from migration drizzle/pg/0022_broll_clearance_and_brands.sql for --apply.
  *
  * Dry-run (default, read-only, works before the migration is applied):
  *   npx ts-node --project tsconfig.scripts.json scripts/broll-backfill-brands.ts
@@ -8,7 +8,7 @@
  * Apply (needs separate approval; do not run against production without it):
  *   npx ts-node --project tsconfig.scripts.json scripts/broll-backfill-brands.ts --apply
  *
- * notes is never modified. Every association is written with clearance 'unresolved'.
+ * notes is never modified.
  * Safe to re-run: existing associations are left as they are.
  */
 import * as path from 'node:path';

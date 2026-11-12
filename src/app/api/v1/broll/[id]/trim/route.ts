@@ -7,6 +7,9 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
 import { and, eq } from 'drizzle-orm';
+import { isAdminUser } from '@/lib/api-auth';
+import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
+import { trimMedia, validateTrimRange } from '@/lib/broll-trim';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const supabase = await createClient();
@@ -24,19 +27,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { inPoint, outPoint } = body;
-  if (typeof inPoint !== 'number' || typeof outPoint !== 'number' || outPoint <= inPoint) {
-    return NextResponse.json({ error: 'inPoint and outPoint must be numbers with outPoint > inPoint' }, { status: 400 });
-  }
+  const { inPoint, outPoint } = body ?? ({} as { inPoint: number; outPoint: number });
+  const rangeError = validateTrimRange(inPoint, outPoint);
+  if (rangeError) return NextResponse.json({ error: rangeError }, { status: 400 });
 
-  // Fetch clip (user-scoped)
+  // Anyone signed in can trim any clip in the shared library; administrators can trim any clip.
+  const isAdmin = await isAdminUser(user.id);
   const [clip] = await db
     .select()
     .from(brollClips)
-    .where(and(eq(brollClips.id, clipId), eq(brollClips.userId, user.id)))
+    .where(isAdmin ? eq(brollClips.id, clipId) : and(eq(brollClips.id, clipId), activeBrollLibraryCondition()))
     .limit(1);
 
   if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const beyondEnd = validateTrimRange(inPoint, outPoint, clip.durationSeconds);
+  if (beyondEnd) return NextResponse.json({ error: beyondEnd }, { status: 400 });
 
   // Get a fresh signed URL to download the original
   const service = createServiceClient(
@@ -55,12 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     'video/webm': 'webm',
     'video/x-msvideo': 'avi',
   };
-  // MP4 and MOV (MPEG-4 family) can be stream-copied into an MP4 output safely.
-  // WebM (VP8/VP9 + Opus/Vorbis) and AVI need re-encoding to H.264+AAC for MP4 output.
-  const STREAM_COPY_MIME = new Set(['video/mp4', 'video/quicktime']);
-
   const sourceExt = MIME_TO_EXT[clip.mimeType] ?? 'mp4';
-  const useCopy = STREAM_COPY_MIME.has(clip.mimeType);
 
   // Download original to temp file
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'broll-trim-'));
@@ -73,31 +73,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const buf = Buffer.from(await downloadRes.arrayBuffer());
     await fs.writeFile(inputPath, buf);
 
-    // Run ffmpeg trim
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffmpegStaticPath: string | null = require('ffmpeg-static') as string | null;
     if (!ffmpegStaticPath) throw new Error('ffmpeg-static binary not found');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffprobeModule = require('ffprobe-static') as string | { path: string };
+    const ffprobePath = typeof ffprobeModule === 'string' ? ffprobeModule : ffprobeModule.path;
 
-    const { spawnSync } = await import('node:child_process');
-    const duration = outPoint - inPoint;
-    const encodeArgs = useCopy
-      ? ['-c', 'copy']
-      : ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'];
-    const args = [
-      '-y',
-      '-ss', String(inPoint),
-      '-i', inputPath,
-      '-t', String(duration),
-      ...encodeArgs,
-      outputPath,
-    ];
-
-    const result = spawnSync(ffmpegStaticPath, args, { stdio: 'pipe' });
-    if (result.status !== 0) {
-      const stderr = result.stderr?.toString().slice(-400) ?? '';
-      console.error('[broll/trim] ffmpeg failed:', stderr);
-      throw new Error('FFmpeg trim failed');
-    }
+    // Stream-copies when the file allows it, converts only the audio when it must (e.g. Opus in MP4), and
+    // re-encodes as a last resort. The output is validated before it is returned.
+    const outcome = trimMedia({ ffmpegPath: ffmpegStaticPath, ffprobePath, inputPath, outputPath, mimeType: clip.mimeType, inPoint, outPoint });
+    console.info(`[broll/trim] clip ${clip.id}: ${outcome.plan}${outcome.fellBack ? ' (fallback)' : ''} - ${outcome.reason}`);
 
     const trimmedBuf = await fs.readFile(outputPath);
 

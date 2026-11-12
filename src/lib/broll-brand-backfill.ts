@@ -13,12 +13,12 @@ export interface BackfillResult {
 }
 
 // Copies brand details from broll_clips.notes into broll_clip_brands.
-// notes is never modified. Every association is written with clearance 'unresolved'.
+// notes is never modified.
 // Safe to re-run: associations that already exist are left as they are.
 export async function backfillBrands(database: BrollDb, apply: boolean, log: (line: string) => void = () => {}): Promise<BackfillResult> {
   const result: BackfillResult = { clipsWithBrands: 0, planned: 0, inserted: 0, alreadyPresent: 0, skipped: [], heroColumnWithoutAssociation: [] };
 
-  // Explicit columns so a dry run also works before the migration adds clearance_status.
+  // Explicit columns: only what the backfill needs.
   const clips = await database
     .select({ id: brollClips.id, notes: brollClips.notes, brand: brollClips.brand })
     .from(brollClips)
@@ -43,7 +43,7 @@ export async function backfillBrands(database: BrollDb, apply: boolean, log: (li
       const now = Date.now();
       const inserted = await database
         .insert(brollClipBrands)
-        .values({ clipId: clip.id, brandName: a.brandName, role: a.role, clearanceStatus: a.clearanceStatus, note: a.note, createdAt: now, updatedAt: now })
+        .values({ clipId: clip.id, brandName: a.brandName, role: a.role, note: a.note, createdAt: now, updatedAt: now })
         .onConflictDoNothing()
         .returning({ id: brollClipBrands.id });
       if (inserted.length > 0) result.inserted++; else result.alreadyPresent++;

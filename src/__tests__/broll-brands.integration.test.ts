@@ -5,12 +5,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { backfillBrands } from '@/lib/broll-brand-backfill';
 import { BROLL_BRAND_ROLES } from '@/lib/broll-brands';
-import { BROLL_CLEARANCE_STATUSES } from '@/lib/broll-visibility';
 import {
   addClip, addLegacyClip, clipFingerprint, createBrollTestDb, isRejected, MIGRATION_0022, rowCount, type BrollTestDb,
 } from './helpers/broll-test-db';
 
-const INSERT_BRAND = `insert into broll_clip_brands (clip_id, brand_name, role, clearance_status, note, created_at, updated_at) values ($1, $2, $3, $4, $5, 1, 1)`;
+const INSERT_BRAND = `insert into broll_clip_brands (clip_id, brand_name, role, note, created_at, updated_at) values ($1, $2, $3, $4, 1, 1)`;
 
 // Notes as the classification script wrote them, including the five observations whose role was left unresolved.
 const NOTES = {
@@ -71,27 +70,15 @@ describe('migration 0022 on existing data', () => {
     expect(after).toBe(before);
   });
 
-  it('starts every existing clip with unresolved clearance, clearing none', async () => {
-    const r = await t.pg.query<{ clearance_status: string; n: number }>('select clearance_status, count(*)::int as n from broll_clips group by 1');
-    expect(r.rows).toEqual([{ clearance_status: 'unresolved', n: LEGACY_CLIPS.length }]);
-  });
-
-  it('keeps review status separate from clearance', async () => {
+  it('leaves review status exactly as it was', async () => {
     const r = await t.pg.query<{ review_status: string; n: number }>('select review_status, count(*)::int as n from broll_clips group by 1 order by 1');
     expect(r.rows).toEqual([{ review_status: 'archived', n: 1 }, { review_status: 'on_hold', n: 1 }, { review_status: 'unreviewed', n: 6 }]);
-  });
-
-  it('rejects a clearance value outside unresolved, cleared and not_cleared', async () => {
-    expect(await isRejected(t, `update broll_clips set clearance_status = 'approved' where id = 1`)).toBe(true);
-    expect(await isRejected(t, `update broll_clips set clearance_status = 'cleared' where id = 1`)).toBe(false);
   });
 
   it('creates the expected constraints and indexes', async () => {
     const constraints = (await t.pg.query<{ conname: string }>(`select conname from pg_constraint where conrelid in ('broll_clips'::regclass, 'broll_clip_brands'::regclass) and contype in ('c', 'f') and conname like 'broll_%' order by conname`)).rows.map((r) => r.conname);
     expect(constraints).toEqual(expect.arrayContaining([
-      'broll_clips_clearance_status_check',
       'broll_clip_brands_role_check',
-      'broll_clip_brands_clearance_status_check',
       'broll_clip_brands_name_required_check',
       'broll_clip_brands_name_not_blank_check',
       'broll_clip_brands_unnamed_needs_note_check',
@@ -109,24 +96,18 @@ describe('migration 0022 on existing data', () => {
 
   it('adds only a column and a table: no existing column, table or row is dropped or rewritten', async () => {
     const cols = (await t.pg.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'broll_clips'`)).rows.map((r) => r.column_name);
-    expect(cols).toContain('clearance_status');
+    expect(cols).toContain('clearance_status'); // legacy: kept in the database, unused by the application
     for (const existing of ['id', 'title', 'storage_path', 'notes', 'user_tags', 'ai_tags', 'brand', 'review_status', 'subject', 'activity', 'setting', 'description']) expect(cols).toContain(existing);
     expect(await rowCount(t, 'broll_clips')).toBe(LEGACY_CLIPS.length);
   });
 
-  it('accepts exactly the roles and clearance statuses that the TypeScript unions allow', async () => {
+  it('accepts exactly the roles that the TypeScript union allows', async () => {
     // The fixture clips use explicit ids, so give this one an unused id.
     const clip = await addClip(t, { id: 99, title: 'Union check' });
     for (const role of BROLL_BRAND_ROLES) {
-      for (const clearance of BROLL_CLEARANCE_STATUSES) {
-        expect(await isRejected(t, INSERT_BRAND, [clip, `Brand ${role} ${clearance}`, role, clearance, null])).toBe(false);
-      }
+      expect(await isRejected(t, INSERT_BRAND, [clip, `Brand ${role}`, role, null])).toBe(false);
     }
-    for (const clearance of BROLL_CLEARANCE_STATUSES) {
-      expect(await isRejected(t, `update broll_clips set clearance_status = $1 where id = $2`, [clearance, clip])).toBe(false);
-    }
-    expect(await isRejected(t, INSERT_BRAND, [clip, 'Other', 'not_a_role', 'unresolved', null])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [clip, 'Other', 'hero', 'not_a_status', null])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [clip, 'Other', 'not_a_role', null])).toBe(true);
   });
 
   it('lets the backfill dry run read existing notes before the migration has been applied', async () => {
@@ -154,9 +135,9 @@ describe('brand associations', () => {
   afterAll(async () => { await t.close(); });
 
   it('supports several brands on one clip without overwriting each other', async () => {
-    await t.pg.query(INSERT_BRAND, [clipId, 'Subway', 'hero', 'unresolved', null]);
-    await t.pg.query(INSERT_BRAND, [clipId, 'Hyundai', 'incidental', 'unresolved', null]);
-    await t.pg.query(INSERT_BRAND, [clipId, 'Disney', 'unresolved', 'unresolved', 'Character print']);
+    await t.pg.query(INSERT_BRAND, [clipId, 'Subway', 'hero', null]);
+    await t.pg.query(INSERT_BRAND, [clipId, 'Hyundai', 'incidental', null]);
+    await t.pg.query(INSERT_BRAND, [clipId, 'Disney', 'unresolved', 'Character print']);
     const r = await t.pg.query<{ brand_name: string; role: string }>('select brand_name, role from broll_clip_brands where clip_id = $1 order by id', [clipId]);
     expect(r.rows).toEqual([
       { brand_name: 'Subway', role: 'hero' },
@@ -167,78 +148,48 @@ describe('brand associations', () => {
 
   it('supports all four roles', async () => {
     const other = await addClip(t, { title: 'Roles' });
-    await t.pg.query(INSERT_BRAND, [other, 'A', 'hero', 'unresolved', null]);
-    await t.pg.query(INSERT_BRAND, [other, 'B', 'incidental', 'unresolved', null]);
-    await t.pg.query(INSERT_BRAND, [other, null, 'client_product', 'unresolved', 'Payments app']);
-    await t.pg.query(INSERT_BRAND, [other, 'C', 'unresolved', 'unresolved', null]);
+    await t.pg.query(INSERT_BRAND, [other, 'A', 'hero', null]);
+    await t.pg.query(INSERT_BRAND, [other, 'B', 'incidental', null]);
+    await t.pg.query(INSERT_BRAND, [other, null, 'client_product', 'Payments app']);
+    await t.pg.query(INSERT_BRAND, [other, 'C', 'unresolved', null]);
     const r = await t.pg.query<{ role: string }>('select role from broll_clip_brands where clip_id = $1 order by role', [other]);
     expect(r.rows.map((x) => x.role)).toEqual(['client_product', 'hero', 'incidental', 'unresolved']);
   });
 
   it('rejects a role outside the four', async () => {
-    expect(await isRejected(t, INSERT_BRAND, [clipId, 'X', 'sponsor', 'unresolved', null])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [clipId, 'X', 'sponsor', null])).toBe(true);
   });
 
   it('prevents the same brand twice in the same role on a clip, whatever the case', async () => {
-    expect(await isRejected(t, INSERT_BRAND, [clipId, 'SUBWAY', 'hero', 'unresolved', null])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [clipId, 'SUBWAY', 'hero', null])).toBe(true);
   });
 
   it('allows the same brand in a different role', async () => {
-    expect(await isRejected(t, INSERT_BRAND, [clipId, 'Subway', 'incidental', 'unresolved', null])).toBe(false);
+    expect(await isRejected(t, INSERT_BRAND, [clipId, 'Subway', 'incidental', null])).toBe(false);
   });
 
   it('prevents the same unnamed observation twice but allows different ones', async () => {
     const other = await addClip(t, { title: 'Observations' });
-    await t.pg.query(INSERT_BRAND, [other, null, 'unresolved', 'unresolved', 'Cup branding, partly legible']);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'unresolved', 'CUP BRANDING, PARTLY LEGIBLE'])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'unresolved', 'Snack packet, brand not legible'])).toBe(false);
+    await t.pg.query(INSERT_BRAND, [other, null, 'unresolved', 'Cup branding, partly legible']);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'CUP BRANDING, PARTLY LEGIBLE'])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'Snack packet, brand not legible'])).toBe(false);
   });
 
   it('does not invent brands: an unknown identity stays null and needs a note', async () => {
     const other = await addClip(t, { title: 'Unknown identity' });
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'hero', 'unresolved', 'a note'])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'incidental', 'unresolved', 'a note'])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'unresolved', null])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'unresolved', '   '])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, '   ', 'unresolved', 'unresolved', 'a note'])).toBe(true);
-    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'unresolved', 'Football video game, title not identified'])).toBe(false);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'hero', 'a note'])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'incidental', 'a note'])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', null])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', '   '])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, '   ', 'unresolved', 'a note'])).toBe(true);
+    expect(await isRejected(t, INSERT_BRAND, [other, null, 'unresolved', 'Football video game, title not identified'])).toBe(false);
     const r = await t.pg.query<{ brand_name: string | null }>('select brand_name from broll_clip_brands where clip_id = $1', [other]);
     expect(r.rows).toEqual([{ brand_name: null }]);
   });
 
-  it('keeps role and clearance as separate fields', async () => {
-    const other = await addClip(t, { title: 'Separate fields' });
-    await t.pg.query(INSERT_BRAND, [other, 'Disney', 'unresolved', 'cleared', null]);
-    await t.pg.query(INSERT_BRAND, [other, 'Blinkit', 'hero', 'unresolved', null]);
-    const r = await t.pg.query<{ brand_name: string; role: string; clearance_status: string }>('select brand_name, role, clearance_status from broll_clip_brands where clip_id = $1 order by id', [other]);
-    expect(r.rows).toEqual([
-      { brand_name: 'Disney', role: 'unresolved', clearance_status: 'cleared' },
-      { brand_name: 'Blinkit', role: 'hero', clearance_status: 'unresolved' },
-    ]);
-  });
-
-  it('rejects a clearance status outside the three allowed', async () => {
-    expect(await isRejected(t, INSERT_BRAND, [clipId, 'Nike', 'hero', 'approved', null])).toBe(true);
-  });
-
-  it('clears one brand without changing another brand or the clip', async () => {
-    const other = await addClip(t, { title: 'Independent clearance' });
-    await t.pg.query(INSERT_BRAND, [other, 'Subway', 'hero', 'unresolved', null]);
-    await t.pg.query(INSERT_BRAND, [other, 'Hyundai', 'incidental', 'unresolved', null]);
-    await t.pg.query(`update broll_clip_brands set clearance_status = 'cleared' where clip_id = $1 and brand_name = 'Hyundai'`, [other]);
-    await t.pg.query(`update broll_clip_brands set clearance_status = 'not_cleared' where clip_id = $1 and brand_name = 'Subway'`, [other]);
-    const brands = await t.pg.query<{ brand_name: string; clearance_status: string }>('select brand_name, clearance_status from broll_clip_brands where clip_id = $1 order by id', [other]);
-    expect(brands.rows).toEqual([
-      { brand_name: 'Subway', clearance_status: 'not_cleared' },
-      { brand_name: 'Hyundai', clearance_status: 'cleared' },
-    ]);
-    const clip = await t.pg.query<{ clearance_status: string }>('select clearance_status from broll_clips where id = $1', [other]);
-    expect(clip.rows[0].clearance_status).toBe('unresolved');
-  });
-
   it('removes a clip\'s brand rows when the clip is deleted', async () => {
     const other = await addClip(t, { title: 'Doomed' });
-    await t.pg.query(INSERT_BRAND, [other, 'Subway', 'hero', 'unresolved', null]);
+    await t.pg.query(INSERT_BRAND, [other, 'Subway', 'hero', null]);
     await t.pg.query('delete from broll_clips where id = $1', [other]);
     const r = await t.pg.query('select 1 from broll_clip_brands where clip_id = $1', [other]);
     expect(r.rows).toHaveLength(0);
@@ -265,11 +216,11 @@ describe('brand backfill', () => {
   });
 
   it('keeps an association that already exists instead of duplicating or overwriting it', async () => {
-    await t.pg.query(INSERT_BRAND, [1, 'Subway', 'hero', 'cleared', 'Reviewer note']);
+    await t.pg.query(INSERT_BRAND, [1, 'Subway', 'hero', 'Reviewer note']);
     const result = await backfillBrands(t.db, true);
     expect(result.alreadyPresent).toBe(1);
-    const r = await t.pg.query<{ clearance_status: string; note: string }>(`select clearance_status, note from broll_clip_brands where clip_id = 1 and brand_name = 'Subway'`);
-    expect(r.rows).toEqual([{ clearance_status: 'cleared', note: 'Reviewer note' }]);
+    const r = await t.pg.query<{ note: string }>(`select note from broll_clip_brands where clip_id = 1 and brand_name = 'Subway'`);
+    expect(r.rows).toEqual([{ note: 'Reviewer note' }]);
   });
 
   it('copies every brand observation across: 10 associations from 6 clips', async () => {
@@ -284,8 +235,8 @@ describe('brand backfill', () => {
   });
 
   it('stores the identifiable brand with an undecided role by name', async () => {
-    const r = await t.pg.query(`select brand_name, role, clearance_status, note from broll_clip_brands where brand_name = 'Disney'`);
-    expect(r.rows).toEqual([{ brand_name: 'Disney', role: 'unresolved', clearance_status: 'unresolved', note: 'Character print on the hero bag.' }]);
+    const r = await t.pg.query(`select brand_name, role, note from broll_clip_brands where brand_name = 'Disney'`);
+    expect(r.rows).toEqual([{ brand_name: 'Disney', role: 'unresolved', note: 'Character print on the hero bag.' }]);
   });
 
   it('stores unidentified observations without a brand name, keeping what was seen', async () => {
@@ -299,8 +250,8 @@ describe('brand backfill', () => {
   });
 
   it('keeps the C23 "PLAY" tape as an unnamed unresolved observation, never as a brand called PLAY', async () => {
-    const r = await t.pg.query(`select brand_name, role, clearance_status, note from broll_clip_brands where clip_id = 3`);
-    expect(r.rows).toEqual([{ brand_name: null, role: 'unresolved', clearance_status: 'unresolved', note: 'Printed tape reading "PLAY" — Not an identifiable brand.' }]);
+    const r = await t.pg.query(`select brand_name, role, note from broll_clip_brands where clip_id = 3`);
+    expect(r.rows).toEqual([{ brand_name: null, role: 'unresolved', note: 'Printed tape reading "PLAY" — Not an identifiable brand.' }]);
     const named = await t.pg.query(`select 1 from broll_clip_brands where lower(trim(brand_name)) = 'play'`);
     expect(named.rows).toHaveLength(0);
   });
@@ -308,13 +259,6 @@ describe('brand backfill', () => {
   it('records the client product without naming a brand', async () => {
     const r = await t.pg.query(`select clip_id, brand_name, role, note from broll_clip_brands where role = 'client_product'`);
     expect(r.rows).toEqual([{ clip_id: 6, brand_name: null, role: 'client_product', note: 'Red card reading "super slicer"' }]);
-  });
-
-  it('writes unresolved clearance for every association it creates, clearing nothing', async () => {
-    const r = await t.pg.query<{ brand_name: string | null }>(`select brand_name from broll_clip_brands where clearance_status <> 'unresolved'`);
-    expect(r.rows).toEqual([{ brand_name: 'Subway' }]); // only the association that was cleared before the backfill ran
-    const clips = await t.pg.query<{ n: number }>(`select count(*)::int as n from broll_clips where clearance_status <> 'unresolved'`);
-    expect(clips.rows[0].n).toBe(0);
   });
 
   it('is idempotent: a second run adds nothing', async () => {

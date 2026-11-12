@@ -4,13 +4,22 @@ import { videoProjects, adminUsers } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { eq } from 'drizzle-orm';
 
-export type AuthUser = { id: string };
+export type AuthUser = { id: string; email?: string | null };
 
 export async function requireUser(): Promise<{ user: AuthUser } | NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return { user };
+}
+
+// True when the user is an administrator: listed in the ADMIN_USER_IDS environment variable or in the
+// admin_users table. This is the single definition of "admin" used by requireAdmin and /api/v1/admin/me.
+export async function isAdminUser(userId: string): Promise<boolean> {
+  const adminIds = (process.env.ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (adminIds.includes(userId)) return true;
+  const rows = await db.select({ id: adminUsers.id }).from(adminUsers).where(eq(adminUsers.userId, userId)).limit(1);
+  return rows.length > 0;
 }
 
 export async function requireProjectOwner(
@@ -29,9 +38,6 @@ export async function requireProjectOwner(
 }
 
 export async function requireAdmin(userId: string): Promise<NextResponse | null> {
-  const adminIds = (process.env.ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (adminIds.includes(userId)) return null;
-  const rows = await db.select({ id: adminUsers.id }).from(adminUsers).where(eq(adminUsers.userId, userId)).limit(1);
-  if (rows.length > 0) return null;
+  if (await isAdminUser(userId)) return null;
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 }

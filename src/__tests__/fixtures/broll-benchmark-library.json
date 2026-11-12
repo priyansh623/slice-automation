@@ -1,0 +1,681 @@
+{
+ "categories": [
+  {
+   "id": 1,
+   "name": "Groceries",
+   "parentId": null,
+   "slug": "groceries"
+  },
+  {
+   "id": 2,
+   "name": "Payments & Finance",
+   "parentId": null,
+   "slug": "payments-finance"
+  },
+  {
+   "id": 3,
+   "name": "Health & Fitness",
+   "parentId": null,
+   "slug": "health-fitness"
+  },
+  {
+   "id": 4,
+   "name": "Home & Living",
+   "parentId": null,
+   "slug": "home-living"
+  },
+  {
+   "id": 5,
+   "name": "Work & Education",
+   "parentId": null,
+   "slug": "work-education"
+  },
+  {
+   "id": 6,
+   "name": "Delivery & Logistics",
+   "parentId": null,
+   "slug": "delivery-logistics"
+  },
+  {
+   "id": 7,
+   "name": "Lifestyle & Leisure",
+   "parentId": null,
+   "slug": "lifestyle-leisure"
+  },
+  {
+   "id": 8,
+   "name": "Travel & Transport",
+   "parentId": null,
+   "slug": "travel-transport"
+  },
+  {
+   "id": 9,
+   "name": "Digital Products & UI",
+   "parentId": null,
+   "slug": "digital-products-ui"
+  },
+  {
+   "id": 10,
+   "name": "Food & Beverage",
+   "parentId": null,
+   "slug": "food-beverage"
+  },
+  {
+   "id": 11,
+   "name": "Cards",
+   "parentId": null,
+   "slug": "cards"
+  },
+  {
+   "id": 12,
+   "name": "Shopping & Retail",
+   "parentId": null,
+   "slug": "shopping-retail"
+  },
+  {
+   "id": 13,
+   "name": "In store browsing",
+   "parentId": 12,
+   "slug": "in-store-browsing"
+  },
+  {
+   "id": 14,
+   "name": "Checkout payment",
+   "parentId": 12,
+   "slug": "checkout-payment"
+  },
+  {
+   "id": 15,
+   "name": "Product display",
+   "parentId": 12,
+   "slug": "product-display"
+  },
+  {
+   "id": 51,
+   "name": "Bags after purchase",
+   "parentId": 12,
+   "slug": "bags-after-purchase"
+  },
+  {
+   "id": 16,
+   "name": "Cafe coffee",
+   "parentId": 10,
+   "slug": "cafe-coffee"
+  },
+  {
+   "id": 17,
+   "name": "Restaurant dining",
+   "parentId": 10,
+   "slug": "restaurant-dining"
+  },
+  {
+   "id": 18,
+   "name": "Street food",
+   "parentId": 10,
+   "slug": "street-food"
+  },
+  {
+   "id": 52,
+   "name": "Food at home",
+   "parentId": 10,
+   "slug": "food-at-home"
+  },
+  {
+   "id": 19,
+   "name": "Supermarket aisles",
+   "parentId": 1,
+   "slug": "supermarket-aisles"
+  },
+  {
+   "id": 20,
+   "name": "Fresh produce",
+   "parentId": 1,
+   "slug": "fresh-produce"
+  },
+  {
+   "id": 21,
+   "name": "Groceries checkout",
+   "parentId": 1,
+   "slug": "groceries-checkout"
+  },
+  {
+   "id": 22,
+   "name": "Mobile payment",
+   "parentId": 2,
+   "slug": "mobile-payment"
+  },
+  {
+   "id": 23,
+   "name": "Card tap",
+   "parentId": 2,
+   "slug": "card-tap"
+  },
+  {
+   "id": 24,
+   "name": "Banking app",
+   "parentId": 2,
+   "slug": "banking-app"
+  },
+  {
+   "id": 49,
+   "name": "Rewards cashback",
+   "parentId": 2,
+   "slug": "rewards-cashback"
+  },
+  {
+   "id": 25,
+   "name": "Card reveal",
+   "parentId": 11,
+   "slug": "card-reveal"
+  },
+  {
+   "id": 26,
+   "name": "Card lifestyle",
+   "parentId": 11,
+   "slug": "card-lifestyle"
+  },
+  {
+   "id": 27,
+   "name": "Card benefits",
+   "parentId": 11,
+   "slug": "card-benefits"
+  },
+  {
+   "id": 28,
+   "name": "Airport",
+   "parentId": 8,
+   "slug": "airport"
+  },
+  {
+   "id": 29,
+   "name": "Train transit",
+   "parentId": 8,
+   "slug": "train-transit"
+  },
+  {
+   "id": 30,
+   "name": "Road trip",
+   "parentId": 8,
+   "slug": "road-trip"
+  },
+  {
+   "id": 50,
+   "name": "Cab ride hailing",
+   "parentId": 8,
+   "slug": "cab-ride-hailing"
+  },
+  {
+   "id": 31,
+   "name": "Package delivery",
+   "parentId": 6,
+   "slug": "package-delivery"
+  },
+  {
+   "id": 32,
+   "name": "Last mile",
+   "parentId": 6,
+   "slug": "last-mile"
+  },
+  {
+   "id": 33,
+   "name": "Courier",
+   "parentId": 6,
+   "slug": "courier"
+  },
+  {
+   "id": 53,
+   "name": "Quick commerce",
+   "parentId": 6,
+   "slug": "quick-commerce"
+  },
+  {
+   "id": 34,
+   "name": "Social outings",
+   "parentId": 7,
+   "slug": "social-outings"
+  },
+  {
+   "id": 35,
+   "name": "Entertainment",
+   "parentId": 7,
+   "slug": "entertainment"
+  },
+  {
+   "id": 36,
+   "name": "Relaxation",
+   "parentId": 7,
+   "slug": "relaxation"
+  },
+  {
+   "id": 37,
+   "name": "Office workspace",
+   "parentId": 5,
+   "slug": "office-workspace"
+  },
+  {
+   "id": 38,
+   "name": "Study learning",
+   "parentId": 5,
+   "slug": "study-learning"
+  },
+  {
+   "id": 39,
+   "name": "Collaboration",
+   "parentId": 5,
+   "slug": "collaboration"
+  },
+  {
+   "id": 40,
+   "name": "App walkthrough",
+   "parentId": 9,
+   "slug": "app-walkthrough"
+  },
+  {
+   "id": 41,
+   "name": "Dashboard",
+   "parentId": 9,
+   "slug": "dashboard"
+  },
+  {
+   "id": 42,
+   "name": "Notification",
+   "parentId": 9,
+   "slug": "notification"
+  },
+  {
+   "id": 43,
+   "name": "Gym workout",
+   "parentId": 3,
+   "slug": "gym-workout"
+  },
+  {
+   "id": 44,
+   "name": "Outdoor activity",
+   "parentId": 3,
+   "slug": "outdoor-activity"
+  },
+  {
+   "id": 45,
+   "name": "Wellness",
+   "parentId": 3,
+   "slug": "wellness"
+  },
+  {
+   "id": 46,
+   "name": "Interior lifestyle",
+   "parentId": 4,
+   "slug": "interior-lifestyle"
+  },
+  {
+   "id": 47,
+   "name": "Cooking at home",
+   "parentId": 4,
+   "slug": "cooking-at-home"
+  },
+  {
+   "id": 48,
+   "name": "Home improvement",
+   "parentId": 4,
+   "slug": "home-improvement"
+  }
+ ],
+ "clips": [
+  {
+   "ref": "C01",
+   "id": 9,
+   "title": "Reaching for a Subway cup in a parked car",
+   "categoryIds": [
+    10
+   ],
+   "userTags": [
+    "takeaway"
+   ],
+   "brands": [
+    "Subway",
+    "Hyundai"
+   ]
+  },
+  {
+   "ref": "C02",
+   "id": 10,
+   "title": "Window seat on a plane with a Coca Cola can on the tray",
+   "categoryIds": [
+    8
+   ],
+   "userTags": [],
+   "brands": [
+    "Coca Cola"
+   ]
+  },
+  {
+   "ref": "C03",
+   "id": 11,
+   "title": "Feet up in a hotel room",
+   "categoryIds": [
+    8,
+    36
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C04",
+   "id": 12,
+   "title": "Walking a mall with a Starbucks bag",
+   "categoryIds": [
+    51
+   ],
+   "userTags": [],
+   "brands": [
+    "Starbucks"
+   ]
+  },
+  {
+   "ref": "C06",
+   "id": 14,
+   "title": "Back seat of a cab in slow city traffic",
+   "categoryIds": [
+    50
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C07",
+   "id": 15,
+   "title": "Sharing momos in a parked car at night",
+   "categoryIds": [
+    18
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C08",
+   "id": 16,
+   "title": "Walking with kraft shopping bags, looking down",
+   "categoryIds": [
+    51
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C09",
+   "id": 17,
+   "title": "Showing a Blinkit x Disney paper bag at home",
+   "categoryIds": [
+    53
+   ],
+   "userTags": [
+    "bag"
+   ],
+   "brands": [
+    "Blinkit",
+    "Disney"
+   ]
+  },
+  {
+   "ref": "C11",
+   "id": 18,
+   "title": "Riding in an auto rickshaw down a tree lined road",
+   "categoryIds": [
+    50
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C12",
+   "id": 19,
+   "title": "Lifting an iced coffee over a plate of noodles",
+   "categoryIds": [
+    17
+   ],
+   "userTags": [
+    "casual eatery"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C13",
+   "id": 20,
+   "title": "Chai on a high rise balcony",
+   "categoryIds": [
+    4,
+    36,
+    52
+   ],
+   "userTags": [
+    "tea",
+    "skyline"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C14",
+   "id": 21,
+   "title": "Stirring a mug in bed beside a gaming laptop",
+   "categoryIds": [
+    36,
+    52
+   ],
+   "userTags": [
+    "mug",
+    "stirring"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C15",
+   "id": 22,
+   "title": "Go kart on an indoor track, wheel view",
+   "categoryIds": [
+    35
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C16",
+   "id": 23,
+   "title": "Tilting a PS5 controller toward the camera",
+   "categoryIds": [
+    35
+   ],
+   "userTags": [
+    "controller"
+   ],
+   "brands": [
+    "PlayStation"
+   ]
+  },
+  {
+   "ref": "C18",
+   "id": 24,
+   "title": "Cinema recliner with popcorn",
+   "categoryIds": [
+    35
+   ],
+   "userTags": [
+    "recliner"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C19",
+   "id": 1,
+   "title": "Lifting the handle of a Blinkit bag full of chips",
+   "categoryIds": [
+    1,
+    53
+   ],
+   "userTags": [
+    "quick commerce"
+   ],
+   "brands": [
+    "Blinkit",
+    "Lay's"
+   ]
+  },
+  {
+   "ref": "C20",
+   "id": 2,
+   "title": "Holding a payments app up to a counter terminal",
+   "categoryIds": [
+    14,
+    22
+   ],
+   "userTags": [
+    "terminal",
+    "client product"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C21",
+   "id": 3,
+   "title": "Showing the Activity list with cashback rows",
+   "categoryIds": [
+    9,
+    24,
+    49
+   ],
+   "userTags": [
+    "transactions",
+    "client product"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C23",
+   "id": 4,
+   "title": "Turning a parcel with printed tape in the hand",
+   "categoryIds": [
+    31
+   ],
+   "userTags": [
+    "package"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C24",
+   "id": 5,
+   "title": "Two kulhads of chai held together on the street",
+   "categoryIds": [
+    18,
+    34
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C25",
+   "id": 6,
+   "title": "Stirring an iced coffee at a cafe table",
+   "categoryIds": [
+    16,
+    34
+   ],
+   "userTags": [
+    "stirring"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C26",
+   "id": 7,
+   "title": "Scrolling the Activity screen while seated in a cafe",
+   "categoryIds": [
+    24,
+    40,
+    49
+   ],
+   "userTags": [
+    "scrolling",
+    "client product"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C27",
+   "id": 8,
+   "title": "Mixing a bowl of puffed rice snack at home",
+   "categoryIds": [
+    47,
+    52
+   ],
+   "userTags": [
+    "mixing"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C28",
+   "id": 25,
+   "title": "Offering a second controller during a football game",
+   "categoryIds": [
+    35
+   ],
+   "userTags": [
+    "controller"
+   ],
+   "brands": [
+    "PlayStation"
+   ]
+  },
+  {
+   "ref": "C29",
+   "id": 26,
+   "title": "Swinging a red basket full of snack boxes",
+   "categoryIds": [
+    1,
+    13
+   ],
+   "userTags": [
+    "minimart"
+   ],
+   "brands": [
+    "Meiji"
+   ]
+  },
+  {
+   "ref": "C30",
+   "id": 27,
+   "title": "Holding up a plain kraft bag in a clothing store",
+   "categoryIds": [
+    51
+   ],
+   "userTags": [],
+   "brands": []
+  },
+  {
+   "ref": "C31",
+   "id": 28,
+   "title": "Card beside two iced coffees on a cafe table",
+   "categoryIds": [
+    16,
+    26,
+    34
+   ],
+   "userTags": [
+    "client product"
+   ],
+   "brands": []
+  },
+  {
+   "ref": "C32",
+   "id": 29,
+   "title": "Pushing a loaded cart through a supermarket",
+   "categoryIds": [
+    13,
+    19
+   ],
+   "userTags": [],
+   "brands": [
+    "Lay's"
+   ]
+  }
+ ]
+}

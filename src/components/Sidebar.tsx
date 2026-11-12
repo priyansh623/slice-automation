@@ -1,11 +1,23 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard, LibraryBig } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
+
+  // Admin navigation is shown only to administrators. The admin APIs enforce access themselves.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/v1/admin/me')
+      .then((r) => (r.ok ? r.json() : { isAdmin: false }))
+      .then((d: { isAdmin?: boolean }) => { if (!cancelled) setIsAdmin(d.isAdmin === true); })
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const projectsActive = pathname.startsWith('/video-projects');
   const brollActive = pathname.startsWith('/broll');
@@ -86,6 +98,8 @@ export default function Sidebar() {
         </button>
       </Link>
 
+      {isAdmin && (
+      <>
       {/* Settings */}
       <Link href="/admin/settings" style={{ textDecoration: 'none' }}>
         <button style={{
@@ -149,6 +163,9 @@ export default function Sidebar() {
         </button>
       </Link>
 
+      </>
+      )}
+
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
@@ -195,7 +212,7 @@ export default function Sidebar() {
         }}>
           AR
         </div>
-        <div style={{ font: '500 10px/1 Satoshi', color: '#9A9AA0' }}>Admin</div>
+        {isAdmin && <div style={{ font: '500 10px/1 Satoshi', color: '#9A9AA0' }}>Admin</div>}
       </div>
     </nav>
   );

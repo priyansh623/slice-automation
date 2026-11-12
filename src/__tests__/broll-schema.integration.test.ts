@@ -29,12 +29,21 @@ const TABLES: [string, PgTable][] = [
   ['broll_clip_categories', brollClipCategories],
 ];
 
+// Migration 0022 added a clearance_status column to two tables. The shared library has no clearance concept, so
+// the application does not declare or use those columns. They stay in the database (dropping them would be a
+// needless destructive change) and are the only database columns the Drizzle schema leaves out.
+const LEGACY_DB_ONLY_COLUMNS: Record<string, string[]> = {
+  broll_clips: ['clearance_status'],
+  broll_clip_brands: ['clearance_status'],
+};
+
 describe.each(TABLES)('Drizzle schema for %s', (name, table) => {
-  it('has exactly the columns the database has', async () => {
+  it('has every database column except the retained legacy ones', async () => {
     const config = getTableConfig(table);
     expect(config.name).toBe(name);
     const db = await dbColumns(name);
-    expect(config.columns.map((c) => c.name).sort()).toEqual([...db.keys()].sort());
+    const expected = [...db.keys()].filter((c) => !(LEGACY_DB_ONLY_COLUMNS[name] ?? []).includes(c)).sort();
+    expect(config.columns.map((c) => c.name).sort()).toEqual(expected);
   });
 
   it('agrees on column types and nullability', async () => {
@@ -47,23 +56,32 @@ describe.each(TABLES)('Drizzle schema for %s', (name, table) => {
   });
 });
 
-describe('the new clearance structures', () => {
-  it('declares broll_clips.clearance_status as non-null text defaulting to unresolved', async () => {
-    const col = getTableConfig(brollClips).columns.find((c) => c.name === 'clearance_status')!;
-    expect(col.getSQLType()).toBe('text');
-    expect(col.notNull).toBe(true);
-    expect(col.default).toBe('unresolved');
-    const db = (await dbColumns('broll_clips')).get('clearance_status')!;
-    expect(db.column_default).toContain('unresolved');
+describe('legacy clearance columns', () => {
+  it('stay in the database with a harmless default, and the application never declares them', async () => {
+    for (const [table, drizzleTable] of [['broll_clips', brollClips], ['broll_clip_brands', brollClipBrands]] as [string, PgTable][]) {
+      const col = (await dbColumns(table)).get('clearance_status')!;
+      expect(col, `${table}.clearance_status is retained`).toBeDefined();
+      expect(col.column_default).toContain('unresolved');
+      expect(getTableConfig(drizzleTable).columns.map((c) => c.name)).not.toContain('clearance_status');
+    }
   });
 
-  it('declares every broll_clip_brands column with the default the migration sets', async () => {
+  it('do not stop the application from inserting clips and brand associations', async () => {
+    const [clip] = await t.db.insert(brollClips).values({
+      userId: '00000000-0000-4000-8000-0000000000b1', title: 'Schema check', storagePath: 'u/broll/schema.mp4', createdAt: 1, updatedAt: 1,
+    }).returning();
+    const [brand] = await t.db.insert(brollClipBrands).values({ clipId: clip.id, brandName: 'Subway', role: 'hero', createdAt: 1, updatedAt: 1 }).returning();
+    expect(brand.brandName).toBe('Subway');
+  });
+});
+
+describe('broll_clip_brands', () => {
+  it('declares every column with the default the migration sets', async () => {
     const config = getTableConfig(brollClipBrands);
     const byName = new Map(config.columns.map((c) => [c.name, c]));
-    expect(byName.get('clearance_status')!.default).toBe('unresolved');
     expect(byName.get('brand_name')!.notNull).toBe(false);
     expect(byName.get('note')!.notNull).toBe(false);
-    for (const required of ['clip_id', 'role', 'clearance_status', 'created_at', 'updated_at']) expect(byName.get(required)!.notNull).toBe(true);
+    for (const required of ['clip_id', 'role', 'created_at', 'updated_at']) expect(byName.get(required)!.notNull).toBe(true);
     const db = await dbColumns('broll_clip_brands');
     for (const col of config.columns) {
       expect(db.get(col.name)!.column_default !== null, `${col.name} default`).toBe(col.hasDefault);

@@ -1,11 +1,10 @@
 import { inArray } from 'drizzle-orm';
 import { brollClipBrands } from '../db/schema.pg';
 import type { BrollDb } from './broll-db';
-import { BROLL_CLEARANCE_STATUSES, type BrollClearanceStatus } from './broll-visibility';
 
-// role is what the brand is to the clip. It is separate from clearanceStatus, which is
-// whether the brand may be used. 'unresolved' means a brand or brand-like element is visible
-// but its role has not been decided; it says nothing about clearance.
+// role is what the brand is to the clip. 'unresolved' means a brand or brand-like element is visible
+// but its role has not been decided. Brand associations are descriptive metadata for finding footage;
+// they carry no approval status.
 export const BROLL_BRAND_ROLES = ['hero', 'incidental', 'client_product', 'unresolved'] as const;
 export type BrollBrandRole = (typeof BROLL_BRAND_ROLES)[number];
 
@@ -13,7 +12,6 @@ export interface BrandAssociation {
   // null when the identity is unknown (an unnamed client product or an unidentified observation).
   brandName: string | null;
   role: BrollBrandRole;
-  clearanceStatus: BrollClearanceStatus;
   note: string | null;
 }
 
@@ -38,7 +36,6 @@ const PLACEHOLDER_BRAND_NAME = /^(none|n\/?a)$|\b(unknown|unidentified|unresolve
 export function validateBrandAssociation(a: BrandAssociation): string[] {
   const errors: string[] = [];
   if (!(BROLL_BRAND_ROLES as readonly string[]).includes(a.role)) errors.push(`unknown role '${String(a.role)}'`);
-  if (!(BROLL_CLEARANCE_STATUSES as readonly string[]).includes(a.clearanceStatus)) errors.push(`unknown clearance status '${String(a.clearanceStatus)}'`);
 
   const name = a.brandName;
   const hasNote = typeof a.note === 'string' && a.note.trim().length > 0;
@@ -65,7 +62,6 @@ function cleanText(value: unknown): string | null {
 }
 
 // Turns the brand details kept in broll_clips.notes into association rows.
-// Clearance is always 'unresolved': the notes are a classifier's observations, not a clearance decision.
 // The notes themselves are never modified.
 export function planBrandAssociations(notes: string | null): BrandAssociationPlan {
   const plan: BrandAssociationPlan = { associations: [], skipped: [] };
@@ -100,13 +96,13 @@ export function planBrandAssociations(notes: string | null): BrandAssociationPla
     const role = b.role;
 
     if (role === 'hero' || role === 'incidental' || role === 'client_product') {
-      add({ brandName: name, role, clearanceStatus: 'unresolved', note }, name);
+      add({ brandName: name, role, note }, name);
     } else if (role === 'unresolved') {
       if (IDENTIFIED_UNRESOLVED_BRANDS.has(name.toLowerCase())) {
-        add({ brandName: name, role: 'unresolved', clearanceStatus: 'unresolved', note }, name);
+        add({ brandName: name, role: 'unresolved', note }, name);
       } else {
         // Identity unknown: keep what was observed, without a brand name.
-        add({ brandName: null, role: 'unresolved', clearanceStatus: 'unresolved', note: note ? `${name} — ${note}` : name }, name);
+        add({ brandName: null, role: 'unresolved', note: note ? `${name} — ${note}` : name }, name);
       }
     } else {
       plan.skipped.push({ name, reason: `unrecognised role '${String(role)}'` });
@@ -115,7 +111,7 @@ export function planBrandAssociations(notes: string | null): BrandAssociationPla
 
   const client = parsed.clientProduct as NotesClientProduct | null | undefined;
   if (client && typeof client === 'object') {
-    add({ brandName: null, role: 'client_product', clearanceStatus: 'unresolved', note: cleanText(client.what) }, 'client product');
+    add({ brandName: null, role: 'client_product', note: cleanText(client.what) }, 'client product');
   }
 
   return plan;
@@ -131,7 +127,6 @@ export async function loadClipBrands(database: BrollDb, clipIds: number[]): Prom
       id: r.id,
       brandName: r.brandName,
       role: r.role as BrollBrandRole,
-      clearanceStatus: r.clearanceStatus as BrollClearanceStatus,
       note: r.note,
     });
     byClip.set(r.clipId, list);

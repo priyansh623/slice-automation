@@ -135,6 +135,11 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
   const [trimming, setTrimming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Only administrators edit, classify or delete clips; everyone else previews, trims and downloads.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch('/api/v1/admin/me').then((r) => (r.ok ? r.json() : { isAdmin: false })).then((d) => setIsAdmin(Boolean(d.isAdmin))).catch(() => setIsAdmin(false));
+  }, []);
 
   // Category state
   const [allCategories, setAllCategories] = useState<CategoryNode[]>([]);
@@ -422,12 +427,13 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                         return cat ? (
                           <span key={cid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: 7, background: '#EFEBFF', color: '#6C47FF', font: '500 12px/24px Satoshi' }}>
                             {cat.name}
-                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />
+                            {isAdmin && <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />}
                           </span>
                         ) : null;
                       })}
                     </div>
                   )}
+                  {isAdmin && (
                   <div ref={catRef} style={{ position: 'relative' }}>
                     <button
                       onClick={() => setCatSearchOpen((o) => !o)}
@@ -461,6 +467,7 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
 
@@ -491,7 +498,8 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                 )}
               </div>
 
-              {/* Delete */}
+              {/* Delete (administrators only) */}
+              {isAdmin && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 36, border: '1px solid transparent', borderRadius: 9, background: 'transparent', color: '#C4C4CC', font: '500 13px/1 Satoshi', cursor: 'pointer' }}
@@ -500,6 +508,7 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
               >
                 <Trash2 size={14} /> Delete clip
               </button>
+              )}
             </div>
           </div>
         </div>

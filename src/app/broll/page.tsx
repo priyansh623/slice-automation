@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import { applyLibraryFilters } from '@/lib/broll-filters';
+import { searchClips } from '@/lib/broll-search';
 import { Search, Upload, Download, ChevronDown, X, LibraryBig, SlidersHorizontal } from 'lucide-react';
 
 interface BrollClip {
@@ -20,6 +22,7 @@ interface BrollClip {
   brand: string | null;
   description: string | null;
   categoryIds: number[];
+  brands?: { brandName: string | null; role: string }[];
   createdAt: number;
 }
 
@@ -379,6 +382,11 @@ export default function BrollLibraryPage() {
   const [categoryFilters, setCategoryFilters] = useState<number[]>([]);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // Only administrators add footage; everyone else browses, searches, previews, trims and downloads.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch('/api/v1/admin/me').then((r) => (r.ok ? r.json() : { isAdmin: false })).then((d) => setIsAdmin(Boolean(d.isAdmin))).catch(() => setIsAdmin(false));
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload modal state
@@ -587,43 +595,12 @@ export default function BrollLibraryPage() {
     return ids;
   })();
 
-  function categoryNamesFor(clip: BrollClip): string[] {
-    const names: string[] = [];
-    for (const id of clip.categoryIds ?? []) {
-      let node = categoryById.get(id);
-      while (node) {
-        names.push(node.name);
-        node = node.parentId !== null ? categoryById.get(node.parentId) : undefined;
-      }
-    }
-    return names;
-  }
-
-  // Filter clips
-  const filtered = clips.filter((c) => {
-    const q = search.trim().toLowerCase();
-    if (q) {
-      const haystack = [
-        c.title, c.subject, c.activity, c.setting, c.brand, c.description,
-        ...parseTags(c.userTags),
-        ...categoryNamesFor(c),
-      ];
-      if (!haystack.some((v) => (v ?? '').toLowerCase().includes(q))) return false;
-    }
-    for (const [field, _label] of FILTER_DEFS) {
-      const fv = filters[field];
-      if (!fv) continue;
-      if (field === 'userTags') {
-        if (!parseTags(c.userTags).includes(fv)) return false;
-      } else {
-        if (c[field] !== fv) return false;
-      }
-    }
-    if (activeCategoryIds !== null) {
-      if (!(c.categoryIds ?? []).some((id) => activeCategoryIds.has(id))) return false;
-    }
-    return true;
-  });
+  // Filters narrow the library first and stay strict. Search then ranks inside what they leave: direct matches
+  // first, related matches after (only for broad queries). It cannot bring a filtered-out clip back.
+  const filteredPool = applyLibraryFilters(clips, filters, activeCategoryIds);
+  const searchResult = searchClips(search.trim(), filteredPool, flatCategories);
+  const filtered = searchResult.hits.map((h) => h.clip);
+  const firstRelatedIndex = searchResult.hits.findIndex((h) => h.tier === 'related');
 
   const activeMoreFilterCount = Object.values(filters).filter(Boolean).length;
   const hasActiveFilters = activeMoreFilterCount > 0 || categoryFilters.length > 0;
@@ -664,6 +641,7 @@ export default function BrollLibraryPage() {
             >
               Manage categories
             </button>
+            {isAdmin && (
             <button
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -676,6 +654,7 @@ export default function BrollLibraryPage() {
               <Upload size={15} />
               Upload B-roll
             </button>
+            )}
           </div>
           <input ref={fileInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) openVideoFile(f); e.target.value = ''; }} />
         </div>
@@ -782,11 +761,13 @@ export default function BrollLibraryPage() {
                   </div>
                   <h2 style={{ margin: 0, font: '700 18px/1.3 Satoshi' }}>No clips yet</h2>
                   <p style={{ margin: '8px 0 24px', maxWidth: 380, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
-                    Drop a 9:16 video here or click Upload B-roll to get started.
+                    {isAdmin ? 'Drop a 9:16 video here or click Upload B-roll to get started.' : 'An administrator will add footage here.'}
                   </p>
+                  {isAdmin && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', font: '600 14px/1 Satoshi' }}>
                     <Upload size={14} /> Upload B-roll
                   </span>
+                  )}
                 </div>
               ) : filtered.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#75757C', font: '400 14px/1.5 Satoshi' }}>
@@ -794,8 +775,15 @@ export default function BrollLibraryPage() {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(196px, 1fr))', gap: '24px 16px' }}>
-                  {filtered.map((clip) => (
-                    <ClipCard key={clip.id} clip={clip} onClick={() => router.push(`/broll/${clip.id}`)} />
+                  {filtered.map((clip, i) => (
+                    <div key={clip.id} style={{ display: 'contents' }}>
+                      {i === firstRelatedIndex && (
+                        <div style={{ gridColumn: '1 / -1', font: '500 12px/1 Satoshi', color: '#75757C', paddingTop: 4 }}>
+                          Related footage — not an exact match for your search
+                        </div>
+                      )}
+                      <ClipCard clip={clip} onClick={() => router.push(`/broll/${clip.id}`)} />
+                    </div>
                   ))}
                 </div>
               )}

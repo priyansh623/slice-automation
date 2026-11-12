@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { isAdminUser } from '@/lib/api-auth';
 import { probeVideoDuration } from '@/worker/ffmpeg-utils';
 
 const ALLOWED_VIDEO_TYPES: Record<string, string> = {
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Only administrators add footage to the library.
+  if (!(await isAdminUser(user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let formData: FormData;
   try {
