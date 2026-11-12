@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { ArrowLeft, Download, Trash2, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, X, Play, Pause, Minus, Plus, Repeat, Scissors, Flag, Upload } from 'lucide-react';
 
 interface BrollClip {
   id: number;
@@ -53,69 +53,47 @@ function formatTime(s: number): string {
 }
 
 function TrimTrack({
-  duration,
-  inPoint,
-  outPoint,
-  currentTime,
-  onInChange,
-  onOutChange,
+  duration, inPoint, outPoint, currentTime, onInChange, onOutChange, onSeek,
 }: {
-  duration: number;
-  inPoint: number;
-  outPoint: number;
-  currentTime: number;
-  onInChange: (v: number) => void;
-  onOutChange: (v: number) => void;
+  duration: number; inPoint: number; outPoint: number; currentTime: number;
+  onInChange: (v: number) => void; onOutChange: (v: number) => void; onSeek: (v: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef<'in' | 'out' | null>(null);
 
-  const toFrac = (x: number) => {
+  const toTime = (x: number) => {
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return 0;
-    return Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+    return Math.max(0, Math.min(1, (x - rect.left) / rect.width)) * duration;
   };
 
-  const handleMouseDown = (handle: 'in' | 'out') => (e: React.MouseEvent) => {
+  const startDrag = (handle: 'in' | 'out') => (e: React.MouseEvent) => {
     e.preventDefault();
-    dragging.current = handle;
+    e.stopPropagation();
     const onMove = (ev: MouseEvent) => {
-      const frac = toFrac(ev.clientX);
-      const t = frac * duration;
-      if (handle === 'in') onInChange(Math.min(t, outPoint - 0.1));
-      else onOutChange(Math.max(t, inPoint + 0.1));
+      const t = toTime(ev.clientX);
+      if (handle === 'in') onInChange(Math.max(0, Math.min(t, outPoint - 0.1)));
+      else onOutChange(Math.min(duration, Math.max(t, inPoint + 0.1)));
     };
-    const onUp = () => {
-      dragging.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
 
   const inPct = (inPoint / duration) * 100;
   const outPct = (outPoint / duration) * 100;
-  const playPct = (currentTime / duration) * 100;
+  const playPct = Math.min((currentTime / duration) * 100, 100);
+  const handle = (side: 'in' | 'out'): React.CSSProperties => ({
+    position: 'absolute', top: 0, bottom: 0, width: 14, borderRadius: 5, background: '#6C47FF', cursor: 'ew-resize',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    ...(side === 'in' ? { left: `${inPct}%`, marginLeft: -7 } : { left: `${outPct}%`, marginLeft: -7 }),
+  });
 
   return (
-    <div ref={trackRef} style={{ position: 'relative', height: 36, userSelect: 'none', cursor: 'default' }}>
-      {/* Full track */}
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 6, transform: 'translateY(-50%)', background: '#E9E9E5', borderRadius: 3 }} />
-      {/* Selected range */}
-      <div style={{ position: 'absolute', top: '50%', left: `${inPct}%`, width: `${outPct - inPct}%`, height: 6, transform: 'translateY(-50%)', background: '#6C47FF', borderRadius: 3 }} />
-      {/* Playhead */}
-      <div style={{ position: 'absolute', top: '50%', left: `${Math.min(playPct, 100)}%`, width: 2, height: 20, transform: 'translate(-50%, -50%)', background: '#fff', borderRadius: 1, pointerEvents: 'none', zIndex: 2 }} />
-      {/* In handle */}
-      <div
-        onMouseDown={handleMouseDown('in')}
-        style={{ position: 'absolute', top: '50%', left: `${inPct}%`, transform: 'translate(-50%, -50%)', width: 14, height: 28, background: '#6C47FF', borderRadius: 4, cursor: 'ew-resize', zIndex: 3, border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }}
-      />
-      {/* Out handle */}
-      <div
-        onMouseDown={handleMouseDown('out')}
-        style={{ position: 'absolute', top: '50%', left: `${outPct}%`, transform: 'translate(-50%, -50%)', width: 14, height: 28, background: '#6C47FF', borderRadius: 4, cursor: 'ew-resize', zIndex: 3, border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }}
-      />
+    <div ref={trackRef} onClick={(e) => onSeek(toTime(e.clientX))} style={{ position: 'relative', height: 56, borderRadius: 8, background: '#E4E4E0', cursor: 'pointer', userSelect: 'none' }}>
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${inPct}%`, width: `${outPct - inPct}%`, background: '#DCD3FF', borderTop: '2px solid #6C47FF', borderBottom: '2px solid #6C47FF', boxSizing: 'border-box', pointerEvents: 'none' }} />
+      <div onMouseDown={startDrag('in')} title="Drag to set the start" style={handle('in')}><span style={{ width: 2, height: 18, borderRadius: 1, background: '#fff' }} /></div>
+      <div onMouseDown={startDrag('out')} title="Drag to set the end" style={handle('out')}><span style={{ width: 2, height: 18, borderRadius: 1, background: '#fff' }} /></div>
+      <div style={{ position: 'absolute', top: -4, bottom: -4, left: `${playPct}%`, width: 2, background: '#111113', pointerEvents: 'none' }} />
     </div>
   );
 }
@@ -131,6 +109,8 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
   const [inPoint, setInPoint] = useState(0);
   const [outPoint, setOutPoint] = useState(0);
   const [looping, setLooping] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [trimming, setTrimming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -190,7 +170,7 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  const duration = clip?.durationSeconds ?? 0;
+  const duration = clip?.durationSeconds || videoDuration || 0;
 
   // Sync video currentTime
   useEffect(() => {
@@ -295,117 +275,109 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
 
   const tags = parseTags(clip.userTags);
   const selectionSec = Math.max(0, outPoint - inPoint);
-  const trimChanged = inPoint > 0 || outPoint < duration;
+  const trimChanged = duration > 0 && (inPoint > 0.05 || outPoint < duration - 0.05);
+  const toggleLoop = () => {
+    setLooping((l) => {
+      if (!l) {
+        const v = videoRef.current;
+        if (v) { v.currentTime = inPoint; v.play().catch(() => {}); }
+      }
+      return !l;
+    });
+  };
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {}); else v.pause();
+  };
+  const stepper = (handle: 'in' | 'out') => {
+    const val = handle === 'in' ? inPoint : outPoint;
+    const btn: React.CSSProperties = { width: 30, height: '100%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#111113' };
+    const mark: React.CSSProperties = { height: 36, padding: '0 10px', borderRadius: 9, border: '1px solid #E4E4E0', background: '#fff', font: '500 12.5px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap', color: '#111113' };
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ font: '500 12px/1 Satoshi', color: '#75757C' }}>{handle === 'in' ? 'Start' : 'End'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, border: '1px solid #E4E4E0', borderRadius: 9, background: '#fff' }}>
+            <button onClick={() => nudge(handle, -0.1)} aria-label={`Move ${handle === 'in' ? 'start' : 'end'} back 0.1 seconds`} style={btn}><Minus size={13} /></button>
+            <span style={{ minWidth: 48, textAlign: 'center', font: '700 13px/1 Satoshi', fontVariantNumeric: 'tabular-nums' }}>{formatTime(val)}</span>
+            <button onClick={() => nudge(handle, 0.1)} aria-label={`Move ${handle === 'in' ? 'start' : 'end'} forward 0.1 seconds`} style={btn}><Plus size={13} /></button>
+          </div>
+          <button onClick={handle === 'in' ? markIn : markOut} title={handle === 'in' ? 'Set start to the playhead' : 'Set end to the playhead'} style={mark}>{handle === 'in' ? 'Mark in' : 'Mark out'}</button>
+        </div>
+      </div>
+    );
+  };
+  const adminCategoryControls = isAdmin;
 
   return (
     <AppShell>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 820, margin: '0 auto', padding: '28px 32px 80px' }}>
-          {/* Back */}
-          <button onClick={() => router.push('/broll')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 24, border: 'none', background: 'transparent', color: '#75757C', font: '500 13px/1 Satoshi', cursor: 'pointer', padding: 0 }}>
-            <ArrowLeft size={14} /> Back to library
+        {/* Section header, same as the library */}
+        <div style={{ height: 64, flexShrink: 0, borderBottom: '1px solid #ECECE8', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 28, height: '100%' }}>
+            <span style={{ font: '700 17px/1 Satoshi', letterSpacing: '-0.01em' }}>B-roll Library</span>
+            {[['Library', '/broll', true], ['Feedback & gaps', '/broll?tab=feedback', false]].map(([label, href, active]) => (
+              <button key={label as string} onClick={() => router.push(href as string)} style={{ height: '100%', padding: 0, border: 'none', borderBottom: `2px solid ${active ? '#6C47FF' : 'transparent'}`, background: 'transparent', color: active ? '#111113' : '#75757C', font: '500 15px/1 Satoshi', cursor: 'pointer' }}>
+                {label as string}
+              </button>
+            ))}
+          </div>
+          {isAdmin && (
+            <button onClick={() => router.push('/broll')} title="Upload from the library" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer' }}>
+              <Upload size={15} /> Upload B-roll
+            </button>
+          )}
+        </div>
+
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 28px 48px' }}>
+          <button onClick={() => router.push('/broll')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 10px 0 8px', borderRadius: 8, border: '1px solid #E4E4E0', background: '#fff', font: '500 13px/1 Satoshi', cursor: 'pointer', marginBottom: 18, color: '#111113' }}>
+            <ArrowLeft size={14} /> Library
           </button>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 28, alignItems: 'start' }}>
-            {/* Left: 9:16 player + trim card */}
-            <div>
-              {/* 9:16 player */}
-              <div style={{ background: '#111113', borderRadius: 12, overflow: 'hidden', marginBottom: 16, aspectRatio: '9/16', maxWidth: 320 }}>
-                {clip.signedUrl ? (
-                  <video
-                    ref={videoRef}
-                    src={clip.signedUrl}
-                    controls
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                  />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#5E5E65', font: '400 14px/1 Satoshi' }}>No preview</div>
-                )}
-              </div>
-
-              {/* Trim card */}
-              {duration > 0 && (
-                <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '18px 20px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                    <div style={{ font: '600 14px/1 Satoshi' }}>Trim clip</div>
-                    {trimChanged && (
-                      <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', color: '#75757C', font: '400 13px/1 Satoshi', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                        <RotateCcw size={11} /> Reset
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Track */}
-                  <TrimTrack
-                    duration={duration}
-                    inPoint={inPoint}
-                    outPoint={outPoint}
-                    currentTime={currentTime}
-                    onInChange={setIn}
-                    onOutChange={setOut}
-                  />
-
-                  {/* In/Out timecodes + nudge */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-                    {(['in', 'out'] as const).map((handle) => {
-                      const val = handle === 'in' ? inPoint : outPoint;
-                      return (
-                        <div key={handle} style={{ background: '#F6F6F4', borderRadius: 9, padding: '10px 12px' }}>
-                          <div style={{ font: '500 11px/1 Satoshi', color: '#75757C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>{handle === 'in' ? 'In' : 'Out'}</div>
-                          <div style={{ font: '600 15px/1 Satoshi', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>{formatTime(val)}</div>
-                          <div style={{ display: 'flex', gap: 5 }}>
-                            {[-0.1, +0.1].map((d) => (
-                              <button key={d} onClick={() => nudge(handle, d)} style={{ height: 24, flex: 1, border: '1px solid #E4E4E0', borderRadius: 6, background: '#fff', font: '500 11px/1 Satoshi', cursor: 'pointer', color: '#5E5E65' }}>
-                                {d > 0 ? '+0.1s' : '−0.1s'}
-                              </button>
-                            ))}
-                          </div>
-                          <button onClick={handle === 'in' ? markIn : markOut} style={{ marginTop: 6, width: '100%', height: 24, border: '1px solid #DCD3FF', borderRadius: 6, background: '#F3F0FF', font: '500 11px/1 Satoshi', color: '#6C47FF', cursor: 'pointer' }}>
-                            Mark {handle === 'in' ? 'in' : 'out'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Selection info + loop toggle */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-                    <div style={{ font: '400 12px/1 Satoshi', color: '#75757C' }}>
-                      Selection: <strong style={{ color: '#111113' }}>{formatTime(selectionSec)}</strong>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setLooping((l) => {
-                          if (!l) {
-                            const v = videoRef.current;
-                            if (v) { v.currentTime = inPoint; v.play().catch(() => {}); }
-                          }
-                          return !l;
-                        });
-                      }}
-                      style={{ height: 28, padding: '0 12px', borderRadius: 7, border: `1.5px solid ${looping ? '#6C47FF' : '#E4E4E0'}`, background: looping ? '#EFEBFF' : '#fff', color: looping ? '#6C47FF' : '#5E5E65', font: `${looping ? 600 : 400} 12px/1 Satoshi`, cursor: 'pointer' }}
-                    >
-                      {looping ? '⏹ Stop loop' : '↻ Preview selection'}
-                    </button>
-                  </div>
-                </div>
+          <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* 9:16 player */}
+            <div style={{ position: 'relative', height: 'min(calc(100vh - 190px), 760px)', minHeight: 480, aspectRatio: '9 / 16', flex: 'none', borderRadius: 14, overflow: 'hidden', background: '#2B2B2E' }}>
+              {clip.signedUrl ? (
+                <video
+                  ref={videoRef}
+                  src={clip.signedUrl}
+                  playsInline
+                  onClick={togglePlay}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onLoadedMetadata={(e) => {
+                    const d = e.currentTarget.duration;
+                    if (!clip.durationSeconds && Number.isFinite(d)) { setVideoDuration(d); setOutPoint(d); }
+                  }}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'pointer' }}
+                />
+              ) : (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A3A3A9', font: '400 14px/1 Satoshi' }}>No preview</div>
               )}
+              {clip.signedUrl && (
+                <button onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'} style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 64, height: 64, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.94)', color: '#111113', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: playing ? 0 : 1, transition: 'opacity .15s' }}>
+                  {playing ? <Pause size={26} /> : <Play size={26} style={{ marginLeft: 3 }} />}
+                </button>
+              )}
+              <span style={{ position: 'absolute', left: 12, bottom: 12, height: 24, padding: '0 8px', borderRadius: 6, background: 'rgba(17,17,19,.6)', color: '#fff', display: 'flex', alignItems: 'center', font: '500 12px/1 Satoshi', fontVariantNumeric: 'tabular-nums' }}>
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </span>
             </div>
 
-            {/* Right panel */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Title + tags */}
-              <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '16px 18px' }}>
-                <div style={{ font: '700 16px/1.3 Satoshi', marginBottom: 8 }}>{clip.title}</div>
+            {/* Details and trim */}
+            <div style={{ flex: 1, minWidth: 340, maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div>
+                <h1 style={{ margin: 0, font: '700 26px/1.2 Satoshi', letterSpacing: '-0.02em' }}>{clip.title}</h1>
                 {tags.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
                     {tags.map((t) => (
-                      <span key={t} style={{ height: 24, padding: '0 9px', borderRadius: 7, background: '#EFEFEC', color: '#3A3A3F', font: '500 12px/24px Satoshi' }}>{t}</span>
+                      <span key={t} style={{ display: 'inline-flex', alignItems: 'center', height: 24, padding: '0 9px', borderRadius: 7, background: '#EFEFEC', color: '#3A3A3F', font: '500 12px/1 Satoshi' }}>{t}</span>
                     ))}
                   </div>
                 )}
                 {(clip.subject || clip.activity || clip.setting || clip.brand) && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {[['Subject', clip.subject], ['Activity', clip.activity], ['Setting', clip.setting], ['Brand', clip.brand]].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label} style={{ display: 'flex', gap: 8 }}>
                         <span style={{ font: '400 12px/1.4 Satoshi', color: '#A3A3A9', minWidth: 56 }}>{label}</span>
@@ -416,98 +388,103 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                 )}
               </div>
 
-              {/* Categories */}
-              {allCategories.length > 0 && (
-                <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '16px 18px' }}>
-                  <div style={{ font: '600 14px/1 Satoshi', marginBottom: 10 }}>Categories</div>
+              {duration > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <span style={{ font: '700 14px/1 Satoshi' }}>Trim</span>
+                    <span style={{ font: '500 13px/1 Satoshi', color: '#75757C' }}>{selectionSec.toFixed(1)}s selected</span>
+                  </div>
+                  <TrimTrack
+                    duration={duration}
+                    inPoint={inPoint}
+                    outPoint={outPoint}
+                    currentTime={currentTime}
+                    onInChange={setIn}
+                    onOutChange={setOut}
+                    onSeek={(t) => { if (videoRef.current) videoRef.current.currentTime = t; setCurrentTime(t); }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                    {stepper('in')}
+                    {stepper('out')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+                    <button onClick={toggleLoop} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: 10, border: `1px solid ${looping ? '#6C47FF' : '#E4E4E0'}`, background: looping ? '#EFEBFF' : '#fff', color: looping ? '#6C47FF' : '#111113', font: '500 13px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      <Repeat size={14} /> {looping ? 'Stop preview' : 'Preview selection'}
+                    </button>
+                    {trimChanged && (
+                      <button onClick={reset} style={{ height: 36, padding: '0 8px', border: 'none', background: 'transparent', font: '500 13px/1 Satoshi', color: '#5E5E65', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>Reset</button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={downloadFull} disabled={downloading || !clip.signedUrl} style={{ background: '#fff', border: '1px solid #E4E4E0', color: '#111113', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 42, padding: '0 16px', borderRadius: 10, font: '500 14px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap', flex: 1 }}>
+                  <Download size={15} /> Download full clip
+                </button>
+                <button onClick={downloadTrimmed} disabled={trimming || !trimChanged} style={{ background: '#6C47FF', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 42, padding: '0 16px', borderRadius: 10, font: '700 14px/1 Satoshi', whiteSpace: 'nowrap', flex: 1, opacity: trimChanged ? 1 : 0.5, cursor: trimming ? 'wait' : trimChanged ? 'pointer' : 'not-allowed' }}>
+                  <Scissors size={15} /> {trimming ? 'Processing…' : 'Download trimmed clip'}
+                </button>
+              </div>
+
+              <button onClick={() => router.push('/broll?tab=feedback')} style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, font: '500 13px/1 Satoshi', color: '#5E5E65', cursor: 'pointer' }}>
+                <Flag size={13} /> Give feedback on this clip
+              </button>
+
+              {/* Categories: everyone sees them, only administrators change them */}
+              {(clipCategoryIds.length > 0 || adminCategoryControls) && allCategories.length > 0 && (
+                <div style={{ borderTop: '1px solid #ECECE8', paddingTop: 16 }}>
+                  <div style={{ font: '700 13px/1 Satoshi', marginBottom: 10 }}>Categories</div>
                   {clipCategoryIds.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: adminCategoryControls ? 10 : 0 }}>
                       {clipCategoryIds.map((cid) => {
                         const cat = flattenCategories(allCategories).find((c) => c.id === cid);
                         return cat ? (
                           <span key={cid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: 7, background: '#EFEBFF', color: '#6C47FF', font: '500 12px/24px Satoshi' }}>
                             {cat.name}
-                            {isAdmin && <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />}
+                            {adminCategoryControls && <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />}
                           </span>
                         ) : null;
                       })}
                     </div>
                   )}
-                  {isAdmin && (
-                  <div ref={catRef} style={{ position: 'relative' }}>
-                    <button
-                      onClick={() => setCatSearchOpen((o) => !o)}
-                      style={{ height: 30, padding: '0 12px', border: '1px dashed #D6D6D1', borderRadius: 8, background: '#fff', font: '400 12px/1 Satoshi', color: '#75757C', cursor: 'pointer' }}
-                    >
-                      + Add category
-                    </button>
-                    {catSearchOpen && (
-                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 220, maxHeight: 260, overflowY: 'auto', padding: '6px 0' }}>
-                        <div style={{ padding: '0 8px 6px', borderBottom: '1px solid #ECECE8', marginBottom: 2 }}>
-                          <input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)} placeholder="Search categories…" style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }} />
+                  {adminCategoryControls && (
+                    <div ref={catRef} style={{ position: 'relative' }}>
+                      <button onClick={() => setCatSearchOpen((o) => !o)} style={{ height: 30, padding: '0 12px', border: '1px dashed #D6D6D1', borderRadius: 8, background: '#fff', font: '400 12px/1 Satoshi', color: '#75757C', cursor: 'pointer' }}>
+                        + Add category
+                      </button>
+                      {catSearchOpen && (
+                        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100, background: '#fff', border: '1px solid #E4E4E0', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', minWidth: 220, maxHeight: 260, overflowY: 'auto', padding: '6px 0' }}>
+                          <div style={{ padding: '0 8px 6px', borderBottom: '1px solid #ECECE8', marginBottom: 2 }}>
+                            <input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)} placeholder="Search categories…" style={{ width: '100%', height: 28, border: '1px solid #E4E4E0', borderRadius: 6, padding: '0 8px', font: '400 12px/1 Satoshi', outline: 'none', boxSizing: 'border-box' }} />
+                          </div>
+                          {flattenCategories(allCategories)
+                            .filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
+                            .map((c) => {
+                              const checked = clipCategoryIds.includes(c.id);
+                              const isRoot = c.parentId === null;
+                              return (
+                                <button key={c.id} onClick={() => toggleCategory(c.id)}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: `7px 12px 7px ${isRoot ? 12 : 24}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: '#111113', font: `${isRoot ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer' }}
+                                >
+                                  <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
+                                  </span>
+                                  {c.name}
+                                </button>
+                              );
+                            })}
                         </div>
-                        {flattenCategories(allCategories)
-                          .filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
-                          .map((c) => {
-                            const checked = clipCategoryIds.includes(c.id);
-                            const isRoot = c.parentId === null;
-                            return (
-                              <button key={c.id} onClick={() => toggleCategory(c.id)}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: `7px 12px 7px ${isRoot ? 12 : 24}px`, border: 'none', background: checked ? '#F3F0FF' : 'transparent', color: '#111113', font: `${isRoot ? 500 : 400} 13px/1.4 Satoshi`, cursor: 'pointer' }}
-                                onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = '#F6F6F4'; }}
-                                onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
-                              >
-                                <span style={{ width: 14, height: 14, border: `2px solid ${checked ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 3, background: checked ? '#6C47FF' : '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {checked && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}
-                                </span>
-                                {c.name}
-                              </button>
-                            );
-                          })}
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Downloads */}
-              <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ font: '600 14px/1 Satoshi', marginBottom: 2 }}>Download</div>
-                <button
-                  onClick={downloadFull}
-                  disabled={downloading || !clip.signedUrl}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', border: '1px solid #E4E4E0', borderRadius: 9, background: '#fff', font: '500 13px/1 Satoshi', cursor: downloading ? 'wait' : 'pointer', color: '#111113', transition: 'background 0.12s' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F6F6F4'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
-                >
-                  <Download size={14} />
-                  {downloading ? 'Downloading…' : 'Download full clip'}
-                  {clip.durationSeconds && <span style={{ marginLeft: 'auto', color: '#A3A3A9', font: '400 12px/1 Satoshi' }}>{formatTime(clip.durationSeconds)}</span>}
-                </button>
-                {duration > 0 && (
-                  <button
-                    onClick={downloadTrimmed}
-                    disabled={trimming}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', border: `1px solid ${trimChanged ? '#DCD3FF' : '#E4E4E0'}`, borderRadius: 9, background: trimChanged ? '#F3F0FF' : '#fff', font: '500 13px/1 Satoshi', cursor: trimming ? 'wait' : 'pointer', color: trimChanged ? '#6C47FF' : '#75757C', transition: 'background 0.12s' }}
-                  >
-                    <Download size={14} />
-                    {trimming ? 'Processing…' : 'Download trimmed clip'}
-                    <span style={{ marginLeft: 'auto', color: trimChanged ? '#9C8DFF' : '#A3A3A9', font: '400 12px/1 Satoshi' }}>{formatTime(selectionSec)}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Delete (administrators only) */}
               {isAdmin && (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 36, border: '1px solid transparent', borderRadius: 9, background: 'transparent', color: '#C4C4CC', font: '500 13px/1 Satoshi', cursor: 'pointer' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FECACA'; e.currentTarget.style.color = '#DC2626'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = '#C4C4CC'; }}
-              >
-                <Trash2 size={14} /> Delete clip
-              </button>
+                <button onClick={() => setConfirmDelete(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: 0, border: 'none', background: 'transparent', color: '#A3A3A9', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>
+                  <Trash2 size={14} /> Delete clip
+                </button>
               )}
             </div>
           </div>

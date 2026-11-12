@@ -373,6 +373,9 @@ function ClipCard({ clip, onClick }: { clip: BrollClip; onClick: () => void }) {
 export default function BrollLibraryPage() {
   const router = useRouter();
   const [tab, setTab] = useState<'library' | 'feedback'>('library');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'feedback') setTab('feedback');
+  }, []);
   const [clips, setClips] = useState<BrollClip[]>([]);
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [feedback, setFeedback] = useState<BrollFeedbackItem[]>([]);
