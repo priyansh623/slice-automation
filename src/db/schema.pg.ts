@@ -245,6 +245,7 @@ export const brollClips = pgTable('broll_clips', {
   reviewStatus: text('review_status').notNull().default('unreviewed'),     // unreviewed | approved | rejected | on_hold | archived
   reviewedAt: bigint('reviewed_at', { mode: 'number' }),
   reviewedBy: uuid('reviewed_by'),
+  clearanceStatus: text('clearance_status').notNull().default('unresolved'), // unresolved | cleared | not_cleared
   userTags: text('user_tags'),                 // JSON string[]
   category: text('category'),
   notes: text('notes'),
@@ -275,6 +276,20 @@ export const brollClipCategories = pgTable('broll_clip_categories', {
   clipId: integer('clip_id').notNull().references(() => brollClips.id, { onDelete: 'cascade' }),
   categoryId: integer('category_id').notNull().references(() => brollCategories.id, { onDelete: 'cascade' }),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+// One row per brand or brand-like element visible in a clip. broll_clips.brand keeps the hero
+// brand for the brand filter and brand-scoped categories. role and clearance_status are
+// independent. brandName is null when the identity is unknown. See migration 0022 for constraints.
+export const brollClipBrands = pgTable('broll_clip_brands', {
+  id: serial('id').primaryKey(),
+  clipId: integer('clip_id').notNull().references(() => brollClips.id, { onDelete: 'cascade' }),
+  brandName: text('brand_name'),                                            // null when the identity is unknown
+  role: text('role').notNull(),                                             // hero | incidental | client_product | unresolved
+  clearanceStatus: text('clearance_status').notNull().default('unresolved'), // unresolved | cleared | not_cleared
+  note: text('note'),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
 
 export const brollFeedback = pgTable('broll_feedback', {

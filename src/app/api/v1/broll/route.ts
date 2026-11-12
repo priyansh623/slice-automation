@@ -3,8 +3,9 @@ import { db } from '@/db';
 import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { desc, eq, inArray, notInArray } from 'drizzle-orm';
-import { HIDDEN_BROLL_REVIEW_STATUSES } from '@/lib/broll-visibility';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { activeBrollLibraryCondition, effectiveClearance, effectiveClearanceCondition, isBrollClearanceStatus, isUsableFootage } from '@/lib/broll-visibility';
+import { loadClipBrands } from '@/lib/broll-brands';
 
 const ONE_HOUR_MS = 3_600_000;
 const URL_TTL_S = 24 * 3600;
@@ -26,15 +27,32 @@ async function refreshSignedUrl(storagePath: string): Promise<{ url: string; exp
   }
 }
 
-export async function GET(): Promise<NextResponse> {
+// Returns the active library: classified clips that are not on hold, archived or rejected.
+// Visibility is not clearance. Each clip reports:
+//   clearanceStatus     the clip-level decision
+//   effectiveClearance  cleared only if the clip and every brand on it are cleared; not_cleared if the
+//                       clip or any brand is not cleared; otherwise unresolved
+//   clearedForUse       true only when usable (effectiveClearance is cleared)
+//   notCleared          true when effectiveClearance is not_cleared
+// ?clearance=cleared returns usable footage only; ?clearance=not_cleared and ?clearance=unresolved
+// filter on effectiveClearance, so the three filters partition the library.
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const clearanceParam = req.nextUrl.searchParams.get('clearance');
+  if (clearanceParam !== null && !isBrollClearanceStatus(clearanceParam)) {
+    return NextResponse.json({ error: "clearance must be 'unresolved', 'cleared' or 'not_cleared'" }, { status: 400 });
+  }
+
   const rows = await db
     .select()
     .from(brollClips)
-    .where(notInArray(brollClips.reviewStatus, HIDDEN_BROLL_REVIEW_STATUSES))
+    .where(and(
+      activeBrollLibraryCondition(),
+      clearanceParam ? effectiveClearanceCondition(clearanceParam) : undefined,
+    ))
     .orderBy(desc(brollClips.createdAt));
 
   const now = Date.now();
@@ -51,6 +69,7 @@ export async function GET(): Promise<NextResponse> {
     if (!categoryMap.has(r.clipId)) categoryMap.set(r.clipId, []);
     categoryMap.get(r.clipId)!.push(r.categoryId);
   }
+  const brandMap = await loadClipBrands(db, clipIds);
 
   const result = await Promise.all(rows.map(async (clip) => {
     let signedUrl = clip.signedUrl;
@@ -63,7 +82,20 @@ export async function GET(): Promise<NextResponse> {
         await db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id));
       }
     }
-    return { ...clip, signedUrl, categoryIds: categoryMap.get(clip.id) ?? [] };
+    const categoryIds = categoryMap.get(clip.id) ?? [];
+    const brands = brandMap.get(clip.id) ?? [];
+    const brandClearanceStatuses = brands.map((b) => b.clearanceStatus);
+    const effective = effectiveClearance(clip.clearanceStatus, brandClearanceStatuses);
+    return {
+      ...clip,
+      signedUrl,
+      categoryIds,
+      classificationStatus: 'classified' as const,
+      effectiveClearance: effective,
+      clearedForUse: isUsableFootage({ reviewStatus: clip.reviewStatus, categoryCount: categoryIds.length, clearanceStatus: clip.clearanceStatus, brandClearanceStatuses }),
+      notCleared: effective === 'not_cleared',
+      brands,
+    };
   }));
 
   return NextResponse.json(result);

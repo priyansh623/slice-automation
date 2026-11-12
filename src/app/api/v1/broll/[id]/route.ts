@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { brollClips } from '@/db/schema.pg';
+import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { brollClassificationStatus, effectiveClearance, isUsableFootage } from '@/lib/broll-visibility';
+import { loadClipBrands } from '@/lib/broll-brands';
 
 const ONE_HOUR_MS = 3_600_000;
 const URL_TTL_S = 24 * 3600;
@@ -53,7 +55,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ ...clip, signedUrl });
+  const [{ categoryCount }] = await db
+    .select({ categoryCount: sql<number>`count(*)::int` })
+    .from(brollClipCategories)
+    .where(eq(brollClipCategories.clipId, clip.id));
+
+  const brands = (await loadClipBrands(db, [clip.id])).get(clip.id) ?? [];
+  const brandClearanceStatuses = brands.map((b) => b.clearanceStatus);
+  const effective = effectiveClearance(clip.clearanceStatus, brandClearanceStatuses);
+
+  return NextResponse.json({
+    ...clip,
+    signedUrl,
+    classificationStatus: brollClassificationStatus(categoryCount),
+    effectiveClearance: effective,
+    clearedForUse: isUsableFootage({ reviewStatus: clip.reviewStatus, categoryCount, clearanceStatus: clip.clearanceStatus, brandClearanceStatuses }),
+    notCleared: effective === 'not_cleared',
+    brands,
+  });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
