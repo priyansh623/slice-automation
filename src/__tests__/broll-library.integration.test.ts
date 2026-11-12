@@ -525,3 +525,18 @@ describe('existing data and brand rows', () => {
     expect(await titles(await library())).toEqual(['Clip']);
   });
 });
+
+describe('a stalled storage call cannot hold up the library', () => {
+  it('keeps the existing URL when refreshing takes too long, and still answers', async () => {
+    const { currentSignedUrl } = await import('@/lib/broll-signed-url');
+    const hang = vi.spyOn(await import('@supabase/supabase-js'), 'createClient').mockReturnValue({
+      storage: { from: () => ({ createSignedUrl: () => new Promise(() => {}) }) },
+    } as never);
+    const started = Date.now();
+    const url = await currentSignedUrl({ id: 1, storagePath: 'x/y.mp4', signedUrl: 'https://old.example/url', signedUrlExpiresAt: Date.now() + 60_000 }, 50);
+    expect(hang).toHaveBeenCalled(); // the hanging client was really used, not the default stub
+    hang.mockRestore();
+    expect(url).toBe('https://old.example/url');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});

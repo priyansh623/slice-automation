@@ -413,11 +413,17 @@ export default function BrollLibraryPage() {
   const [fbAction, setFbAction] = useState('');
   const [fbSubmitting, setFbSubmitting] = useState(false);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
   const fetchClips = useCallback(() => {
+    setLoadError(null);
     fetch('/api/v1/broll')
-      .then((r) => r.json())
-      .then((data: BrollClip[]) => { setClips(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(async (r) => {
+        const data: unknown = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(data)) throw new Error((data as { error?: string } | null)?.error ?? `Could not load the library (${r.status})`);
+        setClips(data as BrollClip[]);
+      })
+      .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : 'Could not load the library'))
+      .finally(() => setLoading(false));
   }, []);
 
   const fetchCategories = useCallback(() => {
@@ -748,8 +754,13 @@ export default function BrollLibraryPage() {
               {loading ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(196px, 1fr))', gap: '24px 16px' }}>
                   {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} style={{ background: '#F6F6F4', borderRadius: 14, aspectRatio: '9/16', animation: 'pulse 1.4s ease-in-out infinite' }} />
+                    <div key={i} style={{ background: '#E9E9E5', borderRadius: 14, aspectRatio: '9/16', animation: 'pulse 1.4s ease-in-out infinite' }} />
                   ))}
+                </div>
+              ) : loadError ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: '#75757C', font: '400 14px/1.5 Satoshi' }}>
+                  <div style={{ marginBottom: 12 }}>{loadError}</div>
+                  <button onClick={() => { setLoading(true); fetchClips(); }} style={{ height: 36, padding: '0 16px', borderRadius: 9, border: '1px solid #E4E4E0', background: '#fff', font: '500 13px/1 Satoshi', cursor: 'pointer', color: '#111113' }}>Try again</button>
                 </div>
               ) : clips.length === 0 ? (
                 <div
