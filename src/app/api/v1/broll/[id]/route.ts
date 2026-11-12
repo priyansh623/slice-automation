@@ -3,16 +3,11 @@ import { db } from '@/db';
 import { brollClipCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { eq, sql } from 'drizzle-orm';
-import { isInActiveBrollLibrary } from '@/lib/broll-visibility';
 import { loadClipBrands } from '@/lib/broll-brands';
-import { isAdminUser } from '@/lib/api-auth';
-import { canManageClip, clipForViewer } from '@/lib/broll-access';
+import { clipForViewer } from '@/lib/broll-access';
 import { currentSignedUrl } from '@/lib/broll-signed-url';
 
-// Detail of one clip.
-//   everyone        any clip in the shared library (classified, not on hold, archived or rejected)
-//   administrators  also unclassified, held and archived clips, so they can manage them
-// A clip outside the library answers 404 to non-admins, whoever uploaded it.
+// Detail of one clip. Every signed-in user can open any clip, including unclassified, held and archived ones.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -30,17 +25,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .from(brollClipCategories)
     .where(eq(brollClipCategories.clipId, clip.id));
 
-  const isAdmin = await isAdminUser(user.id);
-  if (!isAdmin && !isInActiveBrollLibrary(clip.reviewStatus, categoryCount)) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
-
   const signedUrl = await currentSignedUrl(clip);
   const brands = (await loadClipBrands(db, [clip.id])).get(clip.id) ?? [];
-  return NextResponse.json(clipForViewer(clip, { categoryCount, brands, signedUrl }, isAdmin));
+  return NextResponse.json(clipForViewer(clip, { categoryCount, brands, signedUrl }));
 }
 
-// Edits a clip's metadata. Administrators can edit any clip; everyone else only clips they uploaded.
+// Edits a clip's metadata. Any signed-in user can edit any clip.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -66,8 +56,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const isAdmin = await isAdminUser(user.id);
-  if (!canManageClip(isAdmin)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const [existing] = await db.select({ id: brollClips.id }).from(brollClips).where(eq(brollClips.id, clipId)).limit(1);
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -91,11 +79,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from(brollClipCategories)
     .where(eq(brollClipCategories.clipId, clipId));
   const brands = (await loadClipBrands(db, [clipId])).get(clipId) ?? [];
-  return NextResponse.json(clipForViewer(updated, { categoryCount, brands, signedUrl: updated.signedUrl }, isAdmin));
+  return NextResponse.json(clipForViewer(updated, { categoryCount, brands, signedUrl: updated.signedUrl }));
 }
 
-// Deletes a clip permanently. Administrators can delete any clip; everyone else only clips they uploaded.
-// Administrators can archive a clip instead (PATCH /api/v1/broll/[id]/status), which keeps it.
+// Deletes a clip permanently. Any signed-in user can delete any clip.
+// A clip can be archived instead (PATCH /api/v1/broll/[id]/status), which keeps it.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -105,8 +93,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const clipId = Number(id);
   if (isNaN(clipId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const isAdmin = await isAdminUser(user.id);
-  if (!canManageClip(isAdmin)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const [existing] = await db.select({ id: brollClips.id }).from(brollClips).where(eq(brollClips.id, clipId)).limit(1);
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

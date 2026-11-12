@@ -101,11 +101,11 @@ describe('PUT /api/v1/video-projects/[id]/breakdown', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 when user is not the project owner', async () => {
+  it('does not refuse a user who did not create the project (projects are shared)', async () => {
     await setupAuthMock(USER_ID);
 
     const { db } = await import('@/db');
-    // requireProjectOwner → select from videoProjects → returns a different userId
+    // requireProject → select from videoProjects → returns a different userId
     (db as unknown as Record<string, unknown>).select = vi.fn(() =>
       makeChain([{ userId: 'some-other-user', id: PROJECT_ID, name: 'test' }]),
     );
@@ -116,7 +116,8 @@ describe('PUT /api/v1/video-projects/[id]/breakdown', () => {
       { params: Promise.resolve({ id: String(PROJECT_ID) }) },
     );
 
-    expect(res.status).toBe(403);
+    expect(res.status).not.toBe(403);
+    expect(res.status).not.toBe(404);
   });
 
   it('returns 409 when a removed screen has prompt version history', async () => {

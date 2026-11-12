@@ -3,9 +3,6 @@ import { db } from '@/db';
 import { brollClipCategories, brollCategories, brollClips } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq, inArray } from 'drizzle-orm';
-import { isAdminUser } from '@/lib/api-auth';
-import { canManageClip } from '@/lib/broll-access';
-import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
 
 function normalizeBrand(b: string | null | undefined): string | null {
   if (!b) return null;
@@ -24,13 +21,6 @@ export async function GET(
   const { id } = await params;
   const clipId = parseInt(id, 10);
   if (isNaN(clipId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-
-  // Anyone can read the categories of a clip in the shared library; administrators can read any clip's.
-  if (!(await isAdminUser(user.id))) {
-    const visible = await db.select({ id: brollClips.id }).from(brollClips)
-      .where(and(eq(brollClips.id, clipId), activeBrollLibraryCondition())).limit(1);
-    if (visible.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
 
   const rows = await db
     .select({ categoryId: brollClipCategories.categoryId })
@@ -60,8 +50,7 @@ export async function POST(
     return NextResponse.json({ error: 'categoryIds array required' }, { status: 400 });
   }
 
-  // Fetch the clip to get its brand. Only administrators classify clips.
-  if (!canManageClip(await isAdminUser(user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Fetch the clip to get its brand.
   const clipRows = await db.select({ brand: brollClips.brand })
     .from(brollClips)
     .where(eq(brollClips.id, clipId))
@@ -119,8 +108,6 @@ export async function DELETE(
   let body: { categoryIds?: number[] };
   try { body = await req.json(); } catch { body = {}; }
 
-  // Only administrators change a clip's categories.
-  if (!canManageClip(await isAdminUser(user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const owner = await db.select({ id: brollClips.id }).from(brollClips).where(eq(brollClips.id, clipId)).limit(1);
   if (owner.length === 0) return NextResponse.json({ error: 'Clip not found' }, { status: 404 });
 

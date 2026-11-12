@@ -5,22 +5,18 @@ import { createClient } from '@/lib/supabase/server';
 import { desc, inArray } from 'drizzle-orm';
 import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
 import { loadClipBrands } from '@/lib/broll-brands';
-import { isAdminUser } from '@/lib/api-auth';
 import { clipForViewer } from '@/lib/broll-access';
 import { BROLL_URL_TTL_S, currentSignedUrl } from '@/lib/broll-signed-url';
 
 const URL_TTL_S = BROLL_URL_TTL_S;
 
 // The shared library: classified clips that are not on hold, archived or rejected. Every signed-in user gets
-// the same clips; the viewer's role only decides how much of each clip is returned (non-admins do not receive
-// internal notes, the uploader id, storage paths or unnamed brand observations).
-// Admins find unclassified uploads and held or archived clips through the management endpoints instead.
+// the same clips with the same fields. Unclassified uploads and held or archived clips are found through the
+// management endpoints instead.
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const isAdmin = await isAdminUser(user.id);
 
   const rows = await db
     .select()
@@ -44,7 +40,7 @@ export async function GET(): Promise<NextResponse> {
   const result = await Promise.all(rows.map(async (clip) => {
     const signedUrl = await currentSignedUrl(clip);
     const categoryIds = categoryMap.get(clip.id) ?? [];
-    return clipForViewer(clip, { categoryIds, categoryCount: categoryIds.length, brands: brandMap.get(clip.id) ?? [], signedUrl }, isAdmin);
+    return clipForViewer(clip, { categoryIds, categoryCount: categoryIds.length, brands: brandMap.get(clip.id) ?? [], signedUrl });
   }));
 
   return NextResponse.json(result);
@@ -54,8 +50,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Only administrators add footage to the library.
-  if (!(await isAdminUser(user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: {
     title: string;
@@ -106,7 +100,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }).returning();
 
   return NextResponse.json(
-    clipForViewer(inserted, { categoryCount: 0, brands: [], signedUrl: inserted.signedUrl }, true),
+    clipForViewer(inserted, { categoryCount: 0, brands: [], signedUrl: inserted.signedUrl }),
     { status: 201 },
   );
 }

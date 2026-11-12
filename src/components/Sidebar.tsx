@@ -1,28 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, Settings2, MessageSquare, Users, LayoutDashboard, LibraryBig } from 'lucide-react';
+import { FolderOpen, Settings2, MessageSquare, LayoutDashboard, LibraryBig } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
 
-  // Admin navigation is shown only to administrators. The admin APIs enforce access themselves.
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/v1/admin/me')
-      .then((r) => (r.ok ? r.json() : { isAdmin: false }))
-      .then((d: { isAdmin?: boolean }) => { if (!cancelled) setIsAdmin(d.isAdmin === true); })
-      .catch(() => { if (!cancelled) setIsAdmin(false); });
-    return () => { cancelled = true; };
-  }, []);
-
   const projectsActive = pathname.startsWith('/video-projects');
   const brollActive = pathname.startsWith('/broll');
   const settingsActive = pathname.startsWith('/admin/settings');
-  const usersActive = pathname.startsWith('/admin/users');
   const dashboardActive = pathname.startsWith('/admin/dashboard');
 
   const navBg = (active: boolean) => active ? '#F0F0EC' : 'transparent';
@@ -98,7 +85,6 @@ export default function Sidebar() {
         </button>
       </Link>
 
-      {isAdmin && (
       <>
       {/* Settings */}
       <Link href="/admin/settings" style={{ textDecoration: 'none' }}>
@@ -142,29 +128,7 @@ export default function Sidebar() {
         </button>
       </Link>
 
-      {/* Admin users */}
-      <Link href="/admin/users" style={{ textDecoration: 'none' }}>
-        <button style={{
-          width: 60,
-          padding: '9px 0 8px',
-          border: 'none',
-          borderRadius: 10,
-          background: navBg(usersActive),
-          color: navFg(usersActive),
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 6,
-          cursor: 'pointer',
-          font: '500 11px/1 Satoshi',
-        }}>
-          <Users size={19} />
-          Admins
-        </button>
-      </Link>
-
       </>
-      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
@@ -212,7 +176,6 @@ export default function Sidebar() {
         }}>
           AR
         </div>
-        {isAdmin && <div style={{ font: '500 10px/1 Satoshi', color: '#9A9AA0' }}>Admin</div>}
       </div>
     </nav>
   );

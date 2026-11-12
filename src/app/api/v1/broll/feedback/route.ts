@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { brollFeedback } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { desc, eq } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
 
 const VALID_NEXT_ACTIONS = ['Film it', 'Generate it', 'Fix the details', 'Replace the clip', 'Remove the clip'];
 
@@ -14,7 +14,6 @@ export async function GET(): Promise<NextResponse> {
   const rows = await db
     .select()
     .from(brollFeedback)
-    .where(eq(brollFeedback.userId, user.id))
     .orderBy(desc(brollFeedback.createdAt));
 
   return NextResponse.json(rows);

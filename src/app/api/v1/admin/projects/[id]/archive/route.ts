@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
 import { eq } from 'drizzle-orm';
@@ -10,8 +10,6 @@ export async function POST(
 ): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { id } = await params;
   const projectId = parseInt(id, 10);
@@ -32,8 +30,6 @@ export async function DELETE(
 ): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { id } = await params;
   const projectId = parseInt(id, 10);

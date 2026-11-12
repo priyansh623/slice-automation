@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, videoGenerations } from '@/db/schema.pg';
 import { and, eq, inArray } from 'drizzle-orm';
-import { requireUser, requireProjectOwner } from '@/lib/api-auth';
+import { requireUser, requireProject } from '@/lib/api-auth';
 
 class BreakdownBlockedError extends Error {
   screenNumbers: number[];
@@ -25,8 +25,8 @@ export async function PUT(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const ownerResult = await requireProjectOwner(projectId, user.id);
-  if (ownerResult instanceof NextResponse) return ownerResult;
+  const projectResult = await requireProject(projectId);
+  if (projectResult instanceof NextResponse) return projectResult;
 
   const body = (await req.json()) as {
     screens: Array<{

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { brollCategories, brollClips } from '@/db/schema.pg';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { asc, eq, isNull, isNotNull, or, and } from 'drizzle-orm';
 
 export type CategoryRow = {
@@ -79,8 +79,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   let body: {
     name: string;

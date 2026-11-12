@@ -147,7 +147,8 @@ export const workerLock = pgTable('worker_lock', {
   heartbeatAt: bigint('heartbeat_at', { mode: 'number' }).notNull(),
 });
 
-// ── Admin users ───────────────────────────────────────────────────────────────
+// ── Admin users (legacy) ──────────────────────────────────────────────────────
+// No code reads or writes this table any more: the application has no roles. The table and its rows are kept.
 
 export const adminUsers = pgTable('admin_users', {
   id: serial('id').primaryKey(),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { brollCategories } from '@/db/schema.pg';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { eq, isNull } from 'drizzle-orm';
 import type { CategoryRow } from '../route';
 
@@ -33,8 +33,6 @@ export async function PATCH(
 ): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { catId } = await params;
   const id = parseInt(catId, 10);
@@ -118,8 +116,6 @@ export async function DELETE(
 ): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { catId } = await params;
   const id = parseInt(catId, 10);

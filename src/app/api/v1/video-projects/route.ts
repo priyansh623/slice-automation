@@ -13,7 +13,6 @@ export async function GET(): Promise<NextResponse> {
   const rows = await db
     .select()
     .from(videoProjects)
-    .where(eq(videoProjects.userId, user.id))
     .orderBy(desc(videoProjects.createdAt));
 
   const projectIds = rows.map((p) => p.id);

@@ -115,11 +115,6 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
   const [trimming, setTrimming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Only administrators edit, classify or delete clips; everyone else previews, trims and downloads.
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    fetch('/api/v1/admin/me').then((r) => (r.ok ? r.json() : { isAdmin: false })).then((d) => setIsAdmin(Boolean(d.isAdmin))).catch(() => setIsAdmin(false));
-  }, []);
 
   // Category state
   const [allCategories, setAllCategories] = useState<CategoryNode[]>([]);
@@ -308,7 +303,6 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
       </div>
     );
   };
-  const adminCategoryControls = isAdmin;
 
   return (
     <AppShell>
@@ -323,11 +317,9 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
               </button>
             ))}
           </div>
-          {isAdmin && (
-            <button onClick={() => router.push('/broll')} title="Upload from the library" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer' }}>
-              <Upload size={15} /> Upload B-roll
-            </button>
-          )}
+          <button onClick={() => router.push('/broll')} title="Upload from the library" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer' }}>
+            <Upload size={15} /> Upload B-roll
+          </button>
         </div>
 
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 28px 48px' }}>
@@ -431,24 +423,23 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                 <Flag size={13} /> Give feedback on this clip
               </button>
 
-              {/* Categories: everyone sees them, only administrators change them */}
-              {(clipCategoryIds.length > 0 || adminCategoryControls) && allCategories.length > 0 && (
+              {/* Categories: everyone sees and edits them */}
+              {allCategories.length > 0 && (
                 <div style={{ borderTop: '1px solid #ECECE8', paddingTop: 16 }}>
                   <div style={{ font: '700 13px/1 Satoshi', marginBottom: 10 }}>Categories</div>
                   {clipCategoryIds.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: adminCategoryControls ? 10 : 0 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
                       {clipCategoryIds.map((cid) => {
                         const cat = flattenCategories(allCategories).find((c) => c.id === cid);
                         return cat ? (
                           <span key={cid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px', borderRadius: 7, background: '#EFEBFF', color: '#6C47FF', font: '500 12px/24px Satoshi' }}>
                             {cat.name}
-                            {adminCategoryControls && <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />}
+                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => toggleCategory(cid)} />
                           </span>
                         ) : null;
                       })}
                     </div>
                   )}
-                  {adminCategoryControls && (
                     <div ref={catRef} style={{ position: 'relative' }}>
                       <button onClick={() => setCatSearchOpen((o) => !o)} style={{ height: 30, padding: '0 12px', border: '1px dashed #D6D6D1', borderRadius: 8, background: '#fff', font: '400 12px/1 Satoshi', color: '#75757C', cursor: 'pointer' }}>
                         + Add category
@@ -477,15 +468,12 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
                         </div>
                       )}
                     </div>
-                  )}
                 </div>
               )}
 
-              {isAdmin && (
-                <button onClick={() => setConfirmDelete(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: 0, border: 'none', background: 'transparent', color: '#A3A3A9', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>
-                  <Trash2 size={14} /> Delete clip
-                </button>
-              )}
+              <button onClick={() => setConfirmDelete(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: 0, border: 'none', background: 'transparent', color: '#A3A3A9', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>
+                <Trash2 size={14} /> Delete clip
+              </button>
             </div>
           </div>
         </div>

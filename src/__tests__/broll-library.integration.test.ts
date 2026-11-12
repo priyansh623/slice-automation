@@ -6,15 +6,15 @@
  * What these prove:
  *   - one library: every signed-in user sees the same classified, active clips
  *   - no clearance or approval status filters clips or blocks access (the legacy column is ignored)
- *   - non-admins receive no internal data (notes, uploader, storage paths, unnamed brand observations)
- *   - unclassified, held and archived clips are admin-only
- *   - only admins upload, edit, classify, archive, restore and delete; owning an upload gives no rights
- *   - preview, trim and categories work for every clip in the shared library
+ *   - there are no roles: every signed-in user gets the same data and can use every action
+ *   - every user can upload, edit, classify, archive, restore, delete, preview, trim and download any clip
+ *   - unclassified, held and archived clips are reachable by every user through the management views
+ *   - signed-out callers are refused everywhere
  */
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { brollClipBrands } from '@/db/schema.pg';
-import { addAdmin, addClip, ADMIN_USER_ID, categorize, createBrollTestDb, seedCategories, TEST_USER_ID, type BrollTestDb } from './helpers/broll-test-db';
+import { addClip, ADMIN_USER_ID as THIRD_USER_ID, categorize, createBrollTestDb, seedCategories, TEST_USER_ID, type BrollTestDb } from './helpers/broll-test-db';
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown, userId: null as string | null }));
 
@@ -45,7 +45,6 @@ import { PATCH as setStatus } from '@/app/api/v1/broll/[id]/status/route';
 import { POST as trimClip } from '@/app/api/v1/broll/[id]/trim/route';
 import { GET as getCategories, POST as addCategories, DELETE as removeCategories } from '@/app/api/v1/broll/[id]/categories/route';
 import { POST as uploadFile } from '@/app/api/v1/broll/upload/route';
-import { GET as adminMe } from '@/app/api/v1/admin/me/route';
 
 const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000b2';
 
@@ -59,14 +58,12 @@ beforeAll(async () => {
 afterAll(async () => { await t.close(); });
 
 beforeEach(async () => {
-  delete process.env.ADMIN_USER_IDS;
   await t.reset();
   await seedCategories(t, [
     { id: 1, name: 'Food', slug: 'food', parentId: null },
     { id: 2, name: 'Street food', slug: 'street-food', parentId: 1 },
     { id: 3, name: 'Travel', slug: 'travel', parentId: null },
   ]);
-  await addAdmin(t, ADMIN_USER_ID);
   holder.userId = TEST_USER_ID;
 });
 
@@ -134,20 +131,20 @@ describe('one shared library', () => {
     expect((await library()).status).toBe(401);
   });
 
-  it('gives an administrator, the uploader and another user exactly the same clips and categories', async () => {
+  it('gives the uploader and every other user exactly the same clips and categories', async () => {
     const a = await classifiedClip('One');
     await categorize(t, a, 3);
     await classifiedClip('Two', { userId: OTHER_USER_ID });
     await addClip(t, { title: 'Not in library' });
     const seen: Record<string, { title: string; categoryIds: number[] }[]> = {};
-    for (const [who, id] of [['admin', ADMIN_USER_ID], ['uploader', TEST_USER_ID], ['other', OTHER_USER_ID]] as const) {
+    for (const [who, id] of [['third', THIRD_USER_ID], ['uploader', TEST_USER_ID], ['other', OTHER_USER_ID]] as const) {
       as(id);
       const list = (await (await library()).json()) as { title: string; categoryIds: number[] }[];
       seen[who] = list.map((c) => ({ title: c.title, categoryIds: [...c.categoryIds].sort() })).sort((x, y) => x.title.localeCompare(y.title));
     }
-    expect(seen.admin).toEqual([{ title: 'One', categoryIds: [2, 3] }, { title: 'Two', categoryIds: [2] }]);
-    expect(seen.uploader).toEqual(seen.admin);
-    expect(seen.other).toEqual(seen.admin);
+    expect(seen.third).toEqual([{ title: 'One', categoryIds: [2, 3] }, { title: 'Two', categoryIds: [2] }]);
+    expect(seen.uploader).toEqual(seen.third);
+    expect(seen.other).toEqual(seen.third);
   });
 });
 
@@ -155,7 +152,7 @@ describe('no clearance concept', () => {
   it('is not filtered or flagged by the legacy clearance column, whatever it holds', async () => {
     for (const value of ['unresolved', 'cleared', 'not_cleared']) await classifiedClip(`Legacy ${value}`);
     await t.pg.query(`update broll_clips set clearance_status = case title when 'Legacy cleared' then 'cleared' when 'Legacy not_cleared' then 'not_cleared' else 'unresolved' end`);
-    for (const who of [TEST_USER_ID, OTHER_USER_ID, ADMIN_USER_ID]) {
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
       as(who);
       expect(await titles(await library())).toEqual(['Legacy cleared', 'Legacy not_cleared', 'Legacy unresolved']);
     }
@@ -165,11 +162,11 @@ describe('no clearance concept', () => {
     const id = await classifiedClip('Clip');
     await addBrand(id, 'Subway', 'hero');
     await addClip(t, { title: 'Unclassified' });
-    for (const who of [OTHER_USER_ID, ADMIN_USER_ID]) {
+    for (const who of [OTHER_USER_ID, THIRD_USER_ID]) {
       as(who);
       const [clip] = (await (await library()).json()) as Record<string, unknown>[];
       const one = await json(await detail(id));
-      const text = JSON.stringify([clip, one, ...(who === ADMIN_USER_ID ? await (await unclassified()).json() as unknown[] : [])]);
+      const text = JSON.stringify([clip, one, ...(await (await unclassified()).json() as unknown[])]);
       for (const field of ['clearance', 'cleared', 'clearedForUse', 'effectiveClearance', 'notCleared']) {
         expect(text.toLowerCase(), `${field} for ${who}`).not.toContain(field.toLowerCase());
       }
@@ -198,53 +195,44 @@ describe('brand associations are shared metadata', () => {
 
   it('gives everyone the named brands and their roles', async () => {
     await clipWithBrands();
-    for (const who of [TEST_USER_ID, OTHER_USER_ID, ADMIN_USER_ID]) {
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
       as(who);
       const [clip] = (await (await library()).json()) as { brands: { brandName: string; role: string }[] }[];
       expect(clip.brands.filter((b) => b.brandName).map((b) => [b.brandName, b.role])).toEqual([['Subway', 'hero'], ['Hyundai', 'incidental']]);
     }
   });
 
-  it('gives admins the unnamed observations and notes, and keeps them from everyone else', async () => {
+  it('gives every user the unnamed observations and notes as well', async () => {
     const id = await clipWithBrands();
-    as(ADMIN_USER_ID);
-    const adminView = (await json(await detail(id))) as { brands: { brandName: string | null; note: string | null }[] };
-    expect(adminView.brands).toHaveLength(4);
-    expect(adminView.brands.map((b) => b.note)).toContain('Cup branding, partly legible');
-
-    as(OTHER_USER_ID);
-    const userView = (await json(await detail(id))) as { brands: Record<string, unknown>[] };
-    expect(userView.brands).toEqual([{ brandName: 'Subway', role: 'hero' }, { brandName: 'Hyundai', role: 'incidental' }]);
-    expect(JSON.stringify(userView)).not.toContain('Cup branding');
-    expect(JSON.stringify(userView)).not.toContain('Payments app');
-    expect(JSON.stringify(userView)).not.toContain('Internal observation note');
-  });
-});
-
-describe('private data stays private', () => {
-  it('does not send internal fields to non-admins on the library, detail and create responses', async () => {
-    const id = await classifiedClip('Private fields', { notes: '{"review":"internal"}' });
-    await t.pg.query(`update broll_clips set reviewed_by = $1, reviewed_at = 5, processing_error = 'boom' where id = $2`, [ADMIN_USER_ID, id]);
-    as(OTHER_USER_ID);
-    const fromList = ((await (await library()).json()) as Record<string, unknown>[])[0];
-    const fromDetail = await json(await detail(id));
-    for (const clip of [fromList, fromDetail]) {
-      for (const field of ['notes', 'userId', 'reviewedBy', 'reviewedAt', 'storagePath', 'thumbnailStoragePath', 'processingError', 'claimedAt']) {
-        expect(clip, field).not.toHaveProperty(field);
-      }
-      expect(clip).toMatchObject({ id, title: 'Private fields' });
-      expect(clip.signedUrl).toBeTruthy(); // preview and download still work
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      const view = (await json(await detail(id))) as { brands: { brandName: string | null; note: string | null }[] };
+      expect(view.brands).toHaveLength(4);
+      expect(view.brands.map((b) => b.note)).toContain('Cup branding, partly legible');
     }
   });
+});
 
-  it('gives administrators the full record', async () => {
-    const id = await classifiedClip('Admin fields', { notes: '{"review":"internal"}' });
-    as(ADMIN_USER_ID);
-    expect(await json(await detail(id))).toMatchObject({ notes: '{"review":"internal"}', userId: TEST_USER_ID, storagePath: expect.any(String) });
+describe('every user gets the full record', () => {
+  it('sends the same complete clip to the uploader and to everyone else', async () => {
+    const id = await classifiedClip('Full record', { notes: '{"review":"internal"}' });
+    const seen: Record<string, unknown>[] = [];
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      const fromList = ((await (await library()).json()) as Record<string, unknown>[])[0];
+      const fromDetail = await json(await detail(id));
+      for (const clip of [fromList, fromDetail]) {
+        expect(clip).toMatchObject({ id, title: 'Full record', notes: '{"review":"internal"}', userId: TEST_USER_ID, storagePath: expect.any(String) });
+        expect(clip.signedUrl).toBeTruthy();
+      }
+      seen.push(fromDetail);
+    }
+    expect(seen[1]).toEqual(seen[0]);
+    expect(seen[2]).toEqual(seen[0]);
   });
 });
 
-describe('clips outside the library are admin-only', () => {
+describe('clips outside the library are open to every signed-in user', () => {
   async function outsideClips() {
     return {
       unclassified: await addClip(t, { title: 'Unclassified' }),
@@ -253,47 +241,35 @@ describe('clips outside the library are admin-only', () => {
     };
   }
 
-  it('answers 404 to a non-admin, even for their own upload', async () => {
+  it('lets every user open all of them, whoever uploaded them', async () => {
     const clips = await outsideClips();
-    for (const who of [TEST_USER_ID, OTHER_USER_ID]) {
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
       as(who);
       for (const id of Object.values(clips)) {
-        expect((await detail(id)).status).toBe(404);
-        expect((await categoriesOf(id)).status).toBe(404);
-        expect((await trim(id)).status).toBe(404);
+        expect((await detail(id)).status).toBe(200);
+        expect((await categoriesOf(id)).status).toBe(200);
+        expect((await trim(id)).status).toBe(500); // passed the access check; storage is stubbed out
       }
     }
   });
 
-  it('lets an administrator open all of them', async () => {
-    const clips = await outsideClips();
-    as(ADMIN_USER_ID);
-    for (const id of Object.values(clips)) {
-      expect((await detail(id)).status).toBe(200);
-      expect((await categoriesOf(id)).status).toBe(200);
-      expect((await trim(id)).status).toBe(500); // passed the access check; storage is stubbed out
-    }
-  });
-
-  it('lists unclassified uploads for admins only, excluding archived ones by default', async () => {
+  it('lists unclassified uploads for every user, excluding archived ones by default, and 401 when signed out', async () => {
     await addClip(t, { title: 'Unclassified' });
     await addClip(t, { title: 'Unclassified on hold', reviewStatus: 'on_hold' });
     await addClip(t, { title: 'Unclassified archived', reviewStatus: 'archived' });
     await classifiedClip('Classified');
-    as(OTHER_USER_ID);
-    expect((await unclassified()).status).toBe(403);
-    as(TEST_USER_ID);
-    expect((await unclassified()).status).toBe(403);
+    for (const who of [OTHER_USER_ID, TEST_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      expect(await titles(await unclassified())).toEqual(['Unclassified', 'Unclassified on hold']);
+      expect(await titles(await unclassified('?includeArchived=true'))).toEqual(['Unclassified', 'Unclassified archived', 'Unclassified on hold']);
+    }
     as(null);
     expect((await unclassified()).status).toBe(401);
-    as(ADMIN_USER_ID);
-    expect(await titles(await unclassified())).toEqual(['Unclassified', 'Unclassified on hold']);
-    expect(await titles(await unclassified('?includeArchived=true'))).toEqual(['Unclassified', 'Unclassified archived', 'Unclassified on hold']);
   });
 
   it('shows enough to identify each unclassified upload, without storage details or notes', async () => {
     await addClip(t, { title: 'Unclassified', notes: 'internal' });
-    as(ADMIN_USER_ID);
+    as(OTHER_USER_ID);
     const [clip] = (await (await unclassified()).json()) as Record<string, unknown>[];
     expect(clip).toMatchObject({ title: 'Unclassified', classificationStatus: 'unclassified', reviewStatus: 'unreviewed' });
     for (const field of ['storagePath', 'signedUrl', 'notes']) expect(clip).not.toHaveProperty(field);
@@ -301,7 +277,7 @@ describe('clips outside the library are admin-only', () => {
 
   it('moves a clip from the management view into the library as soon as it is classified', async () => {
     const id = await addClip(t, { title: 'Waiting' });
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     expect(await titles(await unclassified())).toEqual(['Waiting']);
     expect(await titles(await library())).toEqual([]);
     expect((await assign(id, [1])).status).toBe(204);
@@ -309,20 +285,12 @@ describe('clips outside the library are admin-only', () => {
     as(OTHER_USER_ID);
     expect(await titles(await library())).toEqual(['Waiting']);
   });
-
-  it('honours the ADMIN_USER_IDS bootstrap list as well as the admin table', async () => {
-    const bootstrapAdmin = '00000000-0000-4000-8000-0000000000c1';
-    as(bootstrapAdmin);
-    expect((await unclassified()).status).toBe(403);
-    process.env.ADMIN_USER_IDS = bootstrapAdmin;
-    expect((await unclassified()).status).toBe(200);
-  });
 });
 
 describe('preview, trim and download for the whole library', () => {
   it('lets any signed-in user open and trim any clip in the library, whoever uploaded it', async () => {
     const id = await classifiedClip('Shared', { userId: OTHER_USER_ID });
-    for (const who of [TEST_USER_ID, OTHER_USER_ID, ADMIN_USER_ID]) {
+    for (const who of [TEST_USER_ID, OTHER_USER_ID, THIRD_USER_ID]) {
       as(who);
       expect((await detail(id)).status).toBe(200);
       expect((await trim(id)).status).toBe(500); // passed the access check; storage is stubbed out
@@ -336,41 +304,41 @@ describe('preview, trim and download for the whole library', () => {
   });
 });
 
-describe('who can change a clip', () => {
-  it('stops a non-admin from editing or deleting their own upload', async () => {
-    const id = await classifiedClip('Mine', { userId: OTHER_USER_ID });
-    as(OTHER_USER_ID);
-    expect((await patch(id, { title: 'Renamed' })).status).toBe(403);
-    expect((await remove(id)).status).toBe(403);
-    expect(await titles(await library())).toEqual(['Mine']);
-  });
-
-  it("stops a non-admin from editing or deleting another user's clip", async () => {
+describe('every signed-in user can change any clip', () => {
+  it('lets a user who did not upload a clip edit it, and lets the uploader edit it too', async () => {
     const id = await classifiedClip('Theirs', { userId: OTHER_USER_ID });
     as(TEST_USER_ID);
-    expect((await patch(id, { title: 'Hijacked' })).status).toBe(403);
-    expect((await remove(id)).status).toBe(403);
+    expect(await json(await patch(id, { title: 'Edited by someone else' }))).toMatchObject({ title: 'Edited by someone else' });
     as(OTHER_USER_ID);
-    expect(await titles(await library())).toEqual(['Theirs']);
+    expect(await json(await patch(id, { title: 'Edited by uploader' }))).toMatchObject({ title: 'Edited by uploader' });
   });
 
-  it('stops a non-admin from uploading, and signed-out callers get 401', async () => {
+  it('lets any user delete any clip', async () => {
+    const own = await classifiedClip('Mine', { userId: OTHER_USER_ID });
+    const theirs = await classifiedClip('Theirs', { userId: OTHER_USER_ID });
     as(OTHER_USER_ID);
-    expect((await createClip(new NextRequest(url(''), body('POST', { title: 'Mine', storagePath: 'x/y.mp4' })))).status).toBe(403);
+    expect((await remove(own)).status).toBe(200);
+    as(TEST_USER_ID);
+    expect((await remove(theirs)).status).toBe(200);
+    expect(await titles(await library())).toEqual([]);
+  });
+
+  it('lets any user add a clip, and refuses signed-out callers', async () => {
+    const create = () => createClip(new NextRequest(url(''), body('POST', { title: 'New', storagePath: 'x/y.mp4' })));
     as(null);
-    expect((await createClip(new NextRequest(url(''), body('POST', { title: 'Mine', storagePath: 'x/y.mp4' })))).status).toBe(401);
-    as(ADMIN_USER_ID);
-    expect(await json(await createClip(new NextRequest(url(''), body('POST', { title: 'Admin upload', storagePath: 'x/y.mp4' }))))).toMatchObject({ title: 'Admin upload' });
+    expect((await create()).status).toBe(401);
+    for (const who of [OTHER_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      expect(await json(await create())).toMatchObject({ title: 'New', userId: who });
+    }
     expect(await titles(await library())).toEqual([]); // unclassified, so not in the shared library yet
   });
 
-  it('lets an administrator edit and delete any clip', async () => {
-    const id = await classifiedClip('Anyones', { userId: OTHER_USER_ID });
-    as(ADMIN_USER_ID);
-    expect(await json(await patch(id, { title: 'Edited by admin' }))).toMatchObject({ title: 'Edited by admin' });
-    expect((await remove(id)).status).toBe(200);
+  it('answers 404 for an unknown clip, not 403', async () => {
+    as(OTHER_USER_ID);
+    expect((await patch(9999, { title: 'x' })).status).toBe(404);
+    expect((await remove(9999)).status).toBe(404);
   });
-
 });
 
 describe('trim range validation (before any file is touched)', () => {
@@ -401,39 +369,48 @@ describe('trim range validation (before any file is touched)', () => {
 });
 
 describe('file upload endpoint', () => {
-  it('is closed to non-admins and signed-out callers before anything is read', async () => {
+  it('is open to every signed-in user and closed to signed-out callers before anything is read', async () => {
     const req = () => new NextRequest(url('/upload'), { method: 'POST' });
-    as(OTHER_USER_ID);
-    expect((await uploadFile(req())).status).toBe(403);
     as(null);
     expect((await uploadFile(req())).status).toBe(401);
+    for (const who of [OTHER_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      // Past the auth check: the empty request then fails body parsing (400), not a permission error.
+      expect((await uploadFile(req())).status).toBe(400);
+    }
   });
 });
 
-describe('who can classify a clip', () => {
-  it('lets an administrator classify and unclassify any clip', async () => {
+describe('every signed-in user can classify a clip', () => {
+  it('lets any user classify and unclassify any clip', async () => {
     const id = await addClip(t, { title: 'Theirs', userId: OTHER_USER_ID });
-    as(ADMIN_USER_ID);
-    expect((await assign(id, [1, 2])).status).toBe(204);
-    expect(await (await categoriesOf(id)).json()).toEqual(expect.arrayContaining([1, 2]));
-    expect((await unassign(id, [1])).status).toBe(204);
-    expect(await (await categoriesOf(id)).json()).toEqual([2]);
+    for (const who of [TEST_USER_ID, THIRD_USER_ID]) {
+      as(who);
+      expect((await assign(id, [1, 2])).status).toBe(204);
+      expect(await (await categoriesOf(id)).json()).toEqual(expect.arrayContaining([1, 2]));
+      expect((await unassign(id, [1, 2])).status).toBe(204);
+      expect(await (await categoriesOf(id)).json()).toEqual([]);
+    }
   });
 
-  it('stops a non-admin from classifying their own upload', async () => {
-    const id = await addClip(t, { title: 'Mine', userId: OTHER_USER_ID });
-    as(OTHER_USER_ID);
-    expect((await assign(id, [2])).status).toBe(403);
-    expect(await titles(await library())).toEqual([]);
-  });
-
-  it("stops a non-admin from changing another user's classification", async () => {
+  it("lets a user change another user's classification and lets the uploader classify their own clip", async () => {
     const id = await classifiedClip('Theirs', { userId: OTHER_USER_ID });
     as(TEST_USER_ID);
-    expect((await assign(id, [3])).status).toBe(403);
-    expect((await unassign(id, [2])).status).toBe(403);
-    as(ADMIN_USER_ID);
-    expect(await (await categoriesOf(id)).json()).toEqual([2]);
+    expect((await assign(id, [3])).status).toBe(204);
+    expect((await unassign(id, [2])).status).toBe(204);
+    expect(await (await categoriesOf(id)).json()).toEqual([3]);
+    as(OTHER_USER_ID);
+    expect((await assign(id, [2])).status).toBe(204);
+    expect(await (await categoriesOf(id)).json()).toEqual(expect.arrayContaining([2, 3]));
+  });
+
+  it('refuses signed-out callers and reports unknown clips as 404', async () => {
+    const id = await classifiedClip('Clip');
+    as(null);
+    expect((await assign(id, [2])).status).toBe(401);
+    expect((await unassign(id, [2])).status).toBe(401);
+    as(OTHER_USER_ID);
+    expect((await assign(9999, [2])).status).toBe(404);
   });
 
   it('lets anyone read the categories of a clip in the library', async () => {
@@ -443,14 +420,23 @@ describe('who can classify a clip', () => {
   });
 });
 
-describe('archiving and restoring (administrators only)', () => {
-  it('rejects non-admins and signed-out callers', async () => {
+describe('archiving and restoring (every signed-in user)', () => {
+  it('refuses signed-out callers and leaves the clip in the library', async () => {
     const id = await classifiedClip('Clip');
-    as(TEST_USER_ID);
-    expect((await status(id, { status: 'archived' })).status).toBe(403);
     as(null);
     expect((await status(id, { status: 'archived' })).status).toBe(401);
-    as(ADMIN_USER_ID);
+    as(TEST_USER_ID);
+    expect(await titles(await library())).toEqual(['Clip']);
+  });
+
+  it('lets any user archive and restore a clip someone else uploaded', async () => {
+    const id = await classifiedClip('Clip', { userId: OTHER_USER_ID });
+    as(THIRD_USER_ID);
+    expect((await status(id, { status: 'archived' })).status).toBe(200);
+    as(TEST_USER_ID);
+    expect(await titles(await library())).toEqual([]);
+    expect((await status(id, { status: 'active' })).status).toBe(200);
+    as(OTHER_USER_ID);
     expect(await titles(await library())).toEqual(['Clip']);
   });
 
@@ -458,7 +444,7 @@ describe('archiving and restoring (administrators only)', () => {
     const id = await classifiedClip('Clip', { notes: 'keep me' });
     await addBrand(id, 'Subway', 'hero');
     const before = (await t.pg.query(`select title, storage_path, notes, brand from broll_clips where id = $1`, [id])).rows;
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     expect(await json(await status(id, { status: 'archived' }))).toEqual({ id, reviewStatus: 'archived' });
     expect(await titles(await library())).toEqual([]);
     expect(await json(await status(id, { status: 'active' }))).toEqual({ id, reviewStatus: 'unreviewed' });
@@ -468,12 +454,12 @@ describe('archiving and restoring (administrators only)', () => {
     expect((await t.pg.query('select category_id from broll_clip_categories where clip_id = $1', [id])).rows).toEqual([{ category_id: 2 }]);
     expect((await t.pg.query('select brand_name from broll_clip_brands where clip_id = $1', [id])).rows).toEqual([{ brand_name: 'Subway' }]);
     const stamped = (await t.pg.query<{ reviewed_by: string }>('select reviewed_by from broll_clips where id = $1', [id])).rows[0];
-    expect(stamped.reviewed_by).toBe(ADMIN_USER_ID);
+    expect(stamped.reviewed_by).toBe(THIRD_USER_ID);
   });
 
   it('puts a clip on hold and releases it', async () => {
     const id = await classifiedClip('Clip');
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     expect((await status(id, { status: 'on_hold' })).status).toBe(200);
     expect(await titles(await library())).toEqual([]);
     expect((await status(id, { status: 'active' })).status).toBe(200);
@@ -482,7 +468,7 @@ describe('archiving and restoring (administrators only)', () => {
 
   it('keeps an unclassified clip out of the library even when restored', async () => {
     const id = await addClip(t, { title: 'Unclassified', reviewStatus: 'archived' });
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     await status(id, { status: 'active' });
     expect(await titles(await library())).toEqual([]);
     expect(await titles(await unclassified())).toEqual(['Unclassified']);
@@ -490,29 +476,35 @@ describe('archiving and restoring (administrators only)', () => {
 
   it('leaves an approved clip as it is when asked to restore a clip that is already active', async () => {
     const id = await classifiedClip('Clip', { reviewStatus: 'approved' });
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     expect(await json(await status(id, { status: 'active' }))).toEqual({ id, reviewStatus: 'approved' });
   });
 
   it('rejects an unknown status and an unknown clip', async () => {
     const id = await classifiedClip('Clip');
-    as(ADMIN_USER_ID);
+    as(THIRD_USER_ID);
     expect((await status(id, { status: 'cleared' })).status).toBe(400);
     expect((await status(id, {})).status).toBe(400);
     expect((await status(9999, { status: 'archived' })).status).toBe(404);
   });
 });
 
-describe('who is an administrator', () => {
-  it('reports true for admins and false for everyone else, using the same check as the admin routes', async () => {
-    as(ADMIN_USER_ID);
-    expect(await json(await adminMe())).toEqual({ isAdmin: true });
-    as(TEST_USER_ID);
-    expect(await json(await adminMe())).toEqual({ isAdmin: false });
-    process.env.ADMIN_USER_IDS = TEST_USER_ID;
-    expect(await json(await adminMe())).toEqual({ isAdmin: true });
-    as(null);
-    expect((await adminMe()).status).toBe(401);
+describe('there is no administrator role', () => {
+  it('gives a user named in ADMIN_USER_IDS or the admin_users table no more than anyone else', async () => {
+    process.env.ADMIN_USER_IDS = THIRD_USER_ID;
+    await t.pg.query(`insert into admin_users (user_id, email, added_at) values ($1, 'x@example.com', 1)`, [TEST_USER_ID]);
+    try {
+      const id = await classifiedClip('Clip', { notes: 'n' });
+      const views: unknown[] = [];
+      for (const who of [TEST_USER_ID, THIRD_USER_ID, OTHER_USER_ID]) {
+        as(who);
+        views.push(await json(await detail(id)), await titles(await library()), await titles(await unclassified()));
+      }
+      expect(views.slice(3, 6)).toEqual(views.slice(0, 3));
+      expect(views.slice(6, 9)).toEqual(views.slice(0, 3));
+    } finally {
+      delete process.env.ADMIN_USER_IDS;
+    }
   });
 });
 

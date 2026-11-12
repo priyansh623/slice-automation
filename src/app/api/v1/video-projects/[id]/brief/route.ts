@@ -21,7 +21,6 @@ export async function GET(
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   return NextResponse.json(parseBrief(project.creativeBrief));
 }
@@ -41,7 +40,6 @@ export async function PUT(
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const raw = (await req.json()) as Record<string, unknown>;
   const incoming: Partial<CreativeBrief> = {};

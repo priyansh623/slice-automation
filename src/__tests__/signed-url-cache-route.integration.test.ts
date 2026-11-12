@@ -126,7 +126,7 @@ describe('GET /api/v1/video-projects/[id] — signed URL cache [actual-route]', 
     expect(res.status).toBe(404);
   });
 
-  it('returns 403 when user does not own the project', async () => {
+  it('serves a project created by a different user (projects are shared)', async () => {
     await mockAuth('user-1');
     const { db } = await import('@/db');
     let call = 0;
@@ -139,7 +139,7 @@ describe('GET /api/v1/video-projects/[id] — signed URL cache [actual-route]', 
 
     const { GET } = await import('@/app/api/v1/video-projects/[id]/route');
     const res = await GET(req(), { params: Promise.resolve({ id: '1' }) });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it('cache hit: serves fresh cached URL without calling Storage', async () => {

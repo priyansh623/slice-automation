@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { videoCompilations } from '@/db/schema.pg';
 import { and, eq } from 'drizzle-orm';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { requireUser, requireProjectOwner } from '@/lib/api-auth';
+import { requireUser, requireProject } from '@/lib/api-auth';
 
 export async function GET(
   _req: NextRequest,
@@ -20,8 +20,8 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
-  const ownerResult = await requireProjectOwner(projectId, user.id);
-  if (ownerResult instanceof NextResponse) return ownerResult;
+  const projectResult = await requireProject(projectId);
+  if (projectResult instanceof NextResponse) return projectResult;
 
   const rows = await db
     .select()

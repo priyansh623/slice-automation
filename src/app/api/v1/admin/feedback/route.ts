@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { generationFeedback, videoGenerations, videoScreens, videoProjects } from '@/db/schema.pg';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { searchParams } = new URL(req.url);
   const limitParam = searchParams.get('limit');

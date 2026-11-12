@@ -6,9 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
-import { and, eq } from 'drizzle-orm';
-import { isAdminUser } from '@/lib/api-auth';
-import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
+import { eq } from 'drizzle-orm';
 import { trimMedia, validateTrimRange } from '@/lib/broll-trim';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -31,12 +29,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const rangeError = validateTrimRange(inPoint, outPoint);
   if (rangeError) return NextResponse.json({ error: rangeError }, { status: 400 });
 
-  // Anyone signed in can trim any clip in the shared library; administrators can trim any clip.
-  const isAdmin = await isAdminUser(user.id);
+  // Anyone signed in can trim any clip.
   const [clip] = await db
     .select()
     .from(brollClips)
-    .where(isAdmin ? eq(brollClips.id, clipId) : and(eq(brollClips.id, clipId), activeBrollLibraryCondition()))
+    .where(eq(brollClips.id, clipId))
     .limit(1);
 
   if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 });

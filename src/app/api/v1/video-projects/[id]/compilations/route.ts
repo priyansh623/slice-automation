@@ -7,7 +7,7 @@ import {
   videoGenerations,
 } from '@/db/schema.pg';
 import { and, eq, inArray } from 'drizzle-orm';
-import { requireUser, requireProjectOwner } from '@/lib/api-auth';
+import { requireUser, requireProject } from '@/lib/api-auth';
 
 export async function GET(
   _req: NextRequest,
@@ -21,8 +21,8 @@ export async function GET(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const ownerResult = await requireProjectOwner(projectId, user.id);
-  if (ownerResult instanceof NextResponse) return ownerResult;
+  const projectResult = await requireProject(projectId);
+  if (projectResult instanceof NextResponse) return projectResult;
 
   const compilations = await db
     .select()
@@ -45,8 +45,8 @@ export async function POST(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const ownerResult = await requireProjectOwner(projectId, user.id);
-  if (ownerResult instanceof NextResponse) return ownerResult;
+  const projectResult = await requireProject(projectId);
+  if (projectResult instanceof NextResponse) return projectResult;
 
   const body = (await req.json()) as {
     // Array of { videoScreenId, videoGenerationId } scene selections

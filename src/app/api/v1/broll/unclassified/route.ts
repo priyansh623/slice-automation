@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, desc, notInArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
-import { requireAdmin, requireUser } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { CLOSED_BROLL_REVIEW_STATUSES, unclassifiedBrollCondition } from '@/lib/broll-visibility';
 
 function parseTags(raw: string | null): string[] {
@@ -15,14 +15,12 @@ function parseTags(raw: string | null): string[] {
   }
 }
 
-// Admin-only management view of clips that have no category and so never appear in the library.
+// Management view of clips that have no category and so never appear in the library.
 // Archived and rejected clips are left out unless ?includeArchived=true.
 // Returns identifying and status fields only; no signed URLs and no storage paths.
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const forbidden = await requireAdmin(auth.user.id);
-  if (forbidden) return forbidden;
 
   const includeArchived = req.nextUrl.searchParams.get('includeArchived') === 'true';
 

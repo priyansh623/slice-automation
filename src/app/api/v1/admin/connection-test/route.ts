@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { sql } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const results: Record<string, { ok: boolean; detail: string }> = {};
 

@@ -20,7 +20,6 @@ export async function POST(
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // Queue video generations for screens that already have prompts
   const genResult = await enqueueAllSceneGenerations(projectId);

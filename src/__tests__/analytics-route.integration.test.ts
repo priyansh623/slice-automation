@@ -94,18 +94,19 @@ describe('POST /api/v1/analytics-events', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 403 when user does not own the referenced project', async () => {
-    await mockUser('user-attacker');
+  it('records the event when the referenced project was created by a different user (projects are shared)', async () => {
+    await mockUser('user-other');
 
     const { db } = await import('@/db');
     (db as unknown as Record<string, unknown>).select = vi.fn(() =>
-      chain([{ userId: 'user-owner', id: 42 }]), // project belongs to different user
+      chain([{ userId: 'user-owner', id: 42 }]), // project was created by a different user
     );
+    (db as unknown as Record<string, unknown>).insert = vi.fn(() => ({ values: () => ({ returning: () => Promise.resolve([{ id: 1 }]) }) }));
 
     const { POST } = await import('@/app/api/v1/analytics-events/route');
     const res = await POST(request({ eventType: 'test_event', videoProjectId: 42 }));
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
   });
 
   it('returns 201 when user owns the referenced project', async () => {

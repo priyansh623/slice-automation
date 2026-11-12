@@ -19,16 +19,9 @@ Create three buckets in Supabase Dashboard → Storage:
 - `videos` (private) — generated video clips
 - `compilations` (private) — FFmpeg-compiled output
 
-### Admin user
+### Users
 
-Set `app_metadata.role = 'admin'` on your Supabase user via the service role API or the Dashboard. This grants access to `/admin/settings` and the connection-test endpoint.
-
-```sql
--- Run in SQL editor (replaces existing app_metadata)
-UPDATE auth.users
-SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'::jsonb
-WHERE email = 'your@email.com';
-```
+There are no roles. Every signed-in user has the same access, including `/admin/settings`, the dashboard and the connection-test endpoint.
 
 ---
 

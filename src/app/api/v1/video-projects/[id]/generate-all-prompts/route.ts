@@ -20,7 +20,6 @@ export async function POST(
   const projectRows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
   const screen1 = allScreens.sort((a, b) => a.position - b.position)[0];

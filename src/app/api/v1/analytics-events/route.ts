@@ -27,7 +27,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .where(eq(videoProjects.id, body.videoProjectId))
       .limit(1);
     if (!rows[0]) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    if (rows[0].userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const inserted = await db

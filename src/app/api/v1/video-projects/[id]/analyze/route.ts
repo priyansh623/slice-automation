@@ -26,7 +26,6 @@ export async function POST(
     .limit(1);
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // Prevent re-analysis after breakdown has been approved — screens would be destructively deleted
   if (project.breakdownApprovedAt) {

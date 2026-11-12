@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { projectTesters } from '@/db/schema.pg';
-import { requireUser, requireProjectOwner } from '@/lib/api-auth';
+import { requireUser, requireProject } from '@/lib/api-auth';
 
 export async function POST(
   req: NextRequest,
@@ -15,8 +15,8 @@ export async function POST(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const ownerResult = await requireProjectOwner(projectId, user.id);
-  if (ownerResult instanceof NextResponse) return ownerResult;
+  const projectResult = await requireProject(projectId);
+  if (projectResult instanceof NextResponse) return projectResult;
 
   const body = (await req.json()) as { userId: string };
   if (!body.userId || typeof body.userId !== 'string') {

@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, videoGenerations, generationFeedback, videoCompilations, compilationSceneSelections, promptGenerationTasks, claudeConversations, analyticsEvents, projectTesters } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, requireAdmin } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { eq, inArray } from 'drizzle-orm';
 
 export async function GET(
@@ -31,7 +31,6 @@ export async function GET(
 
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (project.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screenIds = screens.map((s) => s.id);
@@ -152,15 +151,9 @@ export async function DELETE(
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
-  const projectRows = await db.select({ id: videoProjects.id, userId: videoProjects.userId })
+  const projectRows = await db.select({ id: videoProjects.id })
     .from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   if (!projectRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const isOwner = projectRows[0].userId === authResult.user.id;
-  if (!isOwner) {
-    const adminError = await requireAdmin(authResult.user.id);
-    if (adminError) return adminError;
-  }
 
   // Cascade delete manually in FK-safe order
   const screenRows = await db.select({ id: videoScreens.id }).from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));

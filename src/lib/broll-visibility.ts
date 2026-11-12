@@ -4,12 +4,12 @@ import { brollClipCategories, brollClips } from '../db/schema.pg';
 // The shared B-roll library is one library for everyone. A clip is in it when
 //   1. it is classified: it has at least one category, and
 //   2. its review status is not on_hold, archived or rejected.
-// Nothing else affects visibility: there is no clearance or approval step, and the viewer's role never
-// changes which clips are in the library (administrators additionally manage clips that are not in it).
+// Nothing else affects visibility: there is no clearance or approval step, and there are no roles. Clips outside
+// the library are still reachable by every signed-in user through the management endpoints.
 
 // Review statuses that keep a clip out of the library. The record and its storage object are left untouched.
-//   on_hold    parked by an admin; returns when released
-//   archived   retired by an admin; returns when restored
+//   on_hold    parked by a user; returns when released
+//   archived   retired by a user; returns when restored
 //   rejected   kept for history from before the library was simplified
 export const HIDDEN_BROLL_REVIEW_STATUSES = ['on_hold', 'archived', 'rejected'];
 

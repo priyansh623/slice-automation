@@ -8,14 +8,12 @@ import {
   screenPromptVersions,
 } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { requireAdmin, requireUser } from '@/lib/api-auth';
+import { requireUser } from '@/lib/api-auth';
 import { eq, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
 
 export async function GET(req: Request): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
-  const adminError = await requireAdmin(authResult.user.id);
-  if (adminError) return adminError;
 
   const { searchParams } = new URL(req.url);
   const showArchived = searchParams.get('archived') === '1';

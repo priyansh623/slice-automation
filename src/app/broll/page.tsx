@@ -385,11 +385,6 @@ export default function BrollLibraryPage() {
   const [categoryFilters, setCategoryFilters] = useState<number[]>([]);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  // Only administrators add footage; everyone else browses, searches, previews, trims and downloads.
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    fetch('/api/v1/admin/me').then((r) => (r.ok ? r.json() : { isAdmin: false })).then((d) => setIsAdmin(Boolean(d.isAdmin))).catch(() => setIsAdmin(false));
-  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload modal state
@@ -650,7 +645,6 @@ export default function BrollLibraryPage() {
             >
               Manage categories
             </button>
-            {isAdmin && (
             <button
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -663,7 +657,6 @@ export default function BrollLibraryPage() {
               <Upload size={15} />
               Upload B-roll
             </button>
-            )}
           </div>
           <input ref={fileInputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) openVideoFile(f); e.target.value = ''; }} />
         </div>
@@ -775,13 +768,11 @@ export default function BrollLibraryPage() {
                   </div>
                   <h2 style={{ margin: 0, font: '700 18px/1.3 Satoshi' }}>No clips yet</h2>
                   <p style={{ margin: '8px 0 24px', maxWidth: 380, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
-                    {isAdmin ? 'Drop a 9:16 video here or click Upload B-roll to get started.' : 'An administrator will add footage here.'}
+                    Drop a 9:16 video here or click Upload B-roll to get started.
                   </p>
-                  {isAdmin && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', font: '600 14px/1 Satoshi' }}>
                     <Upload size={14} /> Upload B-roll
                   </span>
-                  )}
                 </div>
               ) : filtered.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#75757C', font: '400 14px/1.5 Satoshi' }}>
