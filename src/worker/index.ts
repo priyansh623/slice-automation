@@ -97,7 +97,7 @@ async function tick(): Promise<void> {
   await processPendingCompilation();
 }
 
-async function processPromptTasks(): Promise<void> {
+export async function processPromptTasks(): Promise<void> {
   const allPending = await db
     .select()
     .from(promptGenerationTasks)
@@ -184,41 +184,8 @@ async function processPromptTasks(): Promise<void> {
         await generateInitialScreenPrompt(task.videoProjectId, task.videoScreenId);
         console.log(`[worker] generate_prompt task ${task.id} completed for screen ${task.videoScreenId}`);
 
-        // Auto-queue a video generation when this is the first-ever generation attempt
-        // (i.e. the screen has no prior generations). This powers the "generate all"
-        // flow so the full prompt → video pipeline runs without manual steps.
-        const existingGens = await db
-          .select({ id: videoGenerations.id })
-          .from(videoGenerations)
-          .where(eq(videoGenerations.videoScreenId, task.videoScreenId));
-        if (existingGens.length === 0) {
-          const pvRows = await db
-            .select()
-            .from(screenPromptVersions)
-            .where(eq(screenPromptVersions.videoScreenId, task.videoScreenId));
-          const latestPrompt = pvRows.sort((a, b) => b.version - a.version)[0];
-          const screenRows = await db
-            .select()
-            .from(videoScreens)
-            .where(eq(videoScreens.id, task.videoScreenId))
-            .limit(1);
-          const screen = screenRows[0];
-          if (latestPrompt && screen) {
-            const DEFAULT_DURATION = 6;
-            const now2 = Date.now();
-            await db.insert(videoGenerations).values({
-              videoScreenId: task.videoScreenId,
-              promptVersionId: latestPrompt.id,
-              jobId: null,
-              status: 'queued',
-              videoStoragePath: null,
-              durationSeconds: screen.durationSeconds ?? DEFAULT_DURATION,
-              createdAt: now2,
-              updatedAt: now2,
-            });
-            console.log(`[worker] Auto-queued video generation for screen ${task.videoScreenId}`);
-          }
-        }
+        // Generating a prompt never queues a video. Video generation (and its provider credits) starts only when a
+        // user clicks Generate Video / Generate all scenes, which queue it through the API.
       }
 
       clearInterval(heartbeat);
@@ -245,7 +212,7 @@ async function processPromptTasks(): Promise<void> {
   }
 }
 
-async function processQueuedGenerations(): Promise<void> {
+export async function processQueuedGenerations(): Promise<void> {
   const queued = await db
     .select()
     .from(videoGenerations)
@@ -386,7 +353,10 @@ async function shutdown(signal: string): Promise<void> {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('[worker] Fatal error:', err);
-  process.exit(1);
-});
+// Tests import this module to exercise the queue processing; they must not start the polling loop.
+if (!process.env.VITEST) {
+  main().catch((err) => {
+    console.error('[worker] Fatal error:', err);
+    process.exit(1);
+  });
+}
