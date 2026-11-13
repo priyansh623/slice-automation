@@ -139,13 +139,12 @@ export class Storage {
     return { provider: 'supabase' };
   }
 
-  /** A URL the browser can PUT a file to. Credentials are never exposed, only the time-limited URL. */
+  /**
+   * A URL the browser can PUT a file to. Browser-direct uploads always go to Supabase for now, whatever
+   * STORAGE_WRITE_PROVIDER says: sending browsers straight to R2 needs CORS on the bucket and has not been approved.
+   * Server-side writes (put) are what follow the write provider.
+   */
   async signedUpload(bucket: BucketName, key: string, contentType: string, expiresInSeconds = 900): Promise<SignedUpload & { provider: ProviderName }> {
-    if (this.d.writeProvider() === 'r2' && this.d.r2) {
-      const upload = await this.d.r2.signedUpload(bucket, key, contentType, expiresInSeconds);
-      await this.d.register({ bucket, key, provider: 'r2', contentType });
-      return { ...upload, provider: 'r2' };
-    }
     return { ...(await this.d.supabase.signedUpload(bucket, key, contentType, expiresInSeconds)), provider: 'supabase' };
   }
 

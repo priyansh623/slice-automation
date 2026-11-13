@@ -145,12 +145,13 @@ describe('writing new files', () => {
     expect(r2!.calls).toEqual([]);
   });
 
-  it('hands out a presigned upload URL from the write provider and records the key for R2', async () => {
-    const { storage, registered } = setup({ write: 'r2' });
+  it('keeps browser-direct upload URLs on Supabase even when R2 is the write provider', async () => {
+    const { storage, registered, r2 } = setup({ write: 'r2' });
     const up = await storage.signedUpload('uploads', 'u/p.png', 'image/png');
-    expect(up).toMatchObject({ provider: 'r2', method: 'PUT', headers: { 'Content-Type': 'image/png' } });
-    expect(up.url).toContain('r2.example');
-    expect(registered).toEqual([{ bucket: 'uploads', key: 'u/p.png', provider: 'r2' }]);
+    expect(up).toMatchObject({ provider: 'supabase', method: 'PUT', headers: { 'Content-Type': 'image/png' } });
+    expect(up.url).toContain('supabase.example');
+    expect(registered).toEqual([]);
+    expect(r2!.calls).toEqual([]);
   });
 });
 
