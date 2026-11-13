@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoCompilations } from '@/db/schema.pg';
 import { and, eq } from 'drizzle-orm';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
 import { requireUser, requireProject } from '@/lib/api-auth';
 
 export async function GET(
@@ -40,19 +40,16 @@ export async function GET(
     return NextResponse.json({ error: 'Compilation video not yet available' }, { status: 404 });
   }
 
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  const { data, error } = await serviceClient.storage
-    .from(bucket)
-    .createSignedUrl(compilation.outputStoragePath, 3600);
+  let signedUrl: string | null = null;
+  try {
+    signedUrl = await getStorage().signedReadUrl('videos', compilation.outputStoragePath, 3600);
+  } catch (err) {
+    console.error('[compilation video] signed URL failed:', (err as Error).message);
+  }
 
-  if (error || !data?.signedUrl) {
+  if (!signedUrl) {
     return NextResponse.json({ error: 'Failed to generate signed URL' }, { status: 500 });
   }
 
-  return NextResponse.json({ signedUrl: data.signedUrl, compilationId: compilation.id });
+  return NextResponse.json({ signedUrl, compilationId: compilation.id });
 }

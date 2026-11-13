@@ -92,6 +92,9 @@ async function mockServiceClient(storageImpl: {
       }),
     },
   } as unknown as ReturnType<typeof createClient>);
+  // The storage layer keeps the client it first built; rebuild it so this test's mock is the one used.
+  const { resetStorageForTests } = await import('@/lib/object-store');
+  resetStorageForTests();
 }
 
 // ── Single-project route ───────────────────────────────────────────────────────

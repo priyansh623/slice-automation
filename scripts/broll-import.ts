@@ -2,10 +2,13 @@
  * Bulk B-roll import script.
  *
  * Dry-run (default — safe to run any time):
- *   npx ts-node --project tsconfig.json scripts/broll-import.ts
+ *   npx tsx scripts/broll-import.ts
  *
  * Real import (requires explicit flag AND approved dry-run):
- *   npx ts-node --project tsconfig.json scripts/broll-import.ts --import
+ *   npx tsx scripts/broll-import.ts --import
+ *
+ * Run it with tsx (not ts-node): files are stored through the shared object store (src/lib/object-store), which uses
+ * the project's '@/' import aliases that ts-node does not resolve.
  *
  * State log: broll-import/imported.json  (clipId → { dbId, storagePath, importedAt })
  * Manifest:  broll-import/manifest.json
@@ -19,7 +22,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 import { db } from '../src/db';
 import { brollClips } from '../src/db/schema.pg';
-import { createClient } from '@supabase/supabase-js';
+import { getStorage } from '../src/lib/object-store';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -341,7 +344,6 @@ async function main() {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket      = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
 
   if (!supabaseUrl || !serviceKey) {
     console.error('ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local');
@@ -355,7 +357,7 @@ async function main() {
     process.exit(1);
   }
 
-  const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const storage = getStorage();
 
   let imported = 0;
   let failed = 0;
@@ -371,16 +373,11 @@ async function main() {
       const storageUUID = randomUUID();
       const storagePath = `${importUserId}/broll/${storageUUID}.${ext}`;
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await service.storage
-        .from(bucket)
-        .upload(storagePath, fileBuffer, {
-          contentType: 'video/mp4',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      // Upload through the shared object store (Supabase Storage unless R2 writes are enabled)
+      try {
+        await storage.put('uploads', storagePath, fileBuffer, { contentType: 'video/mp4' });
+      } catch (uploadError) {
+        throw new Error(`Storage upload failed: ${(uploadError as Error).message}`);
       }
 
       // Insert DB record

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { adminSettings, videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
+import { locate } from '@/lib/object-store/registry';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
@@ -33,33 +34,31 @@ export async function GET(): Promise<NextResponse> {
   }
 
   // DB-backed signed URL cache: only call Storage for projects whose cached URL has expired.
-  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  // Projects whose image is on R2 never use the cache: signing there is a local computation, and a cached URL could
+  // still point at the old Supabase copy.
+  const storage = getStorage();
   const ONE_HOUR_MS = 3_600_000;
   const URL_TTL_S = 24 * 3600; // 24-hour TTL; refresh 1 h before expiry
   const now = Date.now();
+  const locations = await locate('uploads', rows.map((p) => p.baseImagePath).filter(Boolean));
+  const onR2 = new Set(rows.filter((p) => locations.get(p.baseImagePath) === 'r2').map((p) => p.id));
 
   const needsRefresh = rows.filter(
-    (p) => !p.baseImageSignedUrlExpiresAt || p.baseImageSignedUrlExpiresAt < now + ONE_HOUR_MS,
+    (p) => onR2.has(p.id) || !p.baseImageSignedUrlExpiresAt || p.baseImageSignedUrlExpiresAt < now + ONE_HOUR_MS,
   );
   const refreshPaths = needsRefresh.map((p) => p.baseImagePath).filter(Boolean) as string[];
   const refreshedUrlMap = new Map<string, string>();
 
   if (refreshPaths.length > 0) {
-    const { data: freshUrls } = await serviceClient.storage.from(bucket).createSignedUrls(refreshPaths, URL_TTL_S);
+    const freshUrls = await storage.signedReadUrls('uploads', refreshPaths, URL_TTL_S);
     const expiresAt = now + URL_TTL_S * 1000;
     const writeResults = await Promise.allSettled(
-      (freshUrls ?? []).map((item) => {
-        if (!item.signedUrl || !item.path) return Promise.resolve();
-        refreshedUrlMap.set(item.path, item.signedUrl);
-        const proj = needsRefresh.find((p) => p.baseImagePath === item.path);
-        if (!proj) return Promise.resolve();
+      [...freshUrls.entries()].map(([path, url]) => {
+        refreshedUrlMap.set(path, url);
+        const proj = needsRefresh.find((p) => p.baseImagePath === path);
+        if (!proj || onR2.has(proj.id)) return Promise.resolve();
         return db.update(videoProjects)
-          .set({ baseImageSignedUrl: item.signedUrl, baseImageSignedUrlExpiresAt: expiresAt })
+          .set({ baseImageSignedUrl: url, baseImageSignedUrlExpiresAt: expiresAt })
           .where(eq(videoProjects.id, proj.id));
       }),
     );
@@ -72,13 +71,13 @@ export async function GET(): Promise<NextResponse> {
 
   const signedUrlById = new Map<number, string | null>(
     rows.map((p) => {
-      if (p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS) {
+      if (!onR2.has(p.id) && p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS) {
         return [p.id, p.baseImageSignedUrl];
       }
       const refreshed = refreshedUrlMap.get(p.baseImagePath) ?? null;
       if (refreshed) return [p.id, refreshed];
       // Signing failed: serve existing URL if it has not actually expired yet (still within safety buffer).
-      if (p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt > now) {
+      if (!onR2.has(p.id) && p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt > now) {
         return [p.id, p.baseImageSignedUrl];
       }
       return [p.id, null];

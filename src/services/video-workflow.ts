@@ -13,11 +13,12 @@ import {
 } from '@/db/schema.pg';
 import { and, desc, eq, inArray, max } from 'drizzle-orm';
 import { callClaude, encodeImageFromStorage, loadConversation } from './anthropic';
+import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 import { getSkillContent } from '@/lib/ugc-skill';
 import { useapiProvider } from '@/providers/useapi/provider';
 import type { VideoGenerationProvider } from '@/providers/useapi/interface';
 import { RateLimitError } from '@/providers/useapi/errors';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage, toLogicalBucket } from '../lib/object-store';
 
 function stripNotesSection(text: string): string {
   // Remove any trailing "**Notes:**", "**Note:**", "Notes:", "Note:" section and everything after it
@@ -25,14 +26,13 @@ function stripNotesSection(text: string): string {
 }
 
 async function downloadImageToTmp(storagePath: string, bucket: string): Promise<string> {
-  const supabase = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
-  if (error || !data) throw new Error(`Failed to download image ${storagePath}: ${error?.message}`);
-  const buffer = Buffer.from(await data.arrayBuffer());
+  // `bucket` is the logical bucket name; the storage layer finds the provider holding the file.
+  let buffer: Buffer;
+  try {
+    buffer = await getStorage().download(toLogicalBucket(bucket), storagePath);
+  } catch (err) {
+    throw new Error(`Failed to download image ${storagePath}: ${(err as Error).message}`);
+  }
   const tmpPath = path.join('/tmp', `${crypto.randomBytes(8).toString('hex')}-${path.basename(storagePath)}`);
   fs.writeFileSync(tmpPath, buffer);
   return tmpPath;
@@ -1025,27 +1025,6 @@ async function insertPromptVersion(
   });
 
   return nextVersion;
-}
-
-async function uploadVideoToStorage(localPath: string, videoScreenId: number, generationId: number): Promise<string> {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const fs = await import('node:fs/promises');
-  const fileBuffer = await fs.readFile(localPath);
-  const storagePath = `screen-${videoScreenId}/${Date.now()}-gen-${generationId}.mp4`;
-  const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, fileBuffer, {
-    contentType: 'video/mp4',
-    upsert: false,
-  });
-  if (error) throw new Error(`Failed to upload video to Supabase Storage: ${error.message}`);
-  // Clean up temp file (non-fatal if it fails)
-  fs.unlink(localPath).catch(() => {});
-  return storagePath;
 }
 
 function guessContentType(filePath: string): string {

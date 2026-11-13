@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
-import { createClient } from '@supabase/supabase-js';
+import { getStorage, toLogicalBucket } from '@/lib/object-store';
 import { db } from '@/db';
 import { claudeConversations } from '@/db/schema.pg';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -57,21 +57,17 @@ export async function encodeImageFromStorage(storagePath: string, bucket: string
   const cached = _imageCache.get(cacheKey);
   if (cached) return cached;
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-
-  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
-  if (error || !data) {
-    throw new Error(`Failed to download ${storagePath} from bucket ${bucket}: ${error?.message}`);
+  // `bucket` is the logical bucket name; the storage layer finds the provider holding the file.
+  let bytes: Buffer;
+  try {
+    bytes = await getStorage().download(toLogicalBucket(bucket), storagePath);
+  } catch (err) {
+    throw new Error(`Failed to download ${storagePath} from bucket ${bucket}: ${(err as Error).message}`);
   }
 
   const ext = storagePath.split('.').pop()?.toLowerCase() ?? '';
   const mimeType = SUPPORTED_IMAGE_TYPES[ext as keyof typeof SUPPORTED_IMAGE_TYPES] ?? 'image/jpeg';
-  const arrayBuffer = await data.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString('base64');
+  const base64 = bytes.toString('base64');
   const result: EncodedImage = { base64, mimeType, ref: makeImageRef(bucket, storagePath, mimeType) };
   if (_imageCache.size >= IMAGE_CACHE_MAX) {
     // Evict oldest entry (Map preserves insertion order, so the first key is oldest).

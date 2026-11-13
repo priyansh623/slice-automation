@@ -23,7 +23,7 @@ import {
   generateInitialScreenPrompt,
   submitQueuedGeneration,
 } from '../services/video-workflow';
-import { createClient } from '@supabase/supabase-js';
+import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 
 const POLL_INTERVAL_MS = 5_000;
 const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude call
@@ -321,25 +321,6 @@ async function pollInFlightGenerations(): Promise<void> {
       console.error(`[worker] Error polling gen ${gen.id}:`, err);
     }
   }
-}
-
-async function uploadVideoToStorage(localPath: string, videoScreenId: number, generationId: number): Promise<string> {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const fs = await import('node:fs/promises');
-  const fileBuffer = await fs.readFile(localPath);
-  const storagePath = `screen-${videoScreenId}/${Date.now()}-gen-${generationId}.mp4`;
-  const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  const { error } = await supabase.storage.from(bucket).upload(storagePath, fileBuffer, {
-    contentType: 'video/mp4',
-    upsert: false,
-  });
-  if (error) throw new Error(`Failed to upload video to Supabase Storage: ${error.message}`);
-  fs.unlink(localPath).catch(() => {});
-  return storagePath;
 }
 
 function sleep(ms: number): Promise<void> {

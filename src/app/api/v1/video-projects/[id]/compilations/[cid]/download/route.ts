@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoCompilations } from '@/db/schema.pg';
 import { and, eq } from 'drizzle-orm';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
 import { requireUser, requireProject } from '@/lib/api-auth';
 
 export async function GET(
@@ -35,24 +35,20 @@ export async function GET(
     return NextResponse.json({ error: 'Compilation video not yet available' }, { status: 404 });
   }
 
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  let signedUrl: string | null = null;
+  try {
+    signedUrl = await getStorage().signedReadUrl('videos', compilation.outputStoragePath, 60);
+  } catch (err) {
+    console.error('[compilation download] signed URL failed:', (err as Error).message);
+  }
 
-  const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  const { data, error } = await serviceClient.storage
-    .from(bucket)
-    .createSignedUrl(compilation.outputStoragePath, 60);
-
-  if (error || !data?.signedUrl) {
+  if (!signedUrl) {
     return NextResponse.json({ error: 'Failed to generate download URL' }, { status: 500 });
   }
 
-  // Proxy-stream from Supabase so the browser sees a same-origin response
+  // Proxy-stream from storage so the browser sees a same-origin response
   // and Content-Disposition: attachment triggers a real file-save dialog.
-  const upstream = await fetch(data.signedUrl);
+  const upstream = await fetch(signedUrl);
   if (!upstream.ok || !upstream.body) {
     return NextResponse.json({ error: 'Failed to fetch video from storage' }, { status: 502 });
   }

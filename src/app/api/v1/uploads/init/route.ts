@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'node:crypto';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
 import { requireUser } from '@/lib/api-auth';
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -30,25 +30,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const filename = `${crypto.randomUUID()}.${ext}`;
   const path = `${user.id}/${filename}`;
 
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-
-  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-
-  const { data: uploadData, error: uploadError } = await serviceClient.storage
-    .from(bucket)
-    .createSignedUploadUrl(path);
-
-  if (uploadError || !uploadData) {
-    console.error('[uploads/init] createSignedUploadUrl error:', uploadError?.message);
+  let upload;
+  try {
+    upload = await getStorage().signedUpload('uploads', path, contentType);
+  } catch (err) {
+    console.error('[uploads/init] signed upload URL error:', (err as Error).message);
     return NextResponse.json({ error: 'Failed to create upload URL' }, { status: 500 });
   }
 
   return NextResponse.json({
-    signedUploadUrl: uploadData.signedUrl,
+    signedUploadUrl: upload.url,
     path,
     filename,
   });

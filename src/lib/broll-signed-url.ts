@@ -1,4 +1,5 @@
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
+import { locate } from '@/lib/object-store/registry';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
@@ -25,15 +26,9 @@ export async function refreshSignedUrl(storagePath: string, timeoutMs = REFRESH_
 
 async function createFreshUrl(storagePath: string): Promise<{ url: string; expiresAt: number } | null> {
   try {
-    const service = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } },
-    );
-    const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-    const { data } = await service.storage.from(bucket).createSignedUrl(storagePath, BROLL_URL_TTL_S);
-    if (!data?.signedUrl) return null;
-    return { url: data.signedUrl, expiresAt: Date.now() + BROLL_URL_TTL_S * 1000 };
+    const url = await getStorage().signedReadUrl('uploads', storagePath, BROLL_URL_TTL_S);
+    if (!url) return null;
+    return { url, expiresAt: Date.now() + BROLL_URL_TTL_S * 1000 };
   } catch {
     return null;
   }
@@ -45,9 +40,13 @@ export async function currentSignedUrl(
   timeoutMs = REFRESH_TIMEOUT_MS,
 ): Promise<string | null> {
   const now = Date.now();
-  if (clip.signedUrl && clip.signedUrlExpiresAt && clip.signedUrlExpiresAt >= now + ONE_HOUR_MS) return clip.signedUrl;
+  // A clip stored on R2 never uses the saved URL: signing there is local and instant, and a saved URL may still point
+  // at the old Supabase copy (which would keep costing Supabase egress).
+  const onR2 = (await locate('uploads', [clip.storagePath]).catch(() => new Map())).get(clip.storagePath) === 'r2';
+  if (!onR2 && clip.signedUrl && clip.signedUrlExpiresAt && clip.signedUrlExpiresAt >= now + ONE_HOUR_MS) return clip.signedUrl;
   const fresh = await refreshSignedUrl(clip.storagePath, timeoutMs);
   if (!fresh) return clip.signedUrl;
+  if (onR2) return fresh.url;
   // Saving the new URL is a convenience for the next request; failing or stalling here must not fail this one.
   await withTimeout(
     Promise.resolve(db.update(brollClips).set({ signedUrl: fresh.url, signedUrlExpiresAt: fresh.expiresAt, updatedAt: now }).where(eq(brollClips.id, clip.id))),

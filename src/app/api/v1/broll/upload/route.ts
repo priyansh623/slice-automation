@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
 import { probeVideoDuration } from '@/worker/ffmpeg-utils';
 
 const ALLOWED_VIDEO_TYPES: Record<string, string> = {
@@ -132,32 +132,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await fs.rmdir(tmpDir).catch(() => {});
   }
 
-  const service = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
   const URL_TTL_S = 24 * 3600;
 
   const videoFilename = `${crypto.randomUUID()}.${videoExt}`;
   const videoStoragePath = `${user.id}/broll/${videoFilename}`;
 
-  const { error: videoError } = await service.storage.from(bucket).upload(videoStoragePath, videoBuffer, {
-    contentType: videoFile.type,
-    upsert: false,
-  });
-
-  if (videoError) {
-    console.error('[broll/upload] video upload error:', videoError.message);
+  const storage = getStorage();
+  try {
+    await storage.put('uploads', videoStoragePath, videoBuffer, { contentType: videoFile.type });
+  } catch (err) {
+    console.error('[broll/upload] video upload error:', (err as Error).message);
     return NextResponse.json({ error: 'Failed to upload video' }, { status: 500 });
   }
 
-  const { data: videoSigned } = await service.storage.from(bucket).createSignedUrl(videoStoragePath, URL_TTL_S);
+  const videoSignedUrl = await storage.signedReadUrl('uploads', videoStoragePath, URL_TTL_S).catch(() => null);
 
   return NextResponse.json({
     storagePath: videoStoragePath,
-    signedUrl: videoSigned?.signedUrl ?? null,
+    signedUrl: videoSignedUrl,
     mimeType: videoFile.type,
     fileSizeBytes: videoBuffer.length,
     durationSeconds,

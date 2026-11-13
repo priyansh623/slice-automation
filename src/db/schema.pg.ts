@@ -4,6 +4,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   serial,
   text,
   unique,
@@ -314,3 +315,21 @@ export const analyticsEvents = pgTable('analytics_events', {
   payload: jsonb('payload'),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 });
+
+// ── Storage location registry ────────────────────────────────────────────────
+// Which provider holds each stored file. A missing row means Supabase Storage (where everything started), so the
+// table can be empty or absent and the app behaves as before. Rows are added when a file is copied to R2 (and flipped
+// back to 'supabase' to roll a file back).
+export const storageObjects = pgTable('storage_objects', {
+  bucket: text('bucket').notNull(),                       // logical bucket: 'videos' | 'uploads'
+  key: text('key').notNull(),                             // object key, identical in both providers
+  provider: text('provider').notNull(),                   // 'supabase' | 'r2'
+  sizeBytes: bigint('size_bytes', { mode: 'number' }),
+  contentType: text('content_type'),
+  sha256: text('sha256'),                                 // SHA-256 of the bytes, recorded when the copy was verified
+  verifiedAt: bigint('verified_at', { mode: 'number' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.bucket, table.key] }),
+}));

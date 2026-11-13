@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, videoGenerations, generationFeedback, videoCompilations, compilationSceneSelections, promptGenerationTasks, claudeConversations, analyticsEvents, projectTesters } from '@/db/schema.pg';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
+import { locate } from '@/lib/object-store/registry';
 import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/api-auth';
 import { eq, inArray } from 'drizzle-orm';
@@ -18,12 +19,6 @@ export async function GET(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-
   const [projectRows, allScreens] = await Promise.all([
     db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1),
     db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId)),
@@ -34,35 +29,39 @@ export async function GET(
 
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screenIds = screens.map((s) => s.id);
-  const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-
   // DB-backed signed URL cache: skip Storage call when the cached URL is still fresh.
+  // An image on R2 never uses the cache (signing there is local, and a cached URL may still point at the Supabase copy).
   const ONE_HOUR_MS = 3_600_000;
   const URL_TTL_S = 24 * 3600; // 24-hour TTL; refresh 1 h before expiry
   const nowMs = Date.now();
   let baseImagePreviewUrl: string | null = null;
+  const onR2 = (await locate('uploads', [project.baseImagePath])).get(project.baseImagePath) === 'r2';
   if (
+    !onR2 &&
     project.baseImageSignedUrl &&
     project.baseImageSignedUrlExpiresAt &&
     project.baseImageSignedUrlExpiresAt >= nowMs + ONE_HOUR_MS
   ) {
     baseImagePreviewUrl = project.baseImageSignedUrl;
   } else {
-    const signedResult = await Promise.race([
-      serviceClient.storage.from(bucket).createSignedUrl(project.baseImagePath, URL_TTL_S),
+    const signed = await Promise.race([
+      getStorage().signedReadUrl('uploads', project.baseImagePath, URL_TTL_S),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
-    ]).catch(() => ({ data: null as null }));
-    if (signedResult.data?.signedUrl) {
-      baseImagePreviewUrl = signedResult.data.signedUrl;
-      const expiresAt = nowMs + URL_TTL_S * 1000;
-      try {
-        await db.update(videoProjects)
-          .set({ baseImageSignedUrl: baseImagePreviewUrl, baseImageSignedUrlExpiresAt: expiresAt })
-          .where(eq(videoProjects.id, projectId));
-      } catch (err) {
-        console.warn(`[video-projects/${projectId}] signed URL cache write failed:`, err);
+    ]).catch(() => null);
+    if (signed) {
+      baseImagePreviewUrl = signed;
+      if (!onR2) {
+        const expiresAt = nowMs + URL_TTL_S * 1000;
+        try {
+          await db.update(videoProjects)
+            .set({ baseImageSignedUrl: baseImagePreviewUrl, baseImageSignedUrlExpiresAt: expiresAt })
+            .where(eq(videoProjects.id, projectId));
+        } catch (err) {
+          console.warn(`[video-projects/${projectId}] signed URL cache write failed:`, err);
+        }
       }
     } else if (
+      !onR2 &&
       project.baseImageSignedUrl &&
       project.baseImageSignedUrlExpiresAt &&
       project.baseImageSignedUrlExpiresAt > nowMs

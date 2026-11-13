@@ -7,6 +7,7 @@ import { activeBrollLibraryCondition } from '@/lib/broll-visibility';
 import { loadClipBrands } from '@/lib/broll-brands';
 import { clipForViewer } from '@/lib/broll-access';
 import { BROLL_URL_TTL_S, currentSignedUrl } from '@/lib/broll-signed-url';
+import { locate } from '@/lib/object-store/registry';
 
 const URL_TTL_S = BROLL_URL_TTL_S;
 
@@ -36,6 +37,9 @@ export async function GET(): Promise<NextResponse> {
     categoryMap.get(r.clipId)!.push(r.categoryId);
   }
   const brandMap = await loadClipBrands(db, clipIds);
+
+  // One registry lookup for the whole list; the per-clip lookups below then come from its cache.
+  await locate('uploads', rows.map((c) => c.storagePath)).catch(() => undefined);
 
   const result = await Promise.all(rows.map(async (clip) => {
     const signedUrl = await currentSignedUrl(clip);

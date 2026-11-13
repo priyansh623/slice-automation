@@ -12,7 +12,7 @@
  *  - 2–10 clips supported by the concatenate endpoint.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { getStorage } from '../lib/object-store';
 import { db } from '../db';
 import {
   videoCompilations,
@@ -23,7 +23,6 @@ import {
 import { and, asc, eq, lt } from 'drizzle-orm';
 
 const COMPILATION_LEASE_MS = 30 * 60 * 1000;
-const BUCKET_VIDEOS = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
 const CONCATENATE_URL = 'https://api.useapi.net/v1/google-flow/videos/concatenate';
 
 function authHeaders(): Record<string, string> {
@@ -157,21 +156,13 @@ async function runCompilation(projectId: number, compilationId: number): Promise
     throw new Error(`Concatenate response missing video data. Keys: ${Object.keys(json).join(', ')}`);
   }
 
-  // Upload to Supabase Storage
+  // Store the compilation (Supabase Storage today; R2 once configured)
   const outputStoragePath = `compilations/${projectId}/${Date.now()}-compilation-${compilationId}.mp4`;
-  const supabase = serviceClient();
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET_VIDEOS)
-    .upload(outputStoragePath, videoBuffer, { contentType: 'video/mp4', upsert: false });
-  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+  try {
+    await getStorage().put('videos', outputStoragePath, videoBuffer, { contentType: 'video/mp4' });
+  } catch (uploadErr) {
+    throw new Error(`Upload failed: ${(uploadErr as Error).message}`);
+  }
 
   return outputStoragePath;
-}
-
-function serviceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
 }

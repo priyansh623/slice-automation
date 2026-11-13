@@ -3,13 +3,15 @@ import { db } from '@/db';
 import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/api-auth';
 import { sql } from 'drizzle-orm';
+import { R2Provider, r2ConfigFromEnv } from '@/lib/object-store/r2-provider';
 
 export async function GET(): Promise<NextResponse> {
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
 
-  const results: Record<string, { ok: boolean; detail: string }> = {};
+  // `configured: false` marks a provider that is switched off on purpose (not a failure).
+  const results: Record<string, { ok: boolean; detail: string; configured?: boolean }> = {};
 
   // 1. PostgreSQL (pooler)
   try {
@@ -42,6 +44,35 @@ export async function GET(): Promise<NextResponse> {
   } catch (e: unknown) {
     results.storage = { ok: false, detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   }
+
+  // 3b. Cloudflare R2. Not configured is a normal state while Supabase is the only provider: it is reported as such and
+  // does not make the overall result unhealthy. Only a configured R2 that cannot be reached is a failure.
+  const r2Config = r2ConfigFromEnv();
+  if (!r2Config) {
+    results.r2 = { ok: true, configured: false, detail: 'Not configured (R2 is inactive; Supabase is the only storage provider)' };
+  } else {
+    try {
+      const checks = await Promise.race([
+        new R2Provider(r2Config).ping(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out after 8 seconds')), 8000)),
+      ]);
+      const failed = checks.filter((c) => !c.ok);
+      results.r2 = failed.length === 0
+        ? { ok: true, configured: true, detail: checks.map((c) => c.detail).join('; ') }
+        : { ok: false, configured: true, detail: failed.map((c) => c.detail).join('; ').slice(0, 300) };
+    } catch (e: unknown) {
+      results.r2 = { ok: false, configured: true, detail: `R2 connection failed: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}` };
+    }
+  }
+
+  // 3c. Which provider new files go to (informational)
+  const writesToR2 = process.env.STORAGE_WRITE_PROVIDER === 'r2';
+  results.storageRouting = {
+    ok: !(writesToR2 && !r2Config),
+    detail: writesToR2 && !r2Config
+      ? 'STORAGE_WRITE_PROVIDER=r2 but R2 is not configured; new files fall back to Supabase'
+      : `New files go to ${writesToR2 ? 'R2' : 'Supabase'}; reading falls back between providers: ${process.env.STORAGE_FAILOVER === 'off' ? 'off' : 'on'}`,
+  };
 
   // 4. Anthropic API key present (no test call — don't spend tokens)
   results.anthropic = process.env.ANTHROPIC_API_KEY

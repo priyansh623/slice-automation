@@ -521,6 +521,8 @@ describe('existing data and brand rows', () => {
 describe('a stalled storage call cannot hold up the library', () => {
   it('keeps the existing URL when refreshing takes too long, and still answers', async () => {
     const { currentSignedUrl } = await import('@/lib/broll-signed-url');
+    const { resetStorageForTests } = await import('@/lib/object-store');
+    resetStorageForTests(); // the storage layer keeps its client; rebuild it so the hanging mock below is the one used
     const hang = vi.spyOn(await import('@supabase/supabase-js'), 'createClient').mockReturnValue({
       storage: { from: () => ({ createSignedUrl: () => new Promise(() => {}) }) },
     } as never);
@@ -528,6 +530,7 @@ describe('a stalled storage call cannot hold up the library', () => {
     const url = await currentSignedUrl({ id: 1, storagePath: 'x/y.mp4', signedUrl: 'https://old.example/url', signedUrlExpiresAt: Date.now() + 60_000 }, 50);
     expect(hang).toHaveBeenCalled(); // the hanging client was really used, not the default stub
     hang.mockRestore();
+    resetStorageForTests();
     expect(url).toBe('https://old.example/url');
     expect(Date.now() - started).toBeLessThan(1000);
   });

@@ -2,7 +2,7 @@ import { db } from '@/db';
 import { brollClips } from '@/db/schema.pg';
 import { eq, and, lt, isNull } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getStorage } from '@/lib/object-store';
 
 const BROLL_TASK_LEASE_MS = 10 * 60 * 1000;
 
@@ -85,14 +85,7 @@ async function analyzeClip(clip: { title: string; thumbnailSignedUrl: string | n
 async function refreshThumbnailSignedUrl(storagePath: string): Promise<string | null> {
   if (!storagePath) return null;
   try {
-    const service = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } },
-    );
-    const bucket = process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
-    const { data } = await service.storage.from(bucket).createSignedUrl(storagePath, 3600);
-    return data?.signedUrl ?? null;
+    return await getStorage().signedReadUrl('uploads', storagePath, 3600);
   } catch {
     return null;
   }

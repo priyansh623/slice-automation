@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, videoGenerations } from '@/db/schema.pg';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getStorage } from '@/lib/object-store';
 import { and, eq } from 'drizzle-orm';
 
 export async function GET(
@@ -60,18 +61,18 @@ export async function GET(
     return NextResponse.json({ error: 'No completed video found' }, { status: 404 });
   }
 
-  const bucket = process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos';
-  // Use service role for signed URL creation — the videos bucket is private
-  // and the anon client can't generate signed URLs without special policies.
-  // Auth + ownership checks above ensure only the rightful owner reaches here.
-  const serviceSupabase = createServiceClient();
-  const { data, error } = await serviceSupabase.storage
-    .from(bucket)
-    .createSignedUrl(generation.videoStoragePath, 3600);
+  // The storage layer signs with server-side credentials (the videos bucket is private) and knows which provider
+  // holds the file. The sign-in check above is what lets a request reach this point.
+  let signedUrl: string | null = null;
+  try {
+    signedUrl = await getStorage().signedReadUrl('videos', generation.videoStoragePath, 3600);
+  } catch (err) {
+    console.error('[video] signed URL failed:', (err as Error).message);
+  }
 
-  if (error || !data?.signedUrl) {
+  if (!signedUrl) {
     return NextResponse.json({ error: 'Failed to generate signed video URL' }, { status: 500 });
   }
 
-  return NextResponse.json({ signedUrl: data.signedUrl, generationId: generation.id });
+  return NextResponse.json({ signedUrl, generationId: generation.id });
 }
