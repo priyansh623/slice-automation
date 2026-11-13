@@ -13,7 +13,7 @@ vi.mock('@/db', () => ({
   db: new Proxy({}, { get(_t, prop) { const real = holder.db as Record<string | symbol, unknown>; const v = real[prop]; return typeof v === 'function' ? v.bind(real) : v; } }),
 }));
 
-import { locate, registerObject, clearLocationCache } from '@/lib/object-store/registry';
+import { locate, registerObject, registerObjectIfAbsent, registeredRows, clearLocationCache } from '@/lib/object-store/registry';
 
 const MIGRATION = fs.readFileSync(path.resolve(__dirname, '../../drizzle/pg/0023_storage_objects.sql'), 'utf8');
 let pg: PGlite;
@@ -88,5 +88,39 @@ describe('when the registry cannot be read', () => {
       holder.db = real;
       await empty.close();
     }
+  });
+});
+
+describe('insert-only registration used by the copy tool', () => {
+  it('stores exactly the bucket, key, provider and metadata it is given', async () => {
+    await registerObjectIfAbsent({ bucket: 'uploads', key: 'user-1/clip.mp4', provider: 'r2', sizeBytes: 1234, contentType: 'video/mp4', sha256: 'ab'.repeat(32), verifiedAt: 42 });
+    const row = (await pg.query<Record<string, unknown>>(`select bucket, key, provider, size_bytes, content_type, sha256, verified_at from storage_objects`)).rows;
+    expect(row).toHaveLength(1);
+    expect({ ...row[0], size_bytes: Number(row[0].size_bytes), verified_at: Number(row[0].verified_at) }).toEqual({
+      bucket: 'uploads', key: 'user-1/clip.mp4', provider: 'r2', size_bytes: 1234, content_type: 'video/mp4', sha256: 'ab'.repeat(32), verified_at: 42,
+    });
+  });
+
+  it('inserts a new row once and never changes an existing one', async () => {
+    expect(await registerObjectIfAbsent({ bucket: 'videos', key: 'a.mp4', provider: 'r2', sizeBytes: 5, sha256: 'aa', verifiedAt: 1 })).toBe(true);
+    expect(await registerObjectIfAbsent({ bucket: 'videos', key: 'a.mp4', provider: 'r2', sizeBytes: 999, sha256: 'bb', verifiedAt: 2 })).toBe(false);
+    const row = (await pg.query<{ size_bytes: string; sha256: string }>(`select size_bytes, sha256 from storage_objects where key='a.mp4'`)).rows[0];
+    expect({ size: Number(row.size_bytes), sha256: row.sha256 }).toEqual({ size: 5, sha256: 'aa' });
+  });
+
+  it('leaves a row that says supabase exactly as it is', async () => {
+    await registerObject({ bucket: 'videos', key: 'b.mp4', provider: 'supabase' });
+    expect(await registerObjectIfAbsent({ bucket: 'videos', key: 'b.mp4', provider: 'r2' })).toBe(false);
+    expect((await pg.query<{ provider: string }>(`select provider from storage_objects where key='b.mp4'`)).rows[0].provider).toBe('supabase');
+  });
+
+  it('registeredRows returns exact rows with their checksum, and throws when the registry is unreadable', async () => {
+    await registerObject({ bucket: 'videos', key: 'c.mp4', provider: 'r2', sizeBytes: 7, sha256: 'cd'.repeat(32) });
+    await registerObject({ bucket: 'videos', key: 'old.mp4', provider: 'r2' });
+    const m = await registeredRows('videos', ['c.mp4', 'old.mp4', 'missing.mp4']);
+    expect([...m]).toEqual([['c.mp4', { provider: 'r2', sha256: 'cd'.repeat(32), sizeBytes: 7 }], ['old.mp4', { provider: 'r2', sha256: null, sizeBytes: null }]]);
+    await pg.exec('alter table storage_objects rename to storage_objects_gone');
+    try { await expect(registeredRows('videos', ['c.mp4'])).rejects.toThrow(); }
+    finally { await pg.exec('alter table storage_objects_gone rename to storage_objects'); }
   });
 });
