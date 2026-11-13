@@ -540,6 +540,75 @@ describe('memory measurement does not change what a compilation does', () => {
   });
 });
 
+describe('memory guard: the server-side FFmpeg join is limited to 6 scenes', () => {
+  const LIMIT_TEXT = /limited to 6 scenes/;
+  const noWork = () => {
+    expect(holder.ffmpegInputs).toEqual([]);
+    expect(holder.fetchCalls.filter((u) => u.includes('useapi.net'))).toEqual([]);
+  };
+
+  it('refuses 7 scenes that are all older clips, with a clear message, creating no compilation and doing no work', async () => {
+    const { projectId, scenes } = await makeProject(7);
+    const res = await compile(projectId, allLegacy(scenes), false);
+    expect(res.status).toBe(422);
+    expect(res.json.error).toMatch(LIMIT_TEXT);
+    expect(res.json.error).toContain('This one has 7');
+    expect(await list(projectId)).toHaveLength(0);
+    noWork();
+  });
+
+  it('refuses 7 scenes where only ONE clip is older, because that one clip forces the whole set onto the server join', async () => {
+    const { projectId, scenes } = await makeProject(7);
+    const res = await compile(projectId, pick(scenes, (i) => i === 3), false);
+    expect(res.status).toBe(422);
+    expect(res.json.error).toMatch(LIMIT_TEXT);
+    expect(await list(projectId)).toHaveLength(0);
+  });
+
+  it('still accepts exactly 6 older clips (the measured size) and joins them', async () => {
+    const { projectId, scenes } = await makeProject(6);
+    const res = await compile(projectId, allLegacy(scenes));
+    expect(res.status).toBe(201);
+    expect((await list(projectId))[0]).toMatchObject({ status: 'completed', method: 'ffmpeg', version: 1 });
+    expect(holder.ffmpegInputs[0]).toHaveLength(6);
+  });
+
+  it('does not limit sets that all have media IDs: 7 and 10 newer clips still go through useapi.net', async () => {
+    const seven = await makeProject(7);
+    expect((await compile(seven.projectId, allNew(seven.scenes))).status).toBe(201);
+    expect((await list(seven.projectId))[0]).toMatchObject({ status: 'completed', method: 'useapi' });
+    const ten = await makeProject(10);
+    expect((await compile(ten.projectId, allNew(ten.scenes))).status).toBe(201);
+    expect((await list(ten.projectId))[0]).toMatchObject({ status: 'completed', method: 'useapi' });
+    expect(holder.ffmpegInputs).toEqual([]);
+  });
+
+  it('a refused request leaves earlier versions untouched and uses no version number; a later allowed compile gets the next number', async () => {
+    const { projectId, scenes } = await makeProject(7);
+    const v1 = await compile(projectId, allNew(scenes));
+    expect((await compile(projectId, allLegacy(scenes), false)).status).toBe(422);
+    const v2 = await compile(projectId, allNew(scenes));
+    const rows = await list(projectId);
+    expect(rows.find((r) => r.id === v1.id)).toMatchObject({ status: 'completed', version: 1 });
+    expect(rows.find((r) => r.id === v2.id)).toMatchObject({ status: 'completed', version: 2, isCurrent: true });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('safety net: a job that is already queued above the limit fails in the worker BEFORE downloading or joining anything', async () => {
+    const { projectId, scenes } = await makeProject(7);
+    const now = Date.now();
+    const [job] = await db.insert(schema.videoCompilations).values({ videoProjectId: projectId, status: 'pending', createdAt: now, updatedAt: now }).returning();
+    await db.insert(schema.compilationSceneSelections).values(allLegacy(scenes).map((s) => ({ compilationId: job.id, videoScreenId: s.videoScreenId, videoGenerationId: s.videoGenerationId, createdAt: now })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await processPendingCompilation();
+    vi.restoreAllMocks();
+    const row = (await list(projectId))[0];
+    expect(row).toMatchObject({ status: 'failed', version: null });
+    expect(row.errorMessage).toMatch(LIMIT_TEXT);
+    noWork();
+  });
+});
+
 describe('legacy clips (no media ID)', () => {
   it('compiles legacy clips from their stored files with FFmpeg and makes no useapi.net call', async () => {
     const { projectId, scenes } = await makeProject();

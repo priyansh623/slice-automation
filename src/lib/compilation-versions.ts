@@ -80,6 +80,20 @@ export function compilationView<T extends CompilationRowLike>(rows: readonly T[]
 export const MIN_COMPILATION_CLIPS = 2;
 export const MAX_COMPILATION_CLIPS = 10;
 
+/**
+ * The most scenes the server-side FFmpeg join may take. It is used when any chosen clip has no media ID (older generations),
+ * because the useapi.net concatenate endpoint cannot take those. Measured on the 512 MB Render worker: 3 clips peaked at
+ * 309 MiB and 6 clips at 431 MiB (84% of the limit); more clips were not tried and would be expected to reach the limit
+ * (about 41 MiB per extra clip). Sets that all have media IDs use useapi.net and are not limited by this.
+ * Raise it only after measuring a larger run on the worker (see the [memory] log lines).
+ */
+export const MAX_FFMPEG_COMPILATION_CLIPS = 6;
+
+export function ffmpegClipLimitMessage(sceneCount: number): string {
+  return `Compilations that include older clips (generated before concatenation support) are limited to ${MAX_FFMPEG_COMPILATION_CLIPS} scenes for now. `
+    + `This one has ${sceneCount}. Generating a new clip for each older scene removes the limit.`;
+}
+
 export interface ActiveCompilationText {
   /** True while the job has not been picked up by the worker yet (status 'pending'). */
   queued: boolean;

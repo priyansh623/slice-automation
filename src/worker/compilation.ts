@@ -25,7 +25,7 @@ import {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { compileWithFfmpeg } from './compilation-ffmpeg';
 import { safely, startMemoryProbe, WORKER_LIFETIME } from './container-memory';
-import { MAX_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '../lib/compilation-versions';
+import { ffmpegClipLimitMessage, MAX_COMPILATION_CLIPS, MAX_FFMPEG_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '../lib/compilation-versions';
 
 export type CompilationMethod = 'useapi' | 'ffmpeg';
 
@@ -181,6 +181,8 @@ async function runCompilation(projectId: number, compilationId: number): Promise
   // Any clip without a media ID (an older generation) means the concatenate endpoint cannot take the whole set, so the
   // stored files are joined with FFmpeg instead. Newer and older clips can be mixed this way.
   if (clips.some((c) => !c.mediaGenerationId)) {
+    // Safety net behind the API check (a job created before the limit existed, or by another path): fail before any download.
+    if (clips.length > MAX_FFMPEG_COMPILATION_CLIPS) throw new Error(ffmpegClipLimitMessage(clips.length));
     const missing = clips.find((c) => !c.videoStoragePath);
     if (missing) throw new Error(`Scene ${missing.sceneNumber} clip has no stored video file, so it cannot be compiled.`);
     console.log(`[compilation] Job ${compilationId}: ${clips.filter((c) => !c.mediaGenerationId).length} of ${clips.length} clips have no media ID; joining stored files with FFmpeg`);

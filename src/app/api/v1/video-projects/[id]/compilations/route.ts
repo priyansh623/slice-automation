@@ -9,7 +9,7 @@ import {
 } from '@/db/schema.pg';
 import { and, eq, inArray } from 'drizzle-orm';
 import { requireUser, requireProject } from '@/lib/api-auth';
-import { annotateVersions, MAX_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '@/lib/compilation-versions';
+import { annotateVersions, ffmpegClipLimitMessage, MAX_COMPILATION_CLIPS, MAX_FFMPEG_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '@/lib/compilation-versions';
 
 // Lists every compilation of the project, newest first. Each one carries its version number (successful compilations
 // only), whether it is the current one, how it was produced, and which clip was chosen for each scene.
@@ -148,6 +148,13 @@ export async function POST(
         { status: 422 },
       );
     }
+  }
+
+  // Any clip without a media ID means the whole set is joined on the server with FFmpeg, which is limited by the worker's
+  // memory. Refuse a larger set now, with a clear message, instead of creating a job that could exhaust the worker.
+  const needsServerJoin = scenes.some((scene) => !genById.get(scene.videoGenerationId)?.mediaGenerationId);
+  if (needsServerJoin && scenes.length > MAX_FFMPEG_COMPILATION_CLIPS) {
+    return NextResponse.json({ error: ffmpegClipLimitMessage(scenes.length) }, { status: 422 });
   }
 
   const now = Date.now();
