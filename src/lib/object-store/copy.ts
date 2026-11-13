@@ -61,6 +61,12 @@ export interface CopyDeps {
    * Returns null when it cannot be determined. Used to detect a listing that silently missed objects.
    */
   countSource?(bucket: BucketName, prefix: string): Promise<number | null>;
+  /**
+   * Retry policy for the Supabase download of each file. A transient failure (network error, HTTP 408/425/429/5xx) is retried
+   * a few times with exponential backoff and jitter; anything else fails at once. A failed download never writes to R2
+   * or the registry, so a retry only repeats a read.
+   */
+  retry?: RetryOptions;
   shouldStop?: () => boolean;
   now?: () => number;
   log?: (line: string) => void;
@@ -254,7 +260,7 @@ async function copyOne(deps: CopyDeps, bucket: BucketName, obj: SourceObject): P
   // 1. Read the original (read-only on Supabase).
   let original: Buffer;
   try {
-    original = await deps.source.download(bucket, obj.key);
+    original = await retryTransient(`download ${bucket}/${obj.key}`, () => deps.source.download(bucket, obj.key), deps.retry);
   } catch (e) {
     rethrowIfInterrupted(e);
     return fail('download', e instanceof ObjectNotFoundError ? 'object is listed but could not be downloaded from Supabase' : e);

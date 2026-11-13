@@ -129,6 +129,118 @@ describe('a successful copy', () => {
   });
 });
 
+const httpErr = (status: number, msg = 'error') => Object.assign(new Error(msg), { status, statusCode: String(status) });
+const noWait = { sleep: async () => {}, random: () => 0.5 };
+
+describe('transient download failures are retried; permanent ones are not', () => {
+  it('retries a 503 and a 429 and then copies the file once, registering it only after the checked read-back', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    let n = 0;
+    r.hooks.sbDownload = () => { n++; if (n === 1) throw httpErr(503); if (n === 2) throw httpErr(429); };
+    const report = await runCopy(r.deps, EXEC);
+    expect(report.results[0]).toMatchObject({ outcome: 'copied' });
+    expect(r.calls.filter((c) => c.startsWith('sb.download'))).toHaveLength(3);
+    expect(r.calls.filter((c) => c.startsWith('r2.put'))).toHaveLength(1);        // written once, create-only
+    expect(r.calls.filter((c) => c.startsWith('register'))).toHaveLength(1);
+    expect(r.registry.get('videos/a.mp4')?.sha256).toBe(sha(B('aaa')));
+  });
+
+  it.each([408, 425, 429, 500, 502, 503, 504])('retries HTTP %i', async (status) => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    let n = 0;
+    r.hooks.sbDownload = () => { if (n++ === 0) throw httpErr(status); };
+    expect((await runCopy(r.deps, EXEC)).results[0].outcome).toBe('copied');
+    expect(n).toBe(2);
+  });
+
+  it('retries a network failure that has no HTTP status ("fetch failed")', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    let n = 0;
+    r.hooks.sbDownload = () => { if (n++ < 2) throw new Error('Failed to download a.mp4 from bucket videos: fetch failed'); };
+    expect((await runCopy(r.deps, EXEC)).results[0].outcome).toBe('copied');
+    expect(n).toBe(3);
+  });
+
+  it('gives up after 5 attempts, reports the key and the error, writes nothing, and carries on with the next file', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa', 'videos/b.mp4': 'bbb' } });
+    r.deps.retry = noWait;
+    r.hooks.sbDownload = (k) => { if (k === 'a.mp4') throw httpErr(503, 'Service Unavailable'); };
+    const report = await runCopy(r.deps, EXEC);
+    const a = report.results.find((x) => x.key === 'a.mp4')!;
+    expect(a).toMatchObject({ outcome: 'failed', stage: 'download' });
+    expect(a.reason).toContain('Service Unavailable');
+    expect(a.reason).toContain('gave up after 5 attempts');
+    expect(r.calls.filter((c) => c === 'sb.download videos/a.mp4')).toHaveLength(5);
+    expect(r.r2.has('videos/a.mp4')).toBe(false);
+    expect(r.registry.has('videos/a.mp4')).toBe(false);                           // a failed download never creates a registry entry
+    expect(report.results.find((x) => x.key === 'b.mp4')?.outcome).toBe('copied');
+  });
+
+  it.each([400, 401, 403, 404, 413])('does not retry permanent HTTP %i: exactly one attempt', async (status) => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    r.hooks.sbDownload = () => { throw httpErr(status, 'denied'); };
+    const report = await runCopy(r.deps, EXEC);
+    expect(report.results[0]).toMatchObject({ outcome: 'failed', stage: 'download' });
+    expect(r.calls.filter((c) => c.startsWith('sb.download'))).toHaveLength(1);
+    expect(writes(r.calls)).toEqual([]);
+  });
+
+  it('does not retry a conflicting status pair when either one is permanent (503 with "404")', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    r.hooks.sbDownload = () => { throw Object.assign(new Error('x'), { status: 503, statusCode: '404' }); };
+    await runCopy(r.deps, EXEC);
+    expect(r.calls.filter((c) => c.startsWith('sb.download'))).toHaveLength(1);
+  });
+
+  it('does not retry a file Supabase lists but cannot find (not found is permanent)', async () => {
+    const r = rig();
+    r.deps.retry = noWait;
+    r.hooks.list = [{ key: 'ghost.mp4', size: 3, contentType: 'video/mp4' }];
+    const report = await runCopy(r.deps, EXEC);
+    expect(report.results[0]).toMatchObject({ outcome: 'failed', stage: 'download' });
+    expect(r.calls.filter((c) => c.startsWith('sb.download'))).toHaveLength(1);
+  });
+
+  it('waits with growing, jittered delays between attempts and logs each retry', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    const waits: number[] = []; const lines: string[] = [];
+    r.deps.retry = { sleep: async (ms) => { waits.push(ms); }, random: () => 0, log: (l) => lines.push(l) };
+    let n = 0;
+    r.hooks.sbDownload = () => { if (n++ < 3) throw httpErr(502); };
+    await runCopy(r.deps, EXEC);
+    expect(waits).toEqual([250, 500, 1000]);                                       // equal jitter, random()=0: half of 0.5 s, 1 s, 2 s
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain('download videos/a.mp4');
+  });
+
+  it('an interruption is never retried', async () => {
+    const r = rig({ sb: { 'videos/a.mp4': 'aaa' } });
+    r.deps.retry = noWait;
+    r.hooks.sbDownload = () => { throw new CopyInterrupted(); };
+    await expect(runCopy(r.deps, EXEC)).rejects.toBeInstanceOf(CopyInterrupted);
+    expect(r.calls.filter((c) => c.startsWith('sb.download'))).toHaveLength(1);
+  });
+
+  it('the real Supabase provider keeps the HTTP status of a failed download so it can be classified', async () => {
+    const { SupabaseProvider } = await import('@/lib/object-store/supabase-provider');
+    const mk = (error: unknown) => new SupabaseProvider({ storage: { from: () => ({ download: async () => ({ data: null, error }) }) } } as never);
+    const err = await mk({ message: 'Service Unavailable', status: 503, statusCode: '503' }).download('videos', 'a.mp4').catch((e) => e);
+    expect(err.message).toContain('Failed to download a.mp4');
+    expect(err).toMatchObject({ status: 503, statusCode: '503' });
+    const { isTransientError } = await import('@/lib/object-store/retry');
+    expect(isTransientError(err)).toBe(true);
+    const perm = await mk({ message: 'Forbidden', status: 403, statusCode: '403' }).download('videos', 'a.mp4').catch((e) => e);
+    expect(isTransientError(perm)).toBe(false);
+    const net = await mk({ message: 'fetch failed', name: 'StorageUnknownError', originalError: new TypeError('fetch failed') }).download('videos', 'a.mp4').catch((e) => e);
+    expect(isTransientError(net)).toBe(true);
+  });
+});
+
 describe('failures never register the file', () => {
   it('download failure: nothing written to R2, nothing registered, the run continues', async () => {
     const r = rig({ sb: { 'videos/a.mp4': 'aaa', 'videos/b.mp4': 'bbb' } });

@@ -19,6 +19,9 @@
  *   - R2 writes are create-only: an object already in R2 is never overwritten.
  *   - The registry is insert-only here: existing rows are never changed. A file whose copy fails any check, or whose
  *     registry write fails, stays unregistered and keeps being served from Supabase.
+ *   - A transient error while DOWNLOADING a Supabase original is retried the same way (up to 5 attempts, backoff with
+ *     jitter); a permanent error (for example 400, 401, 403, 404) fails that file at once. A failed download never writes
+ *     to R2 or the registry.
  *   - A transient network or server error while listing Supabase (network failure, HTTP 408/425/429/5xx) is retried up to
  *     5 times in total with backoff (with the default settings, at most 7.5 s of waiting per call) and each retry is
  *     printed; any other error stops
@@ -121,6 +124,7 @@ async function main(): Promise<number> {
           return typeof n === 'number' ? n : null;
         } catch { return null; }
       },
+      retry: { log: (line) => console.log(line) },
       shouldStop: () => stop,
       log: (line) => console.log(line),
     },

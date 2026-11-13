@@ -33,7 +33,10 @@ export class SupabaseProvider implements StorageProvider {
     const { data, error } = await this.sb().storage.from(bucketId(bucket)).download(key);
     if (error || !data) {
       if (!error || /not found|does not exist|404/i.test(error.message)) throw new ObjectNotFoundError(bucket, key);
-      throw new Error(`Failed to download ${key} from bucket ${bucketId(bucket)}: ${error.message}`);
+      // Keep the client's HTTP status and original error on the thrown error so a caller can tell a transient failure
+      // (network, 429, 5xx) from a permanent one. Only properties are added; the message is unchanged.
+      const e = error as { status?: unknown; statusCode?: unknown; originalError?: unknown };
+      throw Object.assign(new Error(`Failed to download ${key} from bucket ${bucketId(bucket)}: ${error.message}`), { status: e.status, statusCode: e.statusCode, originalError: e.originalError });
     }
     return Buffer.from(await data.arrayBuffer());
   }
