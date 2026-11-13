@@ -4,6 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 import { db } from '@/db';
 import { claudeConversations } from '@/db/schema.pg';
 import { and, eq, isNull } from 'drizzle-orm';
+import {
+  hydrateConversationImages,
+  makeImageRef,
+  validateImageRef,
+  type ImageRefBlock,
+} from '@/lib/conversation-images';
 
 const MODEL = () => process.env.ANTHROPIC_MODEL ?? 'claude-opus-5-5';
 
@@ -29,7 +35,11 @@ type SupportedMimeType = (typeof SUPPORTED_IMAGE_TYPES)[keyof typeof SUPPORTED_I
 export interface EncodedImage {
   base64: string;
   mimeType: SupportedMimeType;
+  /** Where the file lives in object storage. Conversations store this instead of the base64 data. */
+  ref?: ImageRefBlock;
 }
+
+const uploadsBucket = () => process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
 
 // Module-level image cache for the worker process (runs as a persistent Render process, not
 // Vercel serverless — instances are not shared and won't survive a restart, but within a single
@@ -62,7 +72,7 @@ export async function encodeImageFromStorage(storagePath: string, bucket: string
   const mimeType = SUPPORTED_IMAGE_TYPES[ext as keyof typeof SUPPORTED_IMAGE_TYPES] ?? 'image/jpeg';
   const arrayBuffer = await data.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString('base64');
-  const result: EncodedImage = { base64, mimeType };
+  const result: EncodedImage = { base64, mimeType, ref: makeImageRef(bucket, storagePath, mimeType) };
   if (_imageCache.size >= IMAGE_CACHE_MAX) {
     // Evict oldest entry (Map preserves insertion order, so the first key is oldest).
     const firstKey = _imageCache.keys().next().value;
@@ -161,21 +171,36 @@ export async function callClaude(
 ): Promise<string> {
   const { videoScreenId, fresh = false, image, model, thinking = true } = options ?? {};
 
+  // `history` is exactly what is stored (legacy base64 blocks and/or image references). `apiHistory` is the same
+  // conversation with every reference replaced by the image Claude originally saw.
   const history = fresh ? [] : await loadConversation(videoProjectId, videoScreenId);
+  const apiHistory = await hydrateConversationImages(
+    history,
+    (bucket, path) => encodeImageFromStorage(path, bucket),
+    [uploadsBucket()],
+  );
 
-  const userContent: MessageParam['content'] = image
+  const text = { type: 'text' as const, text: userMessage };
+  const apiUserContent: MessageParam['content'] = image
     ? [
         {
           type: 'image' as const,
           source: { type: 'base64' as const, media_type: image.mimeType, data: image.base64 },
         },
-        { type: 'text' as const, text: userMessage },
+        text,
       ]
     : userMessage;
 
+  // What is saved: a reference to the stored file when the image has a valid one, so the image bytes are not
+  // copied into the database on every turn. Without a usable reference the old behaviour (embed) is kept.
+  const canReference = image?.ref !== undefined && validateImageRef(image.ref, [uploadsBucket()]) === null;
+  const storedUserContent: MessageParam['content'] = image && canReference
+    ? ([image.ref, text] as unknown as MessageParam['content'])
+    : apiUserContent;
+
   const messages: MessageParam[] = [
-    ...history,
-    { role: 'user', content: userContent },
+    ...apiHistory,
+    { role: 'user', content: apiUserContent },
   ];
 
   const response = await getClient().messages.create({
@@ -193,7 +218,8 @@ export async function callClaude(
 
   if (!fresh) {
     const updated: MessageParam[] = [
-      ...messages,
+      ...history,
+      { role: 'user', content: storedUserContent },
       { role: 'assistant', content: response.content },
     ];
     await saveConversation(videoProjectId, updated, videoScreenId);
