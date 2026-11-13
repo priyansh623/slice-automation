@@ -23,7 +23,7 @@ const holder = vi.hoisted(() => ({
   concatenateFails: false,
   onPut: null as null | (() => Promise<void>),
   onConcatenate: null as null | (() => Promise<void>),
-  memory: null as null | (() => unknown),
+  onFfmpeg: null as null | (() => void),
 }));
 
 vi.mock('@/db', () => ({
@@ -39,13 +39,9 @@ vi.mock('@/lib/object-store', () => ({
     signedReadUrl: async (_b: string, key: string) => (holder.files.has(key) ? `https://storage.test/${key}` : null),
   }),
 }));
-// Memory measurement: by default the real reader (which finds no cgroup files on a laptop); tests can inject figures.
-vi.mock('@/worker/container-memory', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@/worker/container-memory')>();
-  return { ...real, snapshotMemory: () => (holder.memory ? holder.memory() : real.snapshotMemory()) };
-});
 vi.mock('@/worker/ffmpeg-utils', () => ({
   runFfmpegFilterComplex: (inputs: string[], output: string) => {
+    holder.onFfmpeg?.();
     holder.ffmpegInputs.push(inputs.map((p) => fs.readFileSync(p).toString()));
     if (holder.failFfmpeg) throw new Error('FFmpeg exited with code 1');
     fs.writeFileSync(output, `ffmpeg-joined:${inputs.map((p) => fs.readFileSync(p).toString()).join('+')}`);
@@ -56,6 +52,8 @@ import { GET as listCompilations, POST as startCompilation } from '@/app/api/v1/
 import { GET as getVideo } from '@/app/api/v1/video-projects/[id]/compilations/[cid]/video/route';
 import { GET as getDownload } from '@/app/api/v1/video-projects/[id]/compilations/[cid]/download/route';
 import { processPendingCompilation, markCompleted, recoverStaleCompilations, INTERRUPTED_COMPILATION_MESSAGE } from '@/worker/compilation';
+import { resetLifetimeCountersForTests, useCgroupIoForTests, WORKER_LIFETIME } from '@/worker/container-memory';
+import { FakeKernel, MIB } from './helpers/fake-cgroup';
 
 const ROOT = path.resolve(__dirname, '../..');
 const ALICE = '00000000-0000-4000-8000-00000000a11c';
@@ -89,7 +87,8 @@ beforeEach(async () => {
   holder.concatenateFails = false;
   holder.onPut = null;
   holder.onConcatenate = null;
-  holder.memory = null;
+  holder.onFfmpeg = null;
+  useCgroupIoForTests();
   await pg.exec('truncate video_projects restart identity cascade');
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
     const u = String(url);
@@ -462,8 +461,6 @@ describe('completion guard: a finished or failed job can never be overwritten', 
 
 
 describe('memory measurement does not change what a compilation does', () => {
-  const MIB = 1024 * 1024;
-  const snap = (peak: number) => ({ source: 'cgroup-v2', currentBytes: 140 * MIB, peakBytes: peak * MIB, limitBytes: 512 * MIB, oomKills: 0 });
   const outcome = async () => {
     const { projectId, scenes } = await makeProject();
     const done = await compile(projectId, allLegacy(scenes));
@@ -474,37 +471,72 @@ describe('memory measurement does not change what a compilation does', () => {
     const bad = (await list(projectId))[0];
     return { done: done.status, ok: { status: ok.status, version: ok.version, method: ok.method, isCurrent: ok.isCurrent }, bad: { status: bad.status, version: bad.version } };
   };
+  const field = (line: string, key: string) => new RegExp(`${key}=(\\S+)`).exec(line)?.[1];
 
-  it('logs a memory line for a completed job and for a failed one, with the figures it was given', async () => {
-    const peaks = [150, 340, 150, 345]; // before/after of job 1, before/after of job 2
-    let i = 0;
-    holder.memory = () => snap(peaks[i++ % peaks.length]);
+  it('logs before and after readings for a completed job and a failed one, with the lifetime and the isolated peak', async () => {
+    resetLifetimeCountersForTests();                                           // a freshly started worker process
+    const kernel = new FakeKernel();
+    useCgroupIoForTests(kernel.io());
+    holder.onFfmpeg = () => { kernel.use(260 * MIB); kernel.use(125 * MIB); };   // the FFmpeg join pushes memory up, then it falls back
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await outcome();
     const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[memory] compilation'));
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatch(/completed: peak_mib=340 peak_before_mib=150 .*limit_mib=512/);
-    expect(lines[1]).toMatch(/failed: peak_mib=345 peak_before_mib=150/);
     vi.restoreAllMocks();
+    expect(lines).toHaveLength(2);
+
+    const [completed, failed] = lines;
+    expect(completed).toContain('completed:');
+    expect(field(completed, 'lifetime')).toBe(WORKER_LIFETIME.id);
+    expect(field(completed, 'job_n')).toBe('1');
+    expect(field(completed, 'before_current_mib')).toBe('110');
+    expect(field(completed, 'before_peak_mib')).toBe('110');
+    expect(field(completed, 'after_current_mib')).toBe('125');
+    expect(field(completed, 'after_peak_mib')).toBe('260');
+    expect(field(completed, 'run_peak_mib')).toBe('260');
+    expect(field(completed, 'basis')).toBe('new-record');
+
+    // The failed job (useapi path, so no FFmpeg): memory did not rise, so the earlier record is only an upper bound
+    // unless a proven reset isolates it. Either way the readings chain on from the previous run.
+    expect(failed).toContain('failed:');
+    expect(field(failed, 'job_n')).toBe('2');
+    expect(field(failed, 'before_peak_mib')).toBe(field(completed, 'after_peak_mib'));
+    expect(field(failed, 'before_current_mib')).toBe(field(completed, 'after_current_mib'));
+    expect(['reset', 'upper-bound']).toContain(field(failed, 'basis'));
   });
 
-  it('gives exactly the same results with the measurement unavailable, injected, or broken (it throws)', async () => {
+  it('gives exactly the same results with a healthy kernel, no cgroup files at all, or a kernel that throws on every read', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    holder.memory = null;
+    useCgroupIoForTests({ read: () => null, openPeak: () => ({ error: 'ENOENT' }) });
     const unavailable = await outcome();
     await pg.exec('truncate video_projects restart identity cascade');
-    holder.memory = () => snap(300);
-    const injected = await outcome();
+    const kernel = new FakeKernel();
+    useCgroupIoForTests(kernel.io());
+    holder.onFfmpeg = () => { kernel.use(300 * MIB); };
+    const healthy = await outcome();
     await pg.exec('truncate video_projects restart identity cascade');
-    holder.memory = () => { throw new Error('cgroup read exploded'); };
+    holder.onFfmpeg = null;
+    useCgroupIoForTests({ read: () => { throw new Error('cgroup read exploded'); }, openPeak: () => { throw new Error('cgroup open exploded'); } });
     const broken = await outcome();
     vi.restoreAllMocks();
-    expect(injected).toEqual(unavailable);
+    expect(healthy).toEqual(unavailable);
     expect(broken).toEqual(unavailable);
     expect(unavailable.ok).toMatchObject({ status: 'completed', version: 1, method: 'ffmpeg', isCurrent: true });
     expect(unavailable.bad).toMatchObject({ status: 'failed', version: null });
+  });
+
+  it('names the new worker lifetime when it marks interrupted compilations failed, so that run is explicit', async () => {
+    const { projectId, scenes } = await makeProject();
+    const stuck = await compile(projectId, allNew(scenes), false);
+    await db.update(schema.videoCompilations).set({ status: 'processing', claimedAt: Date.now() }).where(eq(schema.videoCompilations.id, stuck.id!));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await recoverStaleCompilations();
+    const line = String(warn.mock.calls[0][0]);
+    vi.restoreAllMocks();
+    expect(line).toContain(`${stuck.id}`);
+    expect(line).toContain(`lifetime ${WORKER_LIFETIME.id}`);
+    expect(line).toMatch(/not comparable/);
   });
 });
 

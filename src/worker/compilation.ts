@@ -24,7 +24,7 @@ import {
 } from '../db/schema.pg';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { compileWithFfmpeg } from './compilation-ffmpeg';
-import { logCompilationMemory, safely, snapshotMemory } from './container-memory';
+import { safely, startMemoryProbe, WORKER_LIFETIME } from './container-memory';
 import { MAX_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '../lib/compilation-versions';
 
 export type CompilationMethod = 'useapi' | 'ffmpeg';
@@ -53,7 +53,7 @@ export async function recoverStaleCompilations(): Promise<number> {
     .set({ status: 'failed', claimedAt: null, errorMessage: INTERRUPTED_COMPILATION_MESSAGE, updatedAt: Date.now() })
     .where(eq(videoCompilations.status, 'processing'))
     .returning({ id: videoCompilations.id });
-  if (rows.length > 0) console.warn(`[compilation] Marked ${rows.length} interrupted compilation(s) as failed: ${rows.map((r) => r.id).join(', ')}`);
+  if (rows.length > 0) console.warn(`[compilation] Marked ${rows.length} interrupted compilation(s) as failed: ${rows.map((r) => r.id).join(', ')} (the worker process that was running them ended; this worker is lifetime ${WORKER_LIFETIME.id}, memory readings of those runs are not comparable)`);
   return rows.length;
 }
 
@@ -77,14 +77,15 @@ export async function processPendingCompilation(): Promise<boolean> {
     .returning({ id: videoCompilations.id });
   if (claimed.length === 0) return true;
   const compilation = candidate;
-  const memoryBefore = safely(snapshotMemory); // measurement only: read-only, can never throw into the job, never changes what it does
+  const memoryProbe = safely(startMemoryProbe); // measurement only, immediately before the work: can never throw into the job or change what it does
 
   try {
     const { outputStoragePath, method } = await runCompilation(compilation.videoProjectId, compilation.id);
-    safely(() => logCompilationMemory(compilation.id, 'completed', memoryBefore, snapshotMemory)); // right after the work, before the DB write
+    safely(() => memoryProbe?.finish(compilation.id, 'completed')); // immediately after the work, before any database write
     const version = await markCompleted(compilation.videoProjectId, compilation.id, outputStoragePath, method);
     console.log(`[compilation] Job ${compilation.id} completed as version ${version} (${method}) → ${outputStoragePath}`);
   } catch (err: unknown) {
+    safely(() => memoryProbe?.finish(compilation.id, 'failed')); // first thing: before the failure is written to the database
     // Only this row changes. Earlier successful compilations keep their files, versions and availability.
     await db
       .update(videoCompilations)
@@ -96,7 +97,6 @@ export async function processPendingCompilation(): Promise<boolean> {
       })
       .where(and(eq(videoCompilations.id, compilation.id), eq(videoCompilations.status, 'processing')));
     console.error(`[compilation] Job ${compilation.id} failed:`, err);
-    safely(() => logCompilationMemory(compilation.id, 'failed', memoryBefore, snapshotMemory));
   }
 
   return true;
