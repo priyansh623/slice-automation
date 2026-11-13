@@ -24,6 +24,7 @@ import {
 } from '../db/schema.pg';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { compileWithFfmpeg } from './compilation-ffmpeg';
+import { logCompilationMemory, safely, snapshotMemory } from './container-memory';
 import { MAX_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '../lib/compilation-versions';
 
 export type CompilationMethod = 'useapi' | 'ffmpeg';
@@ -76,9 +77,11 @@ export async function processPendingCompilation(): Promise<boolean> {
     .returning({ id: videoCompilations.id });
   if (claimed.length === 0) return true;
   const compilation = candidate;
+  const memoryBefore = safely(snapshotMemory); // measurement only: read-only, can never throw into the job, never changes what it does
 
   try {
     const { outputStoragePath, method } = await runCompilation(compilation.videoProjectId, compilation.id);
+    safely(() => logCompilationMemory(compilation.id, 'completed', memoryBefore, snapshotMemory)); // right after the work, before the DB write
     const version = await markCompleted(compilation.videoProjectId, compilation.id, outputStoragePath, method);
     console.log(`[compilation] Job ${compilation.id} completed as version ${version} (${method}) → ${outputStoragePath}`);
   } catch (err: unknown) {
@@ -93,6 +96,7 @@ export async function processPendingCompilation(): Promise<boolean> {
       })
       .where(and(eq(videoCompilations.id, compilation.id), eq(videoCompilations.status, 'processing')));
     console.error(`[compilation] Job ${compilation.id} failed:`, err);
+    safely(() => logCompilationMemory(compilation.id, 'failed', memoryBefore, snapshotMemory));
   }
 
   return true;

@@ -23,6 +23,7 @@ const holder = vi.hoisted(() => ({
   concatenateFails: false,
   onPut: null as null | (() => Promise<void>),
   onConcatenate: null as null | (() => Promise<void>),
+  memory: null as null | (() => unknown),
 }));
 
 vi.mock('@/db', () => ({
@@ -38,6 +39,11 @@ vi.mock('@/lib/object-store', () => ({
     signedReadUrl: async (_b: string, key: string) => (holder.files.has(key) ? `https://storage.test/${key}` : null),
   }),
 }));
+// Memory measurement: by default the real reader (which finds no cgroup files on a laptop); tests can inject figures.
+vi.mock('@/worker/container-memory', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/worker/container-memory')>();
+  return { ...real, snapshotMemory: () => (holder.memory ? holder.memory() : real.snapshotMemory()) };
+});
 vi.mock('@/worker/ffmpeg-utils', () => ({
   runFfmpegFilterComplex: (inputs: string[], output: string) => {
     holder.ffmpegInputs.push(inputs.map((p) => fs.readFileSync(p).toString()));
@@ -83,6 +89,7 @@ beforeEach(async () => {
   holder.concatenateFails = false;
   holder.onPut = null;
   holder.onConcatenate = null;
+  holder.memory = null;
   await pg.exec('truncate video_projects restart identity cascade');
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
     const u = String(url);
@@ -450,6 +457,54 @@ describe('completion guard: a finished or failed job can never be overwritten', 
     holder.onConcatenate = async () => { holder.onConcatenate = null; await recoverStaleCompilations(); holder.concatenateFails = true; };
     await processPendingCompilation();
     expect(await rowOf(job.id!)).toMatchObject({ status: 'failed', version: null, errorMessage: INTERRUPTED_COMPILATION_MESSAGE, outputStoragePath: null });
+  });
+});
+
+
+describe('memory measurement does not change what a compilation does', () => {
+  const MIB = 1024 * 1024;
+  const snap = (peak: number) => ({ source: 'cgroup-v2', currentBytes: 140 * MIB, peakBytes: peak * MIB, limitBytes: 512 * MIB, oomKills: 0 });
+  const outcome = async () => {
+    const { projectId, scenes } = await makeProject();
+    const done = await compile(projectId, allLegacy(scenes));
+    const ok = (await list(projectId))[0];
+    holder.concatenateFails = true;
+    await compile(projectId, allNew(scenes));
+    holder.concatenateFails = false;
+    const bad = (await list(projectId))[0];
+    return { done: done.status, ok: { status: ok.status, version: ok.version, method: ok.method, isCurrent: ok.isCurrent }, bad: { status: bad.status, version: bad.version } };
+  };
+
+  it('logs a memory line for a completed job and for a failed one, with the figures it was given', async () => {
+    const peaks = [150, 340, 150, 345]; // before/after of job 1, before/after of job 2
+    let i = 0;
+    holder.memory = () => snap(peaks[i++ % peaks.length]);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await outcome();
+    const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[memory] compilation'));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/completed: peak_mib=340 peak_before_mib=150 .*limit_mib=512/);
+    expect(lines[1]).toMatch(/failed: peak_mib=345 peak_before_mib=150/);
+    vi.restoreAllMocks();
+  });
+
+  it('gives exactly the same results with the measurement unavailable, injected, or broken (it throws)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    holder.memory = null;
+    const unavailable = await outcome();
+    await pg.exec('truncate video_projects restart identity cascade');
+    holder.memory = () => snap(300);
+    const injected = await outcome();
+    await pg.exec('truncate video_projects restart identity cascade');
+    holder.memory = () => { throw new Error('cgroup read exploded'); };
+    const broken = await outcome();
+    vi.restoreAllMocks();
+    expect(injected).toEqual(unavailable);
+    expect(broken).toEqual(unavailable);
+    expect(unavailable.ok).toMatchObject({ status: 'completed', version: 1, method: 'ffmpeg', isCurrent: true });
+    expect(unavailable.bad).toMatchObject({ status: 'failed', version: null });
   });
 });
 

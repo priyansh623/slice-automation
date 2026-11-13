@@ -6,6 +6,7 @@ process.env.STORAGE_DIR ??= '/tmp';
 
 import { acquireLock, releaseLock, closeLockConnection } from './lock';
 import { processPendingCompilation, recoverStaleCompilations } from './compilation';
+import { logStartupMemory, safely } from './container-memory';
 import { validateEnv } from '../lib/startup-checks';
 import { db } from '../db';
 import {
@@ -40,6 +41,7 @@ export async function main(): Promise<void> {
   }
 
   console.log('[worker] Lock acquired.');
+  safely(() => logStartupMemory()); // measurement only
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT',  () => shutdown('SIGINT'));
