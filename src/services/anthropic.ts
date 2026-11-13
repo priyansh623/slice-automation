@@ -123,14 +123,14 @@ export async function saveConversation(
   let existing;
   if (videoScreenId) {
     const rows = await db
-      .select()
+      .select({ id: claudeConversations.id }) // only the id: the stored conversation can be large and is about to be replaced
       .from(claudeConversations)
       .where(eq(claudeConversations.videoScreenId, videoScreenId))
       .limit(1);
     existing = rows[0];
   } else {
     const rows = await db
-      .select()
+      .select({ id: claudeConversations.id }) // only the id: the stored conversation can be large and is about to be replaced
       .from(claudeConversations)
       .where(
         and(

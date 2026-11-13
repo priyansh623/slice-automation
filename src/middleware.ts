@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+// How long the page-route auth check may take before the visitor is sent to /login instead of waiting for a 504.
+export const AUTH_CHECK_TIMEOUT_MS = 6000;
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
@@ -42,7 +45,18 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Supabase Auth can be slow or failing (for example when the database is read-only). Without a limit the request hangs
+  // until the platform cuts it off with a 504, so give up after a few seconds and send the visitor to the login page.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('auth check timed out')), AUTH_CHECK_TIMEOUT_MS)),
+    ]);
+    user = result.data.user;
+  } catch {
+    user = null;
+  }
 
   if (!user) {
     const loginUrl = request.nextUrl.clone();
