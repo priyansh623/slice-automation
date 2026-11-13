@@ -6,6 +6,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { Play, Pause, RotateCcw, Download } from 'lucide-react';
+import { compilationView } from '@/lib/compilation-versions';
 
 interface VideoProject {
   id: number;
@@ -19,6 +20,14 @@ interface Compilation {
   status: string;
   createdAt: number;
   outputStoragePath?: string | null;
+  version: number | null;
+  isCurrent?: boolean;
+  sceneCount?: number;
+}
+
+function formatWhen(ms: number): string {
+  const d = new Date(ms);
+  return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function formatTime(s: number) {
@@ -34,6 +43,7 @@ export default function ReviewPage() {
 
   const [project, setProject] = useState<VideoProject | null>(null);
   const [compilation, setCompilation] = useState<Compilation | null>(null);
+  const [allCompilations, setAllCompilations] = useState<Compilation[]>([]);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
@@ -56,6 +66,7 @@ export default function ReviewPage() {
     const res = await fetch(`/api/v1/video-projects/${id}/compilations`);
     if (!res.ok) return;
     const compilations: Compilation[] = await res.json();
+    setAllCompilations(compilations);
     const found = compilations.find((c) => c.id === parseInt(cid, 10));
     if (!found) { setError('Compilation not found'); return; }
     setCompilation(found);
@@ -65,6 +76,9 @@ export default function ReviewPage() {
   }
 
   useEffect(() => {
+    setSignedUrl(null);
+    setCurrentTime(0);
+    setIsPlaying(false);
     fetch(`/api/v1/video-projects/${id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d) setProject(d); })
@@ -114,6 +128,7 @@ export default function ReviewPage() {
     );
   }
 
+  const versions = compilationView(allCompilations).versions;
   const isProcessing = compilation?.status === 'pending' || compilation?.status === 'processing';
   const isFailed = compilation?.status === 'failed';
   const isCompleted = compilation?.status === 'completed';
@@ -142,6 +157,21 @@ export default function ReviewPage() {
         }}>
           {error && (
             <div className="alert alert-error" style={{ width: '100%', maxWidth: 360 }}>{error}</div>
+          )}
+
+          {/* Which version this is */}
+          {compilation && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, font: '500 13px/1 Satoshi', color: '#5E5E65' }}>
+              <span style={{ font: '700 14px/1 Satoshi', color: '#111113' }}>
+                {compilation.version ? `Version ${compilation.version}` : 'Compiling…'}
+              </span>
+              {compilation.isCurrent && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 8px', borderRadius: 999, font: '500 12px/1 Satoshi', background: '#EFEBFF', color: '#6C47FF' }}>
+                  Current
+                </span>
+              )}
+              <span>· {formatWhen(compilation.createdAt)}</span>
+            </div>
           )}
 
           {/* Video player */}
@@ -303,7 +333,7 @@ export default function ReviewPage() {
                   const objectUrl = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = objectUrl;
-                  a.download = `compilation-${cid}.mp4`;
+                  a.download = compilation?.version ? `compilation-v${compilation.version}.mp4` : `compilation-${cid}.mp4`;
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
@@ -332,6 +362,28 @@ export default function ReviewPage() {
               {downloading ? 'Downloading…' : 'Download'}
             </button>
           </div>
+
+          {/* Other versions of this project's video */}
+          {versions.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', width: 'min(calc(62vh * 9/16), 360px)' }}>
+              {versions.map((v) => {
+                const selected = String(v.id) === cid;
+                return (
+                  <Link key={v.id} href={`/video-projects/${id}/review?cid=${v.id}`} style={{ textDecoration: 'none' }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', height: 28, padding: '0 10px', borderRadius: 999,
+                      font: '500 12px/1 Satoshi',
+                      background: selected ? '#6C47FF' : '#fff',
+                      color: selected ? '#fff' : '#111113',
+                      border: selected ? '1px solid #6C47FF' : '1px solid #E4E4E0',
+                    }}>
+                      v{v.version}{v.isCurrent ? ' · current' : ''}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
 
           {downloadError && (
             <div className="alert alert-error" style={{ width: '100%', maxWidth: 360, fontSize: 13 }}>{downloadError}</div>

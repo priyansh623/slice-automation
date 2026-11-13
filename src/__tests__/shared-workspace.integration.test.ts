@@ -69,7 +69,7 @@ beforeAll(async () => {
   db = drizzle(pg, { schema });
   holder.db = db;
   await pg.exec(`create schema auth; create function auth.uid() returns uuid language sql as 'select null::uuid'; create function auth.jwt() returns jsonb language sql as $$select '{}'::jsonb$$;`);
-  const migrations = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00(0[1-9]|1[0-9]|2[0-2])_.*\.sql$/.test(f) && !f.includes('verification')).sort();
+  const migrations = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00(0[1-9]|1[0-9]|2[0-4])_.*\.sql$/.test(f) && !f.includes('verification')).sort();
   const run = (file: string) => pg.exec(fs.readFileSync(path.join(ROOT, file), 'utf8'));
   for (const f of migrations.filter((m) => m < '0022')) await run(`drizzle/pg/${f}`);
   await run('drizzle/0009_broll_categories.sql'); // the category taxonomy lives outside drizzle/pg

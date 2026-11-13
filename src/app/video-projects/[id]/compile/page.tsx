@@ -6,6 +6,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { Play, RotateCcw, ChevronRight } from 'lucide-react';
+import { compilationView } from '@/lib/compilation-versions';
 
 interface Screen {
   id: number;
@@ -28,6 +29,14 @@ interface Compilation {
   errorMessage?: string | null;
   createdAt: number;
   updatedAt: number;
+  version: number | null;
+  isCurrent?: boolean;
+  sceneCount?: number;
+}
+
+function formatWhen(ms: number): string {
+  const d = new Date(ms);
+  return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 export default function CompilePage() {
@@ -53,10 +62,13 @@ export default function CompilePage() {
 
   useEffect(() => { loadData(); }, [id]);
 
-  const latestComp = compilations[0] ?? null;
-  const isRunning = latestComp?.status === 'pending' || latestComp?.status === 'processing';
-  const isDone = latestComp?.status === 'completed';
-  const isFailed = latestComp?.status === 'failed';
+  // The list is shown newest first; the view picks the current version, a running job and the latest failure from it.
+  const view = compilationView(compilations);
+  const currentComp = view.current;
+  const isRunning = view.active !== null;
+  const isDone = currentComp !== null && !isRunning;
+  const failedComp = view.lastFailed;
+  const hasVersions = view.versions.length > 0;
 
   useEffect(() => {
     if (!isRunning) {
@@ -100,6 +112,7 @@ export default function CompilePage() {
       const d = await res.json().catch(() => ({})) as { error?: string };
       setError(d.error ?? 'Failed to start compilation');
       setSubmitting(false);
+      if (res.status === 409) loadData(); // another compilation is already running: show it
       return;
     }
     const newComp: Compilation = await res.json();
@@ -122,7 +135,7 @@ export default function CompilePage() {
   const allApproved = approvedCount === totalCount && totalCount > 0;
 
   const pageTitle = isRunning
-    ? 'Compiling your video'
+    ? `Compiling version ${view.nextVersion}`
     : isDone
     ? 'Video ready'
     : !allApproved
@@ -152,11 +165,11 @@ export default function CompilePage() {
             <h1 style={{ margin: 0, font: '700 26px/1.2 Satoshi', letterSpacing: '-0.02em' }}>
               {pageTitle}
             </h1>
-            {isDone && latestComp && (
-              <Link href={`/video-projects/${id}/review?cid=${latestComp.id}`} style={{ textDecoration: 'none' }}>
+            {currentComp && (
+              <Link href={`/video-projects/${id}/review?cid=${currentComp.id}`} style={{ textDecoration: 'none' }}>
                 <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}>
                   <Play size={14} />
-                  Review video
+                  {isRunning ? `Review version ${currentComp.version}` : 'Review video'}
                 </button>
               </Link>
             )}
@@ -177,7 +190,7 @@ export default function CompilePage() {
             <div style={{ marginTop: 24, padding: '16px 20px', background: '#fff', border: '1px solid #ECECE8', borderRadius: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                 <span style={{ font: '500 13px/1 Satoshi', color: '#111113' }}>
-                  {latestComp?.status === 'processing' ? 'Processing…' : 'Queued…'}
+                  {view.active?.status === 'processing' ? `Processing version ${view.nextVersion}…` : `Version ${view.nextVersion} is queued…`}
                 </span>
               </div>
               <div style={{ height: 6, borderRadius: 3, background: '#EFEFEC', overflow: 'hidden' }}>
@@ -189,6 +202,11 @@ export default function CompilePage() {
                   animation: 'indeterminate 1.5s ease-in-out infinite',
                 }} />
               </div>
+              {currentComp && (
+                <div style={{ marginTop: 10, font: '400 13px/1.4 Satoshi', color: '#75757C' }}>
+                  Version {currentComp.version} stays available while this is made. You can leave this page; it keeps going.
+                </div>
+              )}
               <style>{`
                 @keyframes indeterminate {
                   0% { transform: translateX(-100%); width: 50%; }
@@ -241,8 +259,8 @@ export default function CompilePage() {
             })}
           </div>
 
-          {/* Compile button (only when all approved and no active compilation) */}
-          {allApproved && !isRunning && !isDone && (
+          {/* Compile button: whenever every scene is approved and nothing is running. After a first compilation it makes the next version. */}
+          {allApproved && !isRunning && !failedComp && (
             <div style={{ marginTop: 28 }}>
               <button
                 onClick={() => setShowModal(true)}
@@ -253,71 +271,75 @@ export default function CompilePage() {
                   height: 40,
                   padding: '0 18px',
                   borderRadius: 9,
-                  background: '#6C47FF',
-                  color: '#fff',
-                  border: 'none',
+                  background: hasVersions ? '#fff' : '#6C47FF',
+                  color: hasVersions ? '#111113' : '#fff',
+                  border: hasVersions ? '1px solid #D0D0CC' : 'none',
                   font: '700 14px/1 Satoshi',
                   cursor: 'pointer',
                 }}
               >
-                Compile all scenes
+                {hasVersions ? <RotateCcw size={14} /> : null}
+                {hasVersions ? `Compile new version (v${view.nextVersion})` : 'Compile all scenes'}
               </button>
+              {hasVersions && (
+                <div style={{ marginTop: 8, font: '400 13px/1.4 Satoshi', color: '#75757C' }}>
+                  Changed a scene? Use Change above, then compile again. Earlier versions are kept.
+                </div>
+              )}
             </div>
           )}
 
-          {/* Failed state */}
-          {isFailed && (
+          {/* Failed state: the earlier version, if any, is unaffected */}
+          {failedComp && !isRunning && (
             <div style={{ marginTop: 16 }}>
               <div style={{ font: '400 14px/1.5 Satoshi', color: '#DC2626', marginBottom: 12 }}>
-                {latestComp?.errorMessage?.includes('missing mediaGenerationId')
-                  ? latestComp.errorMessage
+                {hasVersions
+                  ? `Version ${view.nextVersion} could not be made, so Version ${currentComp!.version} is still your current video.`
                   : 'Compilation failed. Please try again.'}
               </div>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: 'pointer' }}
-              >
-                <RotateCcw size={14} />
-                Try again
-              </button>
+              {allApproved && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: 'pointer' }}
+                >
+                  <RotateCcw size={14} />
+                  Try again
+                </button>
+              )}
             </div>
           )}
 
-          {/* Previous compilations */}
-          {compilations.length > 0 && (
+          {/* Version history: every successful compilation is kept and can be played and downloaded */}
+          {hasVersions && (
             <div style={{ marginTop: 32 }}>
               <div style={{ font: '500 12px/1 Satoshi', color: '#9A9AA0', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>
-                Previous compilations
+                Versions
               </div>
               <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, overflow: 'hidden' }}>
-                {compilations.map((c, i) => (
+                {view.versions.map((c, i) => (
                   <Link key={c.id} href={`/video-projects/${id}/review?cid=${c.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
                       padding: '12px 16px',
-                      borderBottom: i < compilations.length - 1 ? '1px solid #F3F3F1' : 'none',
+                      borderBottom: i < view.versions.length - 1 ? '1px solid #F3F3F1' : 'none',
                       cursor: 'pointer',
                     }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = '#FAFAF8')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <span style={{ font: '500 13px/1 Satoshi' }}>Compilation #{c.id}</span>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        height: 22,
-                        padding: '0 8px',
-                        borderRadius: 999,
-                        font: '500 12px/1 Satoshi',
-                        background: c.status === 'completed' ? '#EFEBFF' : c.status === 'failed' ? '#FEF2F2' : '#F0F0EC',
-                        color: c.status === 'completed' ? '#6C47FF' : c.status === 'failed' ? '#DC2626' : '#111113',
-                      }}>
-                        {c.status}
+                      <span style={{ font: '700 13px/1 Satoshi' }}>Version {c.version}</span>
+                      {c.isCurrent && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 8px', borderRadius: 999, font: '500 12px/1 Satoshi', background: '#EFEBFF', color: '#6C47FF' }}>
+                          Current
+                        </span>
+                      )}
+                      <span style={{ font: '400 12px/1 Satoshi', color: '#75757C' }}>
+                        {c.sceneCount ? `${c.sceneCount} scenes` : ''}
                       </span>
                       <span style={{ marginLeft: 'auto', font: '400 12px/1 Satoshi', color: '#9A9AA0' }}>
-                        {new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        {formatWhen(c.createdAt)}
                       </span>
                       <ChevronRight size={15} color="#A3A3A9" />
                     </div>
@@ -347,9 +369,12 @@ export default function CompilePage() {
             maxWidth: 400,
             boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
           }}>
-            <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>Compile the full video?</div>
+            <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>
+              {hasVersions ? `Compile Version ${view.nextVersion}?` : 'Compile the full video?'}
+            </div>
             <div style={{ font: '400 14px/1.55 Satoshi', color: '#5E5E65', marginBottom: 24 }}>
               This will stitch your {approvedCount} approved scene{approvedCount !== 1 ? 's' : ''} into a single video. This may take a few minutes.
+              {hasVersions ? ` Version ${currentComp!.version} is kept and stays available.` : ''}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button

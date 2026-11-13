@@ -178,6 +178,8 @@ export const videoCompilations = pgTable('video_compilations', {
   claimedAt: bigint('claimed_at', { mode: 'number' }),    // lease timestamp
   outputStoragePath: text('output_storage_path'),         // Supabase Storage path of compiled video
   errorMessage: text('error_message'),
+  version: integer('version'),                            // 1, 2, 3… among a project's SUCCESSFUL compilations; null until completed (see 0024)
+  method: text('method'),                                 // 'useapi' | 'ffmpeg'; null for compilations made before 0024
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
