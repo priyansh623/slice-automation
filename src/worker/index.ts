@@ -30,7 +30,7 @@ const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude
 const VIDEO_GEN_LEASE_MS  = 2 * 60 * 60 * 1000; // 2 hr  — enough for a slow generation
 const HEARTBEAT_MS = 2 * 60 * 1000;              // renew lease every 2 min
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   validateEnv();
 
   const acquired = await acquireLock();

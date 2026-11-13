@@ -59,3 +59,43 @@ describe('compilationView', () => {
     expect(v).toMatchObject({ current: null, active: null, lastFailed: null, nextVersion: 1 });
   });
 });
+
+import { describeActiveCompilation } from '@/lib/compilation-versions';
+
+describe('describeActiveCompilation', () => {
+  it('describes a pending job as queued and waiting for the worker, not as being made', () => {
+    const t = describeActiveCompilation('pending', 3, 2);
+    expect(t.queued).toBe(true);
+    expect(t.headline).toBe('Version 3 is queued');
+    expect(t.detail).toMatch(/waiting for the worker/i);
+    expect(t.headline + t.detail).not.toMatch(/compiling|processing/i);
+    expect(t.detail).toMatch(/Version 2 stays available/);
+  });
+
+  it('describes a processing job as being made now', () => {
+    const t = describeActiveCompilation('processing', 3, 2);
+    expect(t.queued).toBe(false);
+    expect(t.headline).toBe('Compiling version 3');
+    expect(t.detail).not.toMatch(/waiting for the worker/i);
+    expect(t.detail).toMatch(/Version 2 stays available/);
+  });
+
+  it('says nothing about an earlier version when there is none', () => {
+    expect(describeActiveCompilation('pending', 1, null).detail).not.toMatch(/stays available/);
+    expect(describeActiveCompilation('processing', 1, null).detail).not.toMatch(/stays available/);
+  });
+});
+
+describe('the last successful version stays reviewable while a newer compilation is not finished', () => {
+  const finished = [row(1, 'completed', 1, 100), row(2, 'completed', 2, 200)];
+  for (const status of ['pending', 'processing', 'failed']) {
+    it(`while a newer compilation is ${status}: Version 2 is still current, and both versions are still listed for play and download`, () => {
+      const v = compilationView([...finished, row(3, status, null, 300)]);
+      expect(v.current).toMatchObject({ id: 2, version: 2, isCurrent: true });
+      expect(v.versions.map((x) => x.version)).toEqual([2, 1]);
+      expect(v.nextVersion).toBe(3);
+      if (status === 'failed') expect(v.lastFailed?.id).toBe(3);
+      else expect(v.active?.id).toBe(3);
+    });
+  }
+});

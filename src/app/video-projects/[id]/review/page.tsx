@@ -207,7 +207,14 @@ export default function ReviewPage() {
             {isProcessing ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(0,0,0,0.12)', borderTop: '3px solid rgba(0,0,0,0.5)', animation: 'spin 1s linear infinite' }} />
-                <div style={{ font: '500 13px/1 Satoshi', color: 'rgba(0,0,0,0.6)' }}>Compiling your video…</div>
+                <div style={{ font: '500 13px/1.4 Satoshi', color: 'rgba(0,0,0,0.6)', textAlign: 'center', padding: '0 16px' }}>
+                  {compilation?.status === 'pending' ? 'Queued: waiting for the worker to start this version…' : 'Compiling your video…'}
+                </div>
+                {compilation?.status === 'pending' && (
+                  <div style={{ font: '400 12px/1.4 Satoshi', color: 'rgba(0,0,0,0.45)', textAlign: 'center', padding: '0 20px' }}>
+                    It has not started yet. This is usually quick, but can take longer while other videos are being generated.
+                  </div>
+                )}
               </div>
             ) : isFailed ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>

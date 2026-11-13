@@ -6,7 +6,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { Play, RotateCcw, ChevronRight } from 'lucide-react';
-import { compilationView } from '@/lib/compilation-versions';
+import { compilationView, describeActiveCompilation } from '@/lib/compilation-versions';
 
 interface Screen {
   id: number;
@@ -134,8 +134,10 @@ export default function CompilePage() {
   const totalCount = project.screens.length;
   const allApproved = approvedCount === totalCount && totalCount > 0;
 
+  const activeText = view.active ? describeActiveCompilation(view.active.status, view.nextVersion, currentComp?.version ?? null) : null;
+
   const pageTitle = isRunning
-    ? `Compiling version ${view.nextVersion}`
+    ? (activeText?.headline ?? `Compiling version ${view.nextVersion}`)
     : isDone
     ? 'Video ready'
     : !allApproved
@@ -185,28 +187,30 @@ export default function CompilePage() {
             <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>
           )}
 
-          {/* Running state: progress bar */}
-          {isRunning && (
+          {/* Waiting or running: a queued job is only waiting for the worker, so it gets no moving progress bar */}
+          {isRunning && activeText && (
             <div style={{ marginTop: 24, padding: '16px 20px', background: '#fff', border: '1px solid #ECECE8', borderRadius: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                 <span style={{ font: '500 13px/1 Satoshi', color: '#111113' }}>
-                  {view.active?.status === 'processing' ? `Processing version ${view.nextVersion}…` : `Version ${view.nextVersion} is queued…`}
+                  {activeText.queued ? `Queued · version ${view.nextVersion}` : `Processing · version ${view.nextVersion}`}
                 </span>
               </div>
               <div style={{ height: 6, borderRadius: 3, background: '#EFEFEC', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%',
-                  width: '60%',
-                  background: '#6C47FF',
-                  borderRadius: 3,
-                  animation: 'indeterminate 1.5s ease-in-out infinite',
-                }} />
+                {activeText.queued ? (
+                  <div style={{ height: '100%', width: '100%', background: 'repeating-linear-gradient(90deg, #D6D6D1 0 8px, #EFEFEC 8px 16px)' }} />
+                ) : (
+                  <div style={{
+                    height: '100%',
+                    width: '60%',
+                    background: '#6C47FF',
+                    borderRadius: 3,
+                    animation: 'indeterminate 1.5s ease-in-out infinite',
+                  }} />
+                )}
               </div>
-              {currentComp && (
-                <div style={{ marginTop: 10, font: '400 13px/1.4 Satoshi', color: '#75757C' }}>
-                  Version {currentComp.version} stays available while this is made. You can leave this page; it keeps going.
-                </div>
-              )}
+              <div style={{ marginTop: 10, font: '400 13px/1.45 Satoshi', color: '#75757C' }}>
+                {activeText.detail}
+              </div>
               <style>{`
                 @keyframes indeterminate {
                   0% { transform: translateX(-100%); width: 50%; }

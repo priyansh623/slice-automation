@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import ffmpegStaticPath from 'ffmpeg-static';
-import { buildFilterComplex, probeVideoDuration, probeVideoGeometry, runFfmpegFilterComplex } from '@/worker/ffmpeg-utils';
+import { buildFilterComplex, FFMPEG_TIMEOUT_MS, probeVideoDuration, probeVideoGeometry, runFfmpegFilterComplex, runWithKillTimeout } from '@/worker/ffmpeg-utils';
 import { compileWithFfmpeg } from '@/worker/compilation-ffmpeg';
 
 let dir: string;
@@ -101,4 +101,46 @@ describe('real FFmpeg join', () => {
     await expect(compileWithFfmpeg([{ storagePath: 'nope.mp4' }], 35, { download: async () => { throw new Error('not found'); } })).rejects.toThrow(/clip 1.*not found/);
     expect(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('soma-compile-')).length).toBe(before);
   });
+});
+
+const alive = (pid: number | undefined): boolean => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
+
+describe('the time limit really terminates the process', () => {
+  it('keeps the production limit at five minutes', () => {
+    expect(FFMPEG_TIMEOUT_MS).toBe(5 * 60 * 1000);
+  });
+
+  it('kills a real FFmpeg that would run for a minute, with SIGKILL, within the short test limit', () => {
+    const started = Date.now();
+    const run = runWithKillTimeout(ffmpegStaticPath!, ['-nostdin', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10', '-t', '60', '-f', 'null', '-'], 700);
+    const elapsed = Date.now() - started;
+    expect(run.timedOut).toBe(true);
+    expect(run.signal).toBe('SIGKILL');
+    expect(elapsed).toBeLessThan(10_000); // would have taken 60 s
+    expect(alive(run.pid)).toBe(false);   // the process is really gone
+  }, 30_000);
+
+  it('kills a process that ignores SIGTERM, which only SIGKILL can stop', () => {
+    const run = runWithKillTimeout(process.execPath, ['-e', "process.on('SIGTERM', () => {}); process.on('SIGINT', () => {}); setInterval(() => {}, 1000);"], 600);
+    expect(run.timedOut).toBe(true);
+    expect(run.signal).toBe('SIGKILL');
+    expect(alive(run.pid)).toBe(false);
+  }, 30_000);
+
+  it('does not interfere with a process that finishes in time', () => {
+    const run = runWithKillTimeout(process.execPath, ['-e', 'console.log("done")'], 20_000);
+    expect(run).toMatchObject({ timedOut: false, status: 0, signal: null });
+  });
+
+  it('reports a binary that cannot be started separately from a timeout', () => {
+    const run = runWithKillTimeout('/nonexistent/ffmpeg', [], 5000);
+    expect(run.timedOut).toBe(false);
+    expect(run.spawnError).toBeTruthy();
+  });
+
+  it('runFfmpegFilterComplex keeps its clear message when stopped by the limit, and leaves no output behind to use', () => {
+    const a = makeClip('t1.mp4', '128x72', 24, 1);
+    const b = makeClip('t2.mp4', '128x72', 24, 1);
+    expect(() => runFfmpegFilterComplex([a, b], path.join(dir, 't-out.mp4'), 35, 1)).toThrow(/FFmpeg ran for more than \d+ s and was stopped/);
+  }, 60_000);
 });

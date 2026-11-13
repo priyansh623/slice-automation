@@ -5,18 +5,20 @@
  * row locks really make concurrent requests take turns. This file does, using a pool of genuinely separate connections.
  *
  * Skipped unless TEST_POSTGRES_URL is set. It REFUSES to run unless the host is local (localhost, 127.0.0.1 or ::1), so it
- * can never touch a hosted or production database. Point it at an empty, disposable database:
+ * can never touch a hosted or production database.
  *
  *   TEST_POSTGRES_URL=postgres://postgres:postgres@127.0.0.1:54329/postgres npx vitest run src/__tests__/compilation-concurrency.postgres.test.ts
  *
- * It creates the repository's tables from the real migration files (including 0024) in a schema it drops afterwards.
+ * Isolation: the URL's database is used only to CREATE a brand-new throwaway database for this run. Everything (the
+ * repository's tables from the real migration files including 0024, and the stand-in `auth` schema and functions that
+ * Supabase normally provides) lives inside that throwaway database, which is dropped at the end, also when setup or a test
+ * fails. Nothing in the database named in the URL is created, changed or left behind.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq, sql } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import * as schema from '@/db/schema.pg';
 
@@ -41,33 +43,52 @@ import { processPendingCompilation, markCompleted } from '@/worker/compilation';
 
 const ROOT = path.resolve(__dirname, '../..');
 const ALICE = '00000000-0000-4000-8000-00000000a11c';
-const SCHEMA = 'soma_concurrency_test';
+let admin: ReturnType<typeof postgres>;
 let client: ReturnType<typeof postgres>;
 let db: ReturnType<typeof drizzle<typeof schema>>;
+let dbName = '';
+let cleanedUp = false;
+
+const ONE_ACTIVE_INDEX = `create unique index if not exists uq_vc_one_active_per_project on video_compilations (video_project_id) where status in ('pending', 'processing')`;
+
+/** Closes every connection and drops the throwaway database. Safe to call more than once and after a partial setup. */
+async function cleanup(): Promise<void> {
+  if (cleanedUp) return;
+  cleanedUp = true;
+  const errors: unknown[] = [];
+  try { if (client) await client.end({ timeout: 5 }); } catch (e) { errors.push(e); }
+  try { if (admin && dbName) await admin.unsafe(`drop database if exists ${dbName} with (force)`); } catch (e) { errors.push(e); }
+  try { if (admin) await admin.end({ timeout: 5 }); } catch (e) { errors.push(e); }
+  if (errors.length > 0) console.warn('[postgres test] cleanup problems:', errors.map((e) => String((e as Error).message)).join('; '));
+}
 
 suite('compilation versions under real concurrent connections', () => {
   beforeAll(async () => {
-    // Every connection uses the test schema; max: 30 so many requests are genuinely in flight together.
-    client = postgres(URL_ENV!, { max: 30, onnotice: () => {}, connection: { search_path: `${SCHEMA}, public` } });
-    db = drizzle(client, { schema });
-    holder.db = db;
-    await client.unsafe(`drop schema if exists ${SCHEMA} cascade; create schema ${SCHEMA};`);
-    await client.unsafe(`create schema if not exists auth; create or replace function auth.uid() returns uuid language sql as 'select null::uuid'; create or replace function auth.jwt() returns jsonb language sql as $$select '{}'::jsonb$$;`);
-    // Run the migrations on ONE dedicated connection so search_path applies to all of them.
-    const files = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00(0[1-9]|1[0-9]|2[0-4])_.*\.sql$/.test(f) && !f.includes('verification')).sort();
-    const one = postgres(URL_ENV!, { max: 1, onnotice: () => {}, connection: { search_path: `${SCHEMA}, public` } });
     try {
-      for (const f of files.filter((m) => m < '0022_')) await one.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
-      await one.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/0009_broll_categories.sql'), 'utf8'));
-      for (const f of files.filter((m) => m >= '0022_')) await one.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
-    } finally { await one.end(); }
-    process.env.USEAPI_TOKEN = 'test-token';
+      cleanedUp = false;
+      admin = postgres(URL_ENV!, { max: 1, onnotice: () => {} });
+      dbName = `soma_concurrency_${process.pid}_${Date.now()}`;
+      await admin.unsafe(`create database ${dbName}`);
+      const url = new URL(URL_ENV!);
+      url.pathname = `/${dbName}`;
+      // 30 connections so many requests are genuinely in flight together.
+      client = postgres(url.toString(), { max: 30, onnotice: () => {} });
+      db = drizzle(client, { schema });
+      holder.db = db;
+      // The stand-in for what Supabase provides; it exists only inside the throwaway database.
+      await client.unsafe(`create schema auth; create function auth.uid() returns uuid language sql as 'select null::uuid'; create function auth.jwt() returns jsonb language sql as $$select '{}'::jsonb$$;`);
+      const files = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00(0[1-9]|1[0-9]|2[0-4])_.*\.sql$/.test(f) && !f.includes('verification')).sort();
+      for (const f of files.filter((m) => m < '0022_')) await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
+      await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/0009_broll_categories.sql'), 'utf8'));
+      for (const f of files.filter((m) => m >= '0022_')) await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
+      process.env.USEAPI_TOKEN = 'test-token';
+    } catch (err) {
+      await cleanup(); // setup failed partway: do not leave the throwaway database behind
+      throw err;
+    }
   }, 180_000);
 
-  afterAll(async () => {
-    await client.unsafe(`drop schema if exists ${SCHEMA} cascade`);
-    await client.end();
-  });
+  afterAll(async () => { await cleanup(); });
 
   beforeEach(async () => {
     holder.files.clear();
@@ -82,6 +103,13 @@ suite('compilation versions under real concurrent connections', () => {
       }
       return new Response('nf', { status: 404 });
     }));
+  });
+
+  // Whatever a test did (including dropping the one-active index and then failing), the next test starts from a clean,
+  // fully constrained state.
+  afterEach(async () => {
+    await client.unsafe('truncate video_projects restart identity cascade');
+    await client.unsafe(ONE_ACTIVE_INDEX);
   });
 
   const ctx = (id: number) => ({ params: Promise.resolve({ id: String(id) }) });
@@ -129,8 +157,9 @@ suite('compilation versions under real concurrent connections', () => {
       const stored = (await client`select version from video_compilations where video_project_id = ${projectId} order by version`).map((r) => r.version);
       expect(stored).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
     } finally {
-      await client.unsafe('truncate video_compilations restart identity cascade');
-      await client.unsafe(`create unique index if not exists uq_vc_one_active_per_project on video_compilations (video_project_id) where status in ('pending', 'processing')`);
+      // Restore the index even if the insert or a completion above failed: clear any leftover rows first (they could
+      // violate the index), then recreate it. The afterEach hook repeats this as a second safety net.
+      try { await client.unsafe('truncate video_compilations restart identity cascade'); } finally { await client.unsafe(ONE_ACTIVE_INDEX); }
     }
   }, 60_000);
 
@@ -185,6 +214,5 @@ suite('compilation versions under real concurrent connections', () => {
   it('uses real, separate connections (sanity check for this test file itself)', async () => {
     const pids = await Promise.all(Array.from({ length: 10 }, () => client`select pg_backend_pid() as pid, pg_sleep(0.2)`));
     expect(new Set(pids.map((r) => r[0].pid)).size).toBeGreaterThan(5);
-    void eq; void sql;
   }, 30_000);
 });

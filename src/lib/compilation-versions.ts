@@ -79,3 +79,31 @@ export function compilationView<T extends CompilationRowLike>(rows: readonly T[]
 
 export const MIN_COMPILATION_CLIPS = 2;
 export const MAX_COMPILATION_CLIPS = 10;
+
+export interface ActiveCompilationText {
+  /** True while the job has not been picked up by the worker yet (status 'pending'). */
+  queued: boolean;
+  headline: string;
+  detail: string;
+}
+
+/**
+ * What to tell the user about a compilation that is waiting or running. A queued job is only waiting for the worker and
+ * must not be described as already being made; a processing job is being made now. The last successful version, if there
+ * is one, stays available and is mentioned in both cases.
+ */
+export function describeActiveCompilation(status: string, nextVersion: number, currentVersion: number | null): ActiveCompilationText {
+  const stays = currentVersion !== null ? ` Version ${currentVersion} stays available meanwhile.` : '';
+  if (status === 'pending') {
+    return {
+      queued: true,
+      headline: `Version ${nextVersion} is queued`,
+      detail: `Waiting for the worker to pick it up. This is usually quick, but it can take longer while other videos are being generated. You can leave this page; it will start on its own.${stays}`,
+    };
+  }
+  return {
+    queued: false,
+    headline: `Compiling version ${nextVersion}`,
+    detail: `Joining your scenes into one video. This can take a few minutes. You can leave this page; it keeps going.${stays}`,
+  };
+}

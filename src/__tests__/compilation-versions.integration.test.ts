@@ -22,6 +22,7 @@ const holder = vi.hoisted(() => ({
   fetchCalls: [] as string[],
   concatenateFails: false,
   onPut: null as null | (() => Promise<void>),
+  onConcatenate: null as null | (() => Promise<void>),
 }));
 
 vi.mock('@/db', () => ({
@@ -81,11 +82,13 @@ beforeEach(async () => {
   holder.fetchCalls = [];
   holder.concatenateFails = false;
   holder.onPut = null;
+  holder.onConcatenate = null;
   await pg.exec('truncate video_projects restart identity cascade');
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
     const u = String(url);
     holder.fetchCalls.push(u);
     if (u.includes('/videos/concatenate')) {
+      if (holder.onConcatenate) await holder.onConcatenate();
       if (holder.concatenateFails) return new Response('boom', { status: 500 });
       const ids = (JSON.parse(String(init?.body)) as { media: { mediaGenerationId: string }[] }).media.map((m) => m.mediaGenerationId);
       return new Response(JSON.stringify({ encodedVideo: Buffer.from(`useapi-joined:${ids.join('+')}`).toString('base64') }), { status: 200 });
@@ -385,6 +388,68 @@ describe('worker crash and restart', () => {
     await expect(markCompleted(projectId, failed.id, 'x.mp4', 'ffmpeg')).rejects.toThrow(/no longer running/);
     const [ok] = await db.insert(schema.videoCompilations).values({ videoProjectId: projectId, status: 'processing', createdAt: now, updatedAt: now }).returning();
     expect(await markCompleted(projectId, ok.id, 'y.mp4', 'ffmpeg')).toBe(1);
+  });
+});
+
+
+describe('completion guard: a finished or failed job can never be overwritten', () => {
+  const rowOf = async (id: number) => (await db.select().from(schema.videoCompilations).where(eq(schema.videoCompilations.id, id)))[0];
+
+  it('markCompleted cannot overwrite a job that is already completed: path, method, version, status and timestamps stay exactly as they were', async () => {
+    const { projectId, scenes } = await makeProject();
+    const done = await compile(projectId, allNew(scenes));
+    const before = await rowOf(done.id!);
+    expect(before).toMatchObject({ status: 'completed', version: 1, method: 'useapi' });
+
+    await expect(markCompleted(projectId, done.id!, 'compilations/other.mp4', 'ffmpeg')).rejects.toThrow(/no longer running/);
+    expect(await rowOf(done.id!)).toEqual(before); // every column identical, including updatedAt
+  });
+
+  it('markCompleted cannot overwrite a failed job either, and the failed row keeps its error and has no version', async () => {
+    const { projectId, scenes } = await makeProject();
+    holder.concatenateFails = true;
+    const failed = await compile(projectId, allNew(scenes));
+    const before = await rowOf(failed.id!);
+    expect(before).toMatchObject({ status: 'failed', version: null, outputStoragePath: null });
+
+    await expect(markCompleted(projectId, failed.id!, 'compilations/x.mp4', 'useapi')).rejects.toThrow(/no longer running/);
+    expect(await rowOf(failed.id!)).toEqual(before);
+  });
+
+  it('failed, rejected and interrupted attempts never consume a version number', async () => {
+    const { projectId, scenes } = await makeProject();
+    const v1 = await compile(projectId, allNew(scenes));                                   // Version 1
+    holder.concatenateFails = true;
+    const failed = await compile(projectId, allNew(scenes));                               // a failed attempt
+    holder.concatenateFails = false;
+    const stuck = await compile(projectId, allNew(scenes), false);                         // an interrupted attempt
+    await db.update(schema.videoCompilations).set({ status: 'processing', claimedAt: Date.now() }).where(eq(schema.videoCompilations.id, stuck.id!));
+    await recoverStaleCompilations();
+    for (const id of [v1.id!, failed.id!, stuck.id!]) {                                    // three rejected completions
+      await expect(markCompleted(projectId, id, 'compilations/nope.mp4', 'useapi')).rejects.toThrow(/no longer running/);
+    }
+    const next = await compile(projectId, allNew(scenes));
+    const rows = await list(projectId);
+    expect(rows.find((r) => r.id === next.id)).toMatchObject({ status: 'completed', version: 2 });   // 2, not 5
+    expect(rows.filter((r) => r.status === 'completed').map((r) => r.version).sort()).toEqual([1, 2]);
+    expect(rows.filter((r) => r.status === 'failed').every((r) => r.version === null)).toBe(true);
+  });
+
+  it('a rejected completion rolls back everything, including the numbering of older unnumbered completed rows', async () => {
+    const { projectId } = await makeProject();
+    const now = Date.now();
+    const [old] = await db.insert(schema.videoCompilations).values({ videoProjectId: projectId, status: 'completed', outputStoragePath: 'old.mp4', createdAt: now - 10, updatedAt: now }).returning();
+    const [failed] = await db.insert(schema.videoCompilations).values({ videoProjectId: projectId, status: 'failed', createdAt: now, updatedAt: now }).returning();
+    await expect(markCompleted(projectId, failed.id, 'x.mp4', 'ffmpeg')).rejects.toThrow();
+    expect((await rowOf(old.id)).version).toBeNull(); // untouched: the whole transaction was rolled back
+  });
+
+  it('an old run that FAILS after startup recovery cannot overwrite the recovery message or the row', async () => {
+    const { projectId, scenes } = await makeProject();
+    const job = await compile(projectId, allNew(scenes), false);
+    holder.onConcatenate = async () => { holder.onConcatenate = null; await recoverStaleCompilations(); holder.concatenateFails = true; };
+    await processPendingCompilation();
+    expect(await rowOf(job.id!)).toMatchObject({ status: 'failed', version: null, errorMessage: INTERRUPTED_COMPILATION_MESSAGE, outputStoragePath: null });
   });
 });
 

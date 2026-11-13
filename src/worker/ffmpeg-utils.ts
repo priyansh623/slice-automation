@@ -145,6 +145,33 @@ export function buildFilterComplex(
  */
 export const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000;
 
+export interface ProcessRun {
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  pid: number | undefined;
+  stderr: string;
+  timedOut: boolean;
+  /** Set when the process could not be started at all (for example the binary is missing). */
+  spawnError?: string;
+}
+
+/**
+ * Runs a command and kills it with SIGKILL if it is still running after `timeoutMs`. SIGKILL cannot be caught or ignored,
+ * so a hung or stubborn process is always stopped. `binary` is only overridden by tests.
+ */
+export function runWithKillTimeout(binary: string, args: string[], timeoutMs: number): ProcessRun {
+  const result = spawnSync(binary, args, { stdio: 'pipe', timeout: timeoutMs, killSignal: 'SIGKILL' });
+  const code = result.error ? (result.error as NodeJS.ErrnoException).code : undefined;
+  return {
+    status: result.status,
+    signal: result.signal,
+    pid: result.pid,
+    stderr: result.stderr?.toString() ?? '',
+    timedOut: code === 'ETIMEDOUT',
+    spawnError: result.error && code !== 'ETIMEDOUT' ? result.error.message : undefined,
+  };
+}
+
 export function runFfmpegFilterComplex(
   inputPaths: string[],
   outputPath: string,
@@ -212,15 +239,11 @@ export function runFfmpegFilterComplex(
     outputPath,
   ];
 
-  const result = spawnSync(ffmpegStaticPath, args, { stdio: 'pipe', timeout: timeoutMs, killSignal: 'SIGKILL' });
+  const result = runWithKillTimeout(ffmpegStaticPath, args, timeoutMs);
 
-  if (result.error) {
-    const code = (result.error as NodeJS.ErrnoException).code;
-    if (code === 'ETIMEDOUT') throw new Error(`FFmpeg ran for more than ${Math.round(timeoutMs / 1000)} s and was stopped`);
-    throw new Error(`FFmpeg could not be run: ${result.error.message}`);
-  }
+  if (result.timedOut) throw new Error(`FFmpeg ran for more than ${Math.round(timeoutMs / 1000)} s and was stopped`);
+  if (result.spawnError) throw new Error(`FFmpeg could not be run: ${result.spawnError}`);
   if (result.status !== 0) {
-    const stderr = result.stderr?.toString() ?? '';
-    throw new Error(`FFmpeg exited with code ${result.status}: ${stderr.slice(-800)}`);
+    throw new Error(`FFmpeg exited with code ${result.status}: ${result.stderr.slice(-800)}`);
   }
 }
