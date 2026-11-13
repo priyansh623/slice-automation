@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ObjectExistsError, ObjectNotFoundError, type BucketName, type ObjectInfo, type PutOptions, type SignedUpload, type StorageProvider } from './types';
 
 const bucketId = (bucket: BucketName): string =>
-  bucket === 'videos' ? (process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos') : (process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads');
+  // `||`, not `??`: an environment variable set to an empty string must fall back to the default name too.
+  bucket === 'videos' ? (process.env.SUPABASE_BUCKET_VIDEOS || 'videos') : (process.env.SUPABASE_BUCKET_UPLOADS || 'uploads');
 
 /** The existing behaviour: Supabase Storage through the service-role client (server-side only). */
 export class SupabaseProvider implements StorageProvider {

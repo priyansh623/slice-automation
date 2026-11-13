@@ -174,4 +174,24 @@ describe('toLogicalBucket', () => {
   });
 });
 
+describe('empty bucket environment variables', () => {
+  it('are treated as unset, so the default bucket names are used', async () => {
+    const { SupabaseProvider } = await import('@/lib/object-store/supabase-provider');
+    const used: string[] = [];
+    const client = { storage: { from: (name: string) => { used.push(name); return { createSignedUrl: async () => ({ data: { signedUrl: 'https://x/y' }, error: null }) }; } } };
+    const saved = { v: process.env.SUPABASE_BUCKET_VIDEOS, u: process.env.SUPABASE_BUCKET_UPLOADS };
+    process.env.SUPABASE_BUCKET_VIDEOS = ''; process.env.SUPABASE_BUCKET_UPLOADS = '';
+    try {
+      const p = new SupabaseProvider(client as never);
+      await p.signedReadUrl('videos', 'k', 60);
+      await p.signedReadUrl('uploads', 'k', 60);
+      expect(used).toEqual(['videos', 'uploads']);
+      expect(toLogicalBucket('videos')).toBe('videos');
+    } finally {
+      if (saved.v === undefined) delete process.env.SUPABASE_BUCKET_VIDEOS; else process.env.SUPABASE_BUCKET_VIDEOS = saved.v;
+      if (saved.u === undefined) delete process.env.SUPABASE_BUCKET_UPLOADS; else process.env.SUPABASE_BUCKET_UPLOADS = saved.u;
+    }
+  });
+});
+
 beforeEach(() => vi.restoreAllMocks());

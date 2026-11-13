@@ -157,8 +157,8 @@ export class Storage {
 
 /** Maps a configured Supabase bucket name (SUPABASE_BUCKET_VIDEOS / SUPABASE_BUCKET_UPLOADS) to the logical bucket. */
 export function toLogicalBucket(name: string): BucketName {
-  if (name === (process.env.SUPABASE_BUCKET_VIDEOS ?? 'videos') || name === 'videos') return 'videos';
-  if (name === (process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads') || name === 'uploads') return 'uploads';
+  if (name === (process.env.SUPABASE_BUCKET_VIDEOS || 'videos') || name === 'videos') return 'videos';
+  if (name === (process.env.SUPABASE_BUCKET_UPLOADS || 'uploads') || name === 'uploads') return 'uploads';
   throw new Error(`Unknown storage bucket: ${name}`);
 }
 

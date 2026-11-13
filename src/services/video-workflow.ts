@@ -40,7 +40,7 @@ async function downloadImageToTmp(storagePath: string, bucket: string): Promise<
 
 const DEFAULT_MODEL = () => process.env.VIDEO_DEFAULT_MODEL ?? 'omni-flash';
 const DEFAULT_DURATION = () => parseInt(process.env.VIDEO_DEFAULT_DURATION ?? '8', 10);
-const UPLOADS_BUCKET = () => process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
+const UPLOADS_BUCKET = () => process.env.SUPABASE_BUCKET_UPLOADS || 'uploads';
 
 // ── Creative Brief ────────────────────────────────────────────────────────────
 

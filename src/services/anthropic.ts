@@ -39,7 +39,7 @@ export interface EncodedImage {
   ref?: ImageRefBlock;
 }
 
-const uploadsBucket = () => process.env.SUPABASE_BUCKET_UPLOADS ?? 'uploads';
+const uploadsBucket = () => process.env.SUPABASE_BUCKET_UPLOADS || 'uploads';
 
 // Module-level image cache for the worker process (runs as a persistent Render process, not
 // Vercel serverless — instances are not shared and won't survive a restart, but within a single
