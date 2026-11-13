@@ -19,6 +19,10 @@
  *   - R2 writes are create-only: an object already in R2 is never overwritten.
  *   - The registry is insert-only here: existing rows are never changed. A file whose copy fails any check, or whose
  *     registry write fails, stays unregistered and keeps being served from Supabase.
+ *   - A transient network or server error while listing Supabase (network failure, HTTP 408/425/429/5xx) is retried up to
+ *     5 times in total with backoff (with the default settings, at most 7.5 s of waiting per call) and each retry is
+ *     printed; any other error stops
+ *     the run at once.
  *   - Safe to re-run or interrupt (Ctrl-C finishes the current file, then stops). Re-running skips registered files and
  *     finishes any left half-done.
  *   - STORAGE_WRITE_PROVIDER is never read or changed by this script.
@@ -104,7 +108,7 @@ async function main(): Promise<number> {
     {
       source: supabase,
       target: r2Config ? new R2Provider(r2Config) : null,
-      listSource: (bucket, prefix) => listSupabaseObjects(sb, bucketId(bucket), prefix),
+      listSource: (bucket, prefix) => listSupabaseObjects(sb, bucketId(bucket), prefix, { retry: { log: (line) => console.log(line) } }),
       registeredRows,
       registerIfAbsent: registerObjectIfAbsent,
       // Independent count straight from the storage tables (not through the listing API), to catch a listing that missed

@@ -13,6 +13,7 @@
  */
 import { createHash } from 'node:crypto';
 import { ObjectExistsError, ObjectNotFoundError, type BucketName, type ObjectInfo, type PutOptions, type ProviderName } from './types';
+import { retryTransient, RetryExhaustedError, type RetryOptions } from './retry';
 
 export interface SourceObject { key: string; size: number | null; contentType: string | null }
 
@@ -310,16 +311,32 @@ export interface SupabaseListClient {
   } };
 }
 
+export interface ListOptions {
+  /**
+   * Retry policy for each listing call. A transient failure (network, HTTP 408/425/429/5xx) is retried a few times with
+   * backoff; anything else fails at once. Each page is retried on its own, so a retry never repeats or skips objects.
+   */
+  retry?: RetryOptions;
+}
+
 /** Lists every object of a Supabase bucket under `prefix`, folders first-class, sorted by name. Read-only. */
-export async function* listSupabaseObjects(client: SupabaseListClient, bucketId: string, prefix = ''): AsyncGenerator<SourceObject> {
+export async function* listSupabaseObjects(client: SupabaseListClient, bucketId: string, prefix = '', options: ListOptions = {}): AsyncGenerator<SourceObject> {
   const startDir = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/')) : '';
   async function* walk(dir: string): AsyncGenerator<SourceObject> {
     // Page until the server returns an EMPTY page, advancing by the number of items actually received. Stopping at the
     // first short page would silently drop objects if the server ever returned fewer rows than the limit we asked for.
     for (let offset = 0; ; ) {
-      const { data, error } = await client.storage.from(bucketId).list(dir, { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } });
-      if (error) throw new Error(`Could not list ${bucketId}/${dir}: ${error.message}`);
-      const items = data ?? [];
+      let items: NonNullable<Awaited<ReturnType<ReturnType<SupabaseListClient['storage']['from']>['list']>>['data']>;
+      try {
+        items = await retryTransient(`list ${bucketId}/${dir || '.'} offset ${offset}`, async () => {
+          const { data, error } = await client.storage.from(bucketId).list(dir, { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } });
+          if (error) throw error; // keep the client's error object so it can be classified (HTTP status, or a network failure)
+          return data ?? [];
+        }, options.retry);
+      } catch (err) {
+        const detail = err instanceof RetryExhaustedError ? err.message : err instanceof Error ? err.message : String((err as { message?: unknown })?.message ?? err);
+        throw new Error(`Could not list ${bucketId}/${dir}: ${detail}`);
+      }
       if (items.length === 0) return;
       for (const item of items) {
         const key = dir ? `${dir}/${item.name}` : item.name;
