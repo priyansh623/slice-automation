@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Storage, toLogicalBucket, ObjectExistsError, ObjectNotFoundError, type StorageProvider, type ProviderName, type BucketName } from '@/lib/object-store';
+import { Storage, brollWriteProvider, toLogicalBucket, ObjectExistsError, ObjectNotFoundError, type StorageProvider, type ProviderName, type BucketName } from '@/lib/object-store';
 
 /** A provider backed by a map, recording every call. */
 function fakeProvider(name: ProviderName, files: Record<string, Buffer> = {}) {
@@ -143,6 +143,61 @@ describe('writing new files', () => {
     const { storage, r2 } = setup({});
     expect(await storage.put('videos', 'n.mp4', B('n'), { contentType: 'video/mp4' })).toEqual({ provider: 'supabase' });
     expect(r2!.calls).toEqual([]);
+  });
+
+  describe('a per-write provider preference (used for B-roll)', () => {
+    const opts = { contentType: 'video/mp4', preferProvider: 'r2' as const };
+
+    it('sends this one write to R2 and registers it while the global provider stays Supabase', async () => {
+      const { storage, r2, supabase, registered } = setup({ write: 'supabase' });
+      expect(await storage.put('uploads', 'u/broll/a.mp4', B('n'), opts)).toEqual({ provider: 'r2' });
+      expect(r2!.store.has('uploads/u/broll/a.mp4')).toBe(true);
+      expect(supabase.store.size).toBe(0);
+      expect(registered).toEqual([{ bucket: 'uploads', key: 'u/broll/a.mp4', provider: 'r2' }]);
+      // a write without the preference still goes to Supabase
+      expect(await storage.put('uploads', 'u/b.png', B('i'), { contentType: 'image/png' })).toEqual({ provider: 'supabase' });
+    });
+
+    it('is ignored when R2 is not configured: the write goes to Supabase', async () => {
+      const { storage, supabase } = setup({ r2: false });
+      expect(await storage.put('uploads', 'u/broll/a.mp4', B('n'), opts)).toEqual({ provider: 'supabase' });
+      expect(supabase.store.has('uploads/u/broll/a.mp4')).toBe(true);
+    });
+
+    it('falls back to Supabase, with no registry row, when R2 fails and failover is on', async () => {
+      const { storage, r2, supabase, registered } = setup({});
+      r2!.failPut = true;
+      expect(await storage.put('uploads', 'u/broll/a.mp4', B('n'), opts)).toEqual({ provider: 'supabase' });
+      expect(supabase.store.has('uploads/u/broll/a.mp4')).toBe(true);
+      expect(registered).toEqual([]);
+    });
+
+    it('fails (and writes nothing to Supabase) when R2 fails and failover is off', async () => {
+      const { storage, r2, supabase } = setup({ failover: false });
+      r2!.failPut = true;
+      await expect(storage.put('uploads', 'u/broll/a.mp4', B('n'), opts)).rejects.toThrow('provider down');
+      expect(supabase.store.size).toBe(0);
+    });
+
+    it("'supabase' as the preference overrides an R2 global setting", async () => {
+      const { storage, r2 } = setup({ write: 'r2' });
+      expect(await storage.put('uploads', 'k.mp4', B('n'), { contentType: 'video/mp4', preferProvider: 'supabase' })).toEqual({ provider: 'supabase' });
+      expect(r2!.calls).toEqual([]);
+    });
+  });
+
+  it('brollWriteProvider follows STORAGE_WRITE_PROVIDER_BROLL only', () => {
+    const old = process.env.STORAGE_WRITE_PROVIDER_BROLL;
+    try {
+      delete process.env.STORAGE_WRITE_PROVIDER_BROLL;
+      expect(brollWriteProvider()).toBeUndefined();
+      process.env.STORAGE_WRITE_PROVIDER_BROLL = 'r2';
+      expect(brollWriteProvider()).toBe('r2');
+      process.env.STORAGE_WRITE_PROVIDER_BROLL = 'anything-else';
+      expect(brollWriteProvider()).toBeUndefined();
+    } finally {
+      if (old === undefined) delete process.env.STORAGE_WRITE_PROVIDER_BROLL; else process.env.STORAGE_WRITE_PROVIDER_BROLL = old;
+    }
   });
 
   it('keeps browser-direct upload URLs on Supabase even when R2 is the write provider', async () => {

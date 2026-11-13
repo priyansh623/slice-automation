@@ -122,7 +122,8 @@ export class Storage {
 
   /** Stores a new file with the configured write provider. Returns where it went. */
   async put(bucket: BucketName, key: string, body: Buffer, opts: PutOptions): Promise<{ provider: ProviderName }> {
-    const wantR2 = this.d.writeProvider() === 'r2' && this.d.r2 !== null;
+    const target = opts.preferProvider ?? this.d.writeProvider(); // a per-write preference wins over the global setting
+    const wantR2 = target === 'r2' && this.d.r2 !== null;
     if (wantR2) {
       try {
         await this.d.r2!.put(bucket, key, body, opts);
@@ -152,6 +153,15 @@ export class Storage {
   async delete(bucket: BucketName, key: string): Promise<void> {
     for (const p of [this.d.supabase, this.d.r2]) if (p) await p.delete(bucket, key);
   }
+}
+
+/**
+ * Where NEW B-roll uploads go, independent of the global STORAGE_WRITE_PROVIDER. Set STORAGE_WRITE_PROVIDER_BROLL=r2 to send
+ * them to R2; unset (or anything else) leaves them following the global setting, which is Supabase unless changed.
+ * R2 is only used if it is configured, and a failed R2 write falls back to Supabase while STORAGE_FAILOVER is not 'off'.
+ */
+export function brollWriteProvider(): ProviderName | undefined {
+  return process.env.STORAGE_WRITE_PROVIDER_BROLL === 'r2' ? 'r2' : undefined;
 }
 
 /** Maps a configured Supabase bucket name (SUPABASE_BUCKET_VIDEOS / SUPABASE_BUCKET_UPLOADS) to the logical bucket. */

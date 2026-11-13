@@ -16,6 +16,12 @@ export interface PutOptions {
   contentType: string;
   /** Replace an existing object. Default false: fail if the key already exists (same as the old Supabase calls). */
   upsert?: boolean;
+  /**
+   * Which provider this one write should go to, instead of the global STORAGE_WRITE_PROVIDER. Used to move one kind of file
+   * (B-roll uploads) to R2 without switching everything. 'r2' is only honoured when R2 is configured; otherwise, and when
+   * R2 fails and failover is on, the write goes to Supabase exactly as before. Providers ignore this field.
+   */
+  preferProvider?: ProviderName;
 }
 
 export interface SignedUpload {

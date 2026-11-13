@@ -67,11 +67,13 @@ export async function GET(): Promise<NextResponse> {
 
   // 3c. Which provider new files go to (informational)
   const writesToR2 = process.env.STORAGE_WRITE_PROVIDER === 'r2';
+  const brollToR2 = process.env.STORAGE_WRITE_PROVIDER_BROLL === 'r2';
+  const wantsR2 = writesToR2 || brollToR2;
   results.storageRouting = {
-    ok: !(writesToR2 && !r2Config),
-    detail: writesToR2 && !r2Config
-      ? 'STORAGE_WRITE_PROVIDER=r2 but R2 is not configured; new files fall back to Supabase'
-      : `New files go to ${writesToR2 ? 'R2' : 'Supabase'}; reading falls back between providers: ${process.env.STORAGE_FAILOVER === 'off' ? 'off' : 'on'}`,
+    ok: !(wantsR2 && !r2Config),
+    detail: wantsR2 && !r2Config
+      ? `${writesToR2 ? 'STORAGE_WRITE_PROVIDER' : 'STORAGE_WRITE_PROVIDER_BROLL'}=r2 but R2 is not configured; new files fall back to Supabase`
+      : `New files go to ${writesToR2 ? 'R2' : 'Supabase'}; new B-roll uploads go to ${writesToR2 || brollToR2 ? 'R2' : 'Supabase'}; reading falls back between providers: ${process.env.STORAGE_FAILOVER === 'off' ? 'off' : 'on'}`,
   };
 
   // 4. Anthropic API key present (no test call — don't spend tokens)

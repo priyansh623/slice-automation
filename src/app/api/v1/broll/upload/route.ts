@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { createClient } from '@/lib/supabase/server';
-import { getStorage } from '@/lib/object-store';
+import { brollWriteProvider, getStorage } from '@/lib/object-store';
 import { probeVideoDuration } from '@/worker/ffmpeg-utils';
 
 const ALLOWED_VIDEO_TYPES: Record<string, string> = {
@@ -138,8 +138,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const videoStoragePath = `${user.id}/broll/${videoFilename}`;
 
   const storage = getStorage();
+  let stored: { provider: 'supabase' | 'r2' };
   try {
-    await storage.put('uploads', videoStoragePath, videoBuffer, { contentType: videoFile.type });
+    // New B-roll goes to R2 when STORAGE_WRITE_PROVIDER_BROLL=r2 (and R2 is configured); otherwise to the global write
+    // provider (Supabase). A failed R2 write falls back to Supabase. No database row is written here: the clip record is
+    // created by a separate request only after this one has succeeded, so a failed upload leaves no record behind.
+    stored = await storage.put('uploads', videoStoragePath, videoBuffer, { contentType: videoFile.type, preferProvider: brollWriteProvider() });
   } catch (err) {
     console.error('[broll/upload] video upload error:', (err as Error).message);
     return NextResponse.json({ error: 'Failed to upload video' }, { status: 500 });
@@ -149,6 +153,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     storagePath: videoStoragePath,
+    storageProvider: stored.provider,
     signedUrl: videoSignedUrl,
     mimeType: videoFile.type,
     fileSizeBytes: videoBuffer.length,
