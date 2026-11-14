@@ -8,6 +8,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createHash } from 'node:crypto';
 import { ObjectExistsError, ObjectNotFoundError, type BucketName, type ObjectInfo, type PutOptions, type SignedUpload, type StorageProvider } from './types';
 
 export interface R2Config {
@@ -84,6 +85,29 @@ export class R2Provider implements StorageProvider {
       if (isMissing(e)) return null;
       throw new Error(`Failed to read metadata of ${bucket}/${key} from R2: ${(e as Error).message}`);
     }
+  }
+
+  /**
+   * SHA-256 and byte count of what R2 itself holds, computed while the object streams through: memory use stays at one
+   * chunk whatever the file size, so a 500 MB video costs no more memory than a 5 MB one. Aborting (timeout) stops the
+   * transfer. Throws ObjectNotFoundError if the object is missing.
+   */
+  async hashObject(bucket: BucketName, key: string, signal?: AbortSignal): Promise<{ sha256: string; size: number }> {
+    let res;
+    try {
+      res = await this.client.send(new GetObjectCommand({ Bucket: this.bucketOf(bucket), Key: key }), { abortSignal: signal });
+    } catch (e) {
+      if (isMissing(e)) throw new ObjectNotFoundError(bucket, key);
+      throw new Error(`Failed to read ${bucket}/${key} from R2: ${(e as Error).message}`);
+    }
+    if (!res.Body) throw new ObjectNotFoundError(bucket, key);
+    const hash = createHash('sha256');
+    let size = 0;
+    for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+      hash.update(chunk);
+      size += chunk.length;
+    }
+    return { sha256: hash.digest('hex'), size };
   }
 
   /** Presigning is a local computation: no network call, and it does not check that the object exists. */

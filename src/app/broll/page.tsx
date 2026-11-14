@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { applyLibraryFilters } from '@/lib/broll-filters';
 import { searchClips } from '@/lib/broll-search';
+import BulkUpload from '@/components/broll-bulk/BulkUpload';
 import { Search, Upload, Download, ChevronDown, X, LibraryBig, SlidersHorizontal } from 'lucide-react';
 
 interface BrollClip {
@@ -400,6 +401,8 @@ export default function BrollLibraryPage() {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // AI-assisted bulk upload overlay: null = closed, [] = open and waiting for files
+  const [bulkFiles, setBulkFiles] = useState<File[] | null>(null);
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -468,8 +471,8 @@ export default function BrollLibraryPage() {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('video/')) openVideoFile(file);
+    const videos = [...e.dataTransfer.files].filter((f) => f.type.startsWith('video/') || /\.(mp4|mov|webm|avi)$/i.test(f.name));
+    if (videos.length > 0) setBulkFiles(videos);
   }
 
   async function handleUpload() {
@@ -685,6 +688,15 @@ export default function BrollLibraryPage() {
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
+              style={{ height: 38, padding: '0 14px', borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', color: '#5E5E65', font: '500 13px/1 Satoshi', cursor: 'pointer', flexShrink: 0 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#F6F6F4')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+              title="Add a single video and fill in its details yourself"
+            >
+              Upload one manually
+            </button>
+            <button
+              onClick={() => setBulkFiles([])}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
@@ -798,7 +810,7 @@ export default function BrollLibraryPage() {
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => setBulkFiles([])}
                   style={{ background: dragOver ? '#F5F3FF' : '#fff', border: `2px dashed ${dragOver ? '#6C47FF' : '#D6D6D1'}`, borderRadius: 16, padding: '72px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s' }}
                 >
                   <div style={{ width: 52, height: 52, borderRadius: 14, background: '#EFEFEC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
@@ -806,7 +818,7 @@ export default function BrollLibraryPage() {
                   </div>
                   <h2 style={{ margin: 0, font: '700 18px/1.3 Satoshi' }}>No clips yet</h2>
                   <p style={{ margin: '8px 0 24px', maxWidth: 380, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
-                    Drop a 9:16 video here or click Upload B-roll to get started.
+                    Drop 9:16 videos here (as many as you like) or click Upload B-roll to get started. The AI suggests the details for you to review.
                   </p>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', font: '600 14px/1 Satoshi' }}>
                     <Upload size={14} /> Upload B-roll
@@ -911,7 +923,17 @@ export default function BrollLibraryPage() {
         </div>
       </div>
 
-      {/* Upload modal */}
+      {/* AI-assisted bulk upload */}
+      {bulkFiles !== null && (
+        <BulkUpload
+          initialFiles={bulkFiles}
+          onClose={() => setBulkFiles(null)}
+          onUploaded={() => fetchClips()}
+          onManual={() => { setBulkFiles(null); fileInputRef.current?.click(); }}
+        />
+      )}
+
+      {/* Upload modal (manual, one video) */}
       {showUploadModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) setShowUploadModal(false); }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '28px 28px 24px', width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>

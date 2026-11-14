@@ -166,6 +166,25 @@ export class Storage {
     return this.d.r2 ? this.d.r2.head(bucket, key) : null;
   }
 
+  /**
+   * SHA-256 and size of the object R2 holds for a key, streamed (constant memory, any size). Gives up after `timeoutMs` with
+   * an error named HashTimeoutError, so a slow read fails clearly instead of hanging; nothing is recorded in that case.
+   */
+  async hashFromR2(bucket: BucketName, key: string, timeoutMs = 45_000): Promise<{ sha256: string; size: number }> {
+    const r2 = this.d.r2 as (StorageProvider & { hashObject?: R2Provider['hashObject'] }) | null;
+    if (!r2 || !r2.hashObject) throw new Error('R2 is not configured');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await r2.hashObject(bucket, key, controller.signal);
+    } catch (err) {
+      if (controller.signal.aborted) throw Object.assign(new Error(`Reading ${bucket}/${key} took longer than ${Math.round(timeoutMs / 1000)} s`), { name: 'HashTimeoutError' });
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** Removes one object from R2 only. Callers must have checked that nothing references it. */
   async deleteFromR2(bucket: BucketName, key: string): Promise<void> {
     if (this.d.r2) await this.d.r2.delete(bucket, key);

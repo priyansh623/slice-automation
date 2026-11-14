@@ -4,6 +4,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import * as crypto from 'node:crypto';
 import { brollClips } from '@/db/schema.pg';
 import { createBrollTestDb, TEST_USER_ID, type BrollTestDb } from './helpers/broll-test-db';
 
@@ -13,6 +14,7 @@ const h = vi.hoisted(() => ({
   r2: new Map<string, { size: number; contentType: string | null }>(),
   registry: new Map<string, { size: number; contentType: string | null }>(),
   deleted: [] as string[],
+  bytes: new Map<string, Buffer>(),
   signed: [] as { key: string; contentType: string; size: number; ttl: number }[],
   available: true,
   headFails: false,
@@ -36,6 +38,7 @@ vi.mock('@/lib/object-store', async (orig) => ({
     },
     headR2: async (_b: string, key: string) => { if (h.headFails) throw new Error('R2 unreachable'); return h.r2.get(key) ?? null; },
     deleteFromR2: async (_b: string, key: string) => { h.deleted.push(key); h.r2.delete(key); },
+    hashFromR2: async (_b: string, key: string) => { const o = h.r2.get(key); if (!o) throw new Error('missing'); return { sha256: crypto.createHash('sha256').update(h.bytes.get(key) ?? Buffer.alloc(o.size)).digest('hex'), size: o.size }; },
     signedReadUrl: async (_b: string, key: string) => `https://r2.example/read/${key}`,
   }),
 }));

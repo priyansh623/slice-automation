@@ -115,3 +115,62 @@ describe('R2Provider.signedSizedUpload (browser-direct uploads)', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('R2Provider.hashObject (streaming checksum for any file size)', () => {
+  const { Readable } = require('node:stream') as typeof import('node:stream');
+  const { createHash } = require('node:crypto') as typeof import('node:crypto');
+
+  /** A body that produces `total` bytes lazily, one 1 MiB chunk at a time, and the digest of everything it produced. */
+  function lazyBody(total: number) {
+    const chunk = Buffer.alloc(1024 * 1024, 7);
+    const hash = createHash('sha256');
+    let sent = 0;
+    const stream = Readable.from((async function* () {
+      while (sent < total) { const n = Math.min(chunk.length, total - sent); const piece = chunk.subarray(0, n); hash.update(piece); sent += n; yield piece; }
+    })());
+    return { stream, digest: () => hash.copy().digest('hex'), produced: () => sent };
+  }
+
+  it('hashes small and large objects correctly: 2 MB, just above 64 MB, and the full 500 MB limit', async () => {
+    for (const size of [2 * 1024 * 1024, 64 * 1024 * 1024 + 1, 500 * 1024 * 1024]) {
+      const body = lazyBody(size);
+      const { client } = fakeClient(() => ({ Body: body.stream }));
+      const res = await new R2Provider(config, client).hashObject('uploads', 'k.mp4');
+      expect(res.size).toBe(size);
+      expect(res.sha256).toBe(body.digest());
+    }
+  }, 120_000);
+
+  it('uses constant memory: hashing 500 MB does not grow the heap or buffers by anything like the file size', async () => {
+    if (global.gc) global.gc();
+    const before = process.memoryUsage();
+    const body = lazyBody(500 * 1024 * 1024);
+    const { client } = fakeClient(() => ({ Body: body.stream }));
+    await new R2Provider(config, client).hashObject('uploads', 'k.mp4');
+    const after = process.memoryUsage();
+    expect(after.heapUsed - before.heapUsed).toBeLessThan(120 * 1024 * 1024);
+    expect(after.arrayBuffers - before.arrayBuffers).toBeLessThan(120 * 1024 * 1024);
+  }, 120_000);
+
+  it('reports a missing object, and a read error, without a partial result', async () => {
+    await expect(new R2Provider(config, fakeClient(() => { throw httpError(404, 'NoSuchKey'); }).client).hashObject('uploads', 'k')).rejects.toBeInstanceOf(ObjectNotFoundError);
+    await expect(new R2Provider(config, fakeClient(() => { throw httpError(500, 'InternalError'); }).client).hashObject('uploads', 'k')).rejects.toThrow(/Failed to read uploads\/k from R2/);
+    await expect(new R2Provider(config, fakeClient(() => ({})).client).hashObject('uploads', 'k')).rejects.toBeInstanceOf(ObjectNotFoundError);
+  });
+
+  it('a stream that fails midway is an error, never a digest of the partial data', async () => {
+    const broken = Readable.from((async function* () { yield Buffer.from('partial'); throw new Error('connection reset'); })());
+    await expect(new R2Provider(config, fakeClient(() => ({ Body: broken })).client).hashObject('uploads', 'k')).rejects.toThrow('connection reset');
+  });
+
+  it('Storage.hashFromR2 gives up with HashTimeoutError when the read is too slow, and aborts the transfer', async () => {
+    const { Storage } = await import('@/lib/object-store');
+    let aborted = false;
+    const slow = { name: 'r2', hashObject: (_b: string, _k: string, signal: AbortSignal) => new Promise((_res, rej) => signal.addEventListener('abort', () => { aborted = true; rej(new Error('aborted')); })) };
+    const storage = new Storage({ supabase: {} as never, r2: slow as never, locate: async () => new Map(), register: async () => {}, writeProvider: () => 'r2', failover: () => true });
+    await expect(storage.hashFromR2('uploads', 'k', 30)).rejects.toMatchObject({ name: 'HashTimeoutError' });
+    expect(aborted).toBe(true);
+    const none = new Storage({ supabase: {} as never, r2: null, locate: async () => new Map(), register: async () => {}, writeProvider: () => 'r2', failover: () => true });
+    await expect(none.hashFromR2('uploads', 'k')).rejects.toThrow('R2 is not configured');
+  });
+});
