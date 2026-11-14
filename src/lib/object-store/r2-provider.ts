@@ -107,6 +107,20 @@ export class R2Provider implements StorageProvider {
   }
 
   /**
+   * A presigned PUT whose Content-Type AND Content-Length are part of the signature: R2 refuses an upload that is a different
+   * type or a different size than the one that was authorised. Used for browser-direct uploads; the secret never leaves the server.
+   * It does not use If-None-Match (a browser cannot be relied on to send it); callers use a unique key instead.
+   */
+  async signedSizedUpload(bucket: BucketName, key: string, contentType: string, contentLength: number, expiresInSeconds: number): Promise<SignedUpload> {
+    const url = await getSignedUrl(
+      this.client,
+      new PutObjectCommand({ Bucket: this.bucketOf(bucket), Key: key, ContentType: contentType, ContentLength: contentLength }),
+      { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type', 'content-length']) },
+    );
+    return { url, method: 'PUT', headers: { 'Content-Type': contentType } };
+  }
+
+  /**
    * Connectivity check used by the admin connection test: can the credentials reach each bucket? Never throws and
    * never includes the credentials in what it returns.
    */

@@ -370,6 +370,20 @@ function ClipCard({ clip, onClick }: { clip: BrollClip; onClick: () => void }) {
   );
 }
 
+/** PUTs a file straight to a presigned R2 URL with progress. Rejects on a network failure, an expired link or a refusal. */
+function putToR2(url: string, headers: Record<string, string>, file: File, onProgress: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(xhr.status === 403 ? 'The upload link expired or was refused. Please try again.' : `Upload failed (${xhr.status}). Please try again.`)));
+    xhr.onerror = () => reject(new Error('The upload was interrupted. Please check your connection and try again.'));
+    xhr.onabort = () => reject(new Error('The upload was cancelled.'));
+    xhr.send(file);
+  });
+}
+
 export default function BrollLibraryPage() {
   const router = useRouter();
   const [tab, setTab] = useState<'library' | 'feedback'>('library');
@@ -467,46 +481,70 @@ export default function BrollLibraryPage() {
     setUploadError(null);
 
     try {
-      const form = new FormData();
-      form.append('video', pendingVideoFile);
-      form.append('title', uploadTitle.trim());
-      form.append('tags', JSON.stringify(tags));
-      if (uploadSubject) form.append('subject', uploadSubject);
-      if (uploadActivity) form.append('activity', uploadActivity);
-      if (uploadSetting) form.append('setting', uploadSetting);
-      if (uploadBrand) form.append('brand', uploadBrand);
-      if (uploadDescription) form.append('description', uploadDescription);
+      const clipFields = {
+        title: uploadTitle.trim(),
+        userTags: tags,
+        subject: uploadSubject || null,
+        activity: uploadActivity || null,
+        setting: uploadSetting || null,
+        brand: uploadBrand || null,
+        description: uploadDescription || null,
+      };
+      let created: { id: number } | null = null;
 
-      const uploadRes = await fetch('/api/v1/broll/upload', { method: 'POST', body: form });
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? 'Upload failed');
-      }
-      const upload = await uploadRes.json() as { storagePath: string; signedUrl: string | null; mimeType: string; fileSizeBytes: number; durationSeconds: number | null };
-
-      setUploadProgress('Saving clip…');
-      const createRes = await fetch('/api/v1/broll', {
+      // 1. Preferred: the video goes straight from the browser to R2 (any size up to the server limit) and the server
+      //    verifies it before creating the clip. If direct upload is not available, fall back to the server upload below.
+      const initRes = await fetch('/api/v1/broll/upload/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: uploadTitle.trim(),
-          storagePath: upload.storagePath,
-          signedUrl: upload.signedUrl,
-          mimeType: upload.mimeType,
-          fileSizeBytes: upload.fileSizeBytes,
-          durationSeconds: upload.durationSeconds,
-          userTags: tags,
-          subject: uploadSubject || null,
-          activity: uploadActivity || null,
-          setting: uploadSetting || null,
-          brand: uploadBrand || null,
-          description: uploadDescription || null,
-        }),
+        body: JSON.stringify({ contentType: pendingVideoFile.type, fileSize: pendingVideoFile.size, fileName: pendingVideoFile.name }),
       });
-      if (!createRes.ok) throw new Error('Failed to create clip record');
-      const created = await createRes.json() as { id: number };
+      if (initRes.ok) {
+        const init = await initRes.json() as { storagePath: string; uploadUrl: string; headers: Record<string, string> };
+        await putToR2(init.uploadUrl, init.headers, pendingVideoFile, (pct) => setUploadProgress(`Uploading video… ${pct}%`));
+        setUploadProgress('Checking and saving clip…');
+        const doneRes = await fetch('/api/v1/broll/upload/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storagePath: init.storagePath, ...clipFields }),
+        });
+        if (!doneRes.ok) {
+          const err = await doneRes.json().catch(() => ({})) as { error?: string };
+          throw new Error(err.error ?? 'Failed to save the uploaded clip');
+        }
+        created = await doneRes.json() as { id: number };
+      } else {
+        const initErr = await initRes.json().catch(() => ({})) as { error?: string; code?: string };
+        if (initErr.code !== 'direct_upload_unavailable') throw new Error(initErr.error ?? 'Upload failed');
 
-      if (uploadCategoryIds.length > 0) {
+        // Fallback: the video passes through the server (limited to about 4 MB by the hosting platform).
+        const form = new FormData();
+        form.append('video', pendingVideoFile);
+        const uploadRes = await fetch('/api/v1/broll/upload', { method: 'POST', body: form });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({})) as { error?: string };
+          throw new Error(err.error ?? 'Upload failed');
+        }
+        const upload = await uploadRes.json() as { storagePath: string; signedUrl: string | null; mimeType: string; fileSizeBytes: number; durationSeconds: number | null };
+
+        setUploadProgress('Saving clip…');
+        const createRes = await fetch('/api/v1/broll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...clipFields,
+            storagePath: upload.storagePath,
+            signedUrl: upload.signedUrl,
+            mimeType: upload.mimeType,
+            fileSizeBytes: upload.fileSizeBytes,
+            durationSeconds: upload.durationSeconds,
+          }),
+        });
+        if (!createRes.ok) throw new Error('Failed to create clip record');
+        created = await createRes.json() as { id: number };
+      }
+
+      if (uploadCategoryIds.length > 0 && created) {
         await fetch(`/api/v1/broll/${created.id}/categories`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

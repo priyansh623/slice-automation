@@ -93,3 +93,25 @@ describe('R2Provider.ping', () => {
     expect(JSON.stringify(res)).not.toContain('AKIDEXAMPLE');
   });
 });
+
+describe('R2Provider.signedSizedUpload (browser-direct uploads)', () => {
+  it('signs the content type AND the exact length, never includes the secret, and expires', async () => {
+    const up = await new R2Provider(config).signedSizedUpload('uploads', 'u/broll/a.mp4', 'video/mp4', 12_345_678, 900);
+    const u = new URL(up.url);
+    expect(u.host).toBe('soma-uploads.acct123.r2.cloudflarestorage.com');
+    expect(u.pathname).toBe('/u/broll/a.mp4');
+    expect(u.searchParams.get('X-Amz-Expires')).toBe('900');
+    expect(u.searchParams.get('X-Amz-SignedHeaders')).toContain('content-length');
+    expect(u.searchParams.get('X-Amz-SignedHeaders')).toContain('content-type');
+    expect(up.method).toBe('PUT');
+    expect(up.headers).toEqual({ 'Content-Type': 'video/mp4' });
+    expect(up.url).not.toContain('super-secret-value');
+  });
+
+  it('a different size gives a different signature, so a larger file cannot reuse the URL', async () => {
+    const r2 = new R2Provider(config);
+    const a = new URL((await r2.signedSizedUpload('uploads', 'k.mp4', 'video/mp4', 1000, 900)).url).searchParams.get('X-Amz-Signature');
+    const b = new URL((await r2.signedSizedUpload('uploads', 'k.mp4', 'video/mp4', 2000, 900)).url).searchParams.get('X-Amz-Signature');
+    expect(a).not.toBe(b);
+  });
+});

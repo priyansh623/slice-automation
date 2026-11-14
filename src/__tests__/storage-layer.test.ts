@@ -186,6 +186,20 @@ describe('writing new files', () => {
     });
   });
 
+  it('direct upload helpers: unavailable without R2, R2-only head, and never touch Supabase', async () => {
+    const none = setup({ r2: false });
+    expect(none.storage.directUploadAvailable()).toBe(false);
+    await expect(none.storage.signedDirectUpload('uploads', 'k.mp4', 'video/mp4', 10, 900)).rejects.toThrow('R2 is not configured');
+    expect(await none.storage.headR2('uploads', 'k.mp4')).toBeNull();
+    const withR2 = setup({ sb: { 'uploads/k.mp4': B('s') }, r2files: { 'uploads/r.mp4': B('rr') } });
+    expect(withR2.storage.directUploadAvailable()).toBe(false); // the fake provider has no sized-upload support
+    expect(await withR2.storage.headR2('uploads', 'k.mp4')).toBeNull();   // exists only in Supabase: R2 says no
+    expect((await withR2.storage.headR2('uploads', 'r.mp4'))?.size).toBe(2);
+    await withR2.storage.deleteFromR2('uploads', 'r.mp4');
+    expect(withR2.r2!.store.has('uploads/r.mp4')).toBe(false);
+    expect(withR2.supabase.calls.filter((c) => c.startsWith('delete'))).toEqual([]);
+  });
+
   it('brollWriteProvider follows STORAGE_WRITE_PROVIDER_BROLL only', () => {
     const old = process.env.STORAGE_WRITE_PROVIDER_BROLL;
     try {

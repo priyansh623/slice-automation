@@ -149,6 +149,28 @@ export class Storage {
     return { ...(await this.d.supabase.signedUpload(bucket, key, contentType, expiresInSeconds)), provider: 'supabase' };
   }
 
+  /** True when R2 is configured and can sign size-bound browser uploads. */
+  directUploadAvailable(): boolean {
+    return this.d.r2 !== null && typeof (this.d.r2 as { signedSizedUpload?: unknown }).signedSizedUpload === 'function';
+  }
+
+  /** A short-lived URL the browser can PUT exactly `size` bytes of `contentType` to, in R2 only. Throws if R2 is not configured. */
+  async signedDirectUpload(bucket: BucketName, key: string, contentType: string, size: number, expiresInSeconds: number): Promise<SignedUpload> {
+    const r2 = this.d.r2 as (StorageProvider & { signedSizedUpload?: R2Provider['signedSizedUpload'] }) | null;
+    if (!r2 || !r2.signedSizedUpload) throw new Error('R2 is not configured');
+    return r2.signedSizedUpload(bucket, key, contentType, size, expiresInSeconds);
+  }
+
+  /** What R2 itself holds for a key (no Supabase fallback). null if R2 does not have it or is not configured. */
+  async headR2(bucket: BucketName, key: string): Promise<ObjectInfo | null> {
+    return this.d.r2 ? this.d.r2.head(bucket, key) : null;
+  }
+
+  /** Removes one object from R2 only. Callers must have checked that nothing references it. */
+  async deleteFromR2(bucket: BucketName, key: string): Promise<void> {
+    if (this.d.r2) await this.d.r2.delete(bucket, key);
+  }
+
   /** Not used by the application today (it never deletes files); present so the interface is complete. */
   async delete(bucket: BucketName, key: string): Promise<void> {
     for (const p of [this.d.supabase, this.d.r2]) if (p) await p.delete(bucket, key);
