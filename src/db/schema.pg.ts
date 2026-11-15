@@ -335,3 +335,154 @@ export const storageObjects = pgTable('storage_objects', {
 }, (table) => ({
   pk: primaryKey({ columns: [table.bucket, table.key] }),
 }));
+
+// ── Character B-roll Studio (migration 0025) ─────────────────────────────────
+// Scene Pack Repository + Studio projects. All tables are prefixed studio_ and are additive. Constraints, triggers and
+// the generated search column live in the migration; see drizzle/pg/0025_studio.sql for the invariants they enforce.
+
+export const studioPacks = pgTable('studio_packs', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  profile: jsonb('profile'),                               // AI-derived summary used for recommendations
+  profileStale: boolean('profile_stale').notNull().default(true),
+  archivedAt: bigint('archived_at', { mode: 'number' }),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+// The immutable source images of a pack: file, hash, type, size and pack never change after insert (database trigger).
+export const studioAssets = pgTable('studio_assets', {
+  id: serial('id').primaryKey(),
+  packId: integer('pack_id').notNull().references(() => studioPacks.id),
+  storageKey: text('storage_key').notNull().unique(),      // R2 key in the 'uploads' bucket
+  thumbKey: text('thumb_key'),
+  originalFilename: text('original_filename'),
+  mime: text('mime').notNull(),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+  width: integer('width'),
+  height: integer('height'),
+  sha256: text('sha256').notNull(),
+  ingestGroup: text('ingest_group'),
+  analysisStatus: text('analysis_status').notNull().default('pending'), // pending | processing | completed | failed | skipped
+  analysisError: text('analysis_error'),
+  analysisAttempts: integer('analysis_attempts').notNull().default(0),
+  claimedAt: bigint('claimed_at', { mode: 'number' }),
+  archivedAt: bigint('archived_at', { mode: 'number' }),
+  archivedBy: uuid('archived_by'),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+// AI output and manual edits are separate columns. The value of a field is the manual one if its key is present in
+// `manual` (even a deliberate null), otherwise the AI one. Re-analysis writes `ai` only. search_tsv (generated, in the
+// migration) is not declared here: it is queried with raw SQL.
+export const studioAssetMetadata = pgTable('studio_asset_metadata', {
+  assetId: integer('asset_id').primaryKey().references(() => studioAssets.id),
+  ai: jsonb('ai'),
+  manual: jsonb('manual').notNull().default({}),
+  aiModel: text('ai_model'),
+  aiVersion: integer('ai_version'),
+  aiAnalyzedAt: bigint('ai_analyzed_at', { mode: 'number' }),
+  manualUpdatedBy: uuid('manual_updated_by'),
+  manualUpdatedAt: bigint('manual_updated_at', { mode: 'number' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const studioProjects = pgTable('studio_projects', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  characterKey: text('character_key'),                     // the one base character image (R2)
+  characterMime: text('character_mime'),
+  characterMediaRef: text('character_media_ref'),
+  script: text('script').notNull().default(''),
+  scriptHash: text('script_hash'),
+  analysisStatus: text('analysis_status').notNull().default('idle'), // idle | processing | completed | failed
+  analysisError: text('analysis_error'),
+  analysisAt: bigint('analysis_at', { mode: 'number' }),
+  recommendations: jsonb('recommendations'),
+  recommendationsScriptHash: text('recommendations_script_hash'),
+  createdBy: uuid('created_by').notNull(),
+  archivedAt: bigint('archived_at', { mode: 'number' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const studioProjectPacks = pgTable('studio_project_packs', {
+  projectId: integer('project_id').notNull().references(() => studioProjects.id),
+  packId: integer('pack_id').notNull().references(() => studioPacks.id),
+  source: text('source').notNull(),                        // recommended | manual
+  approvedBy: uuid('approved_by').notNull(),
+  approvedAt: bigint('approved_at', { mode: 'number' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.projectId, table.packId] }),
+}));
+
+export const studioSelections = pgTable('studio_selections', {
+  projectId: integer('project_id').notNull().references(() => studioProjects.id),
+  assetId: integer('asset_id').notNull(),
+  packId: integer('pack_id').notNull(),
+  addedBy: uuid('added_by').notNull(),
+  addedAt: bigint('added_at', { mode: 'number' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.projectId, table.assetId] }),
+}));
+
+export const studioBatches = pgTable('studio_batches', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => studioProjects.id),
+  createdBy: uuid('created_by').notNull(),
+  provider: text('provider').notNull(),
+  providerConfig: jsonb('provider_config'),
+  characterKey: text('character_key').notNull(),
+  totalJobs: integer('total_jobs').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+export const studioJobs = pgTable('studio_jobs', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').notNull().references(() => studioBatches.id),
+  projectId: integer('project_id').notNull().references(() => studioProjects.id),
+  assetId: integer('asset_id').notNull(),
+  packId: integer('pack_id').notNull(),
+  sourceKey: text('source_key').notNull(),
+  characterKey: text('character_key').notNull(),
+  provider: text('provider').notNull(),
+  providerJobId: text('provider_job_id'),
+  status: text('status').notNull().default('queued'),      // queued | submitting | processing | succeeded | failed | canceled
+  attempt: integer('attempt').notNull().default(1),
+  retryOfJobId: integer('retry_of_job_id'),
+  request: jsonb('request'),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  errorRetryable: boolean('error_retryable'),
+  claimedAt: bigint('claimed_at', { mode: 'number' }),
+  nextPollAt: bigint('next_poll_at', { mode: 'number' }),
+  pollCount: integer('poll_count').notNull().default(0),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  startedAt: bigint('started_at', { mode: 'number' }),
+  finishedAt: bigint('finished_at', { mode: 'number' }),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const studioOutputs = pgTable('studio_outputs', {
+  id: serial('id').primaryKey(),
+  jobId: integer('job_id').notNull().references(() => studioJobs.id),
+  projectId: integer('project_id').notNull().references(() => studioProjects.id),
+  assetId: integer('asset_id').notNull().references(() => studioAssets.id),
+  storageKey: text('storage_key').notNull().unique(),
+  thumbKey: text('thumb_key'),
+  mime: text('mime').notNull(),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+  width: integer('width'),
+  height: integer('height'),
+  sha256: text('sha256').notNull(),
+  reviewStatus: text('review_status').notNull().default('pending'), // pending | saved | rejected
+  reviewedBy: uuid('reviewed_by'),
+  reviewedAt: bigint('reviewed_at', { mode: 'number' }),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});

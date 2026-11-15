@@ -25,6 +25,7 @@ import {
   submitQueuedGeneration,
 } from '../services/video-workflow';
 import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
+import { startStudioWorker, stopStudioWorker } from './studio';
 
 const POLL_INTERVAL_MS = 5_000;
 const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude call
@@ -48,6 +49,8 @@ export async function main(): Promise<void> {
 
   await recoverStaleTasks();
   await recoverStaleCompilations();
+  // Character B-roll Studio's own loops: independent of the video loop below (they never run inside tick()).
+  startStudioWorker();
   await runLoop();
 }
 
@@ -331,6 +334,8 @@ function sleep(ms: number): Promise<void> {
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`[worker] ${signal} received. Releasing lock and exiting.`);
+  // Hand back claimed Studio images before the process ends, but never let that hold up the shutdown (at most 5 s).
+  await Promise.race([stopStudioWorker().catch(() => {}), sleep(5_000)]);
   await releaseLock();
   await closeLockConnection();
   process.exit(0);
