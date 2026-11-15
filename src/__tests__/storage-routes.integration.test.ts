@@ -159,12 +159,13 @@ describe('project image upload and preview routes', () => {
 describe('project list: saved preview URLs', () => {
   it('uses the saved URL for a Supabase image but never for an image registered on R2', async () => {
     const { p } = await seed();
+    holder.urlFor = (b, k) => (k.includes('/thumbs/') ? null : `https://signed.example/${b}/${k}`); // no thumbnails exist yet
     const future = Date.now() + 20 * 3_600_000;
     await db.update(schema.videoProjects).set({ baseImageSignedUrl: 'https://old-supabase.example/saved', baseImageSignedUrlExpiresAt: future });
 
     let res = await listProjects();
     expect(((await res.json()) as { baseImagePreviewUrl: string }[])[0].baseImagePreviewUrl).toBe('https://old-supabase.example/saved');
-    expect(holder.calls).toEqual([]); // fresh saved URL: no storage call
+    expect(holder.calls).toEqual(['signMany uploads 1 86400']); // only the lookup for the (not yet existing) thumbnail; the fresh saved URL is used for the original
 
     holder.locations.set(`uploads/${p.baseImagePath}`, 'r2');
     res = await listProjects();

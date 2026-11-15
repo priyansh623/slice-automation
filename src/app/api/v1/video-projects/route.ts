@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { db } from '@/db';
 import { adminSettings, videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { getStorage } from '@/lib/object-store';
 import { locate } from '@/lib/object-store/registry';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
+import { ensureThumbnail, thumbnailKeyFor } from '@/lib/project-thumbnail';
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
@@ -37,13 +38,28 @@ export async function GET(): Promise<NextResponse> {
   // Projects whose image is on R2 never use the cache: signing there is a local computation, and a cached URL could
   // still point at the old Supabase copy.
   const storage = getStorage();
+
+  // The tab shows each image at about 34x50 px, so it asks for the small thumbnail made when the project was created
+  // (see project-thumbnail.ts). Signing is batched and only returns URLs for thumbnails that exist. Projects without
+  // one (made before thumbnails, or a failed generation) fall back to the original below, exactly as before.
+  const THUMB_TTL_S = 24 * 3600;
+  const thumbKeyById = new Map<number, string>();
+  for (const p of rows) { const k = thumbnailKeyFor(p.baseImagePath); if (k) thumbKeyById.set(p.id, k); }
+  const thumbUrls = await storage.signedReadUrls('uploads', [...thumbKeyById.values()], THUMB_TTL_S).catch((err) => {
+    console.warn('[video-projects] thumbnail signing failed, using the original images:', (err as Error).message.slice(0, 120));
+    return new Map<string, string>();
+  });
+  const thumbUrlById = new Map<number, string>();
+  for (const [id, key] of thumbKeyById) { const u = thumbUrls.get(key); if (u) thumbUrlById.set(id, u); }
+  const needOriginal = rows.filter((p) => !thumbUrlById.has(p.id));
+
   const ONE_HOUR_MS = 3_600_000;
   const URL_TTL_S = 24 * 3600; // 24-hour TTL; refresh 1 h before expiry
   const now = Date.now();
-  const locations = await locate('uploads', rows.map((p) => p.baseImagePath).filter(Boolean));
-  const onR2 = new Set(rows.filter((p) => locations.get(p.baseImagePath) === 'r2').map((p) => p.id));
+  const locations = await locate('uploads', needOriginal.map((p) => p.baseImagePath).filter(Boolean));
+  const onR2 = new Set(needOriginal.filter((p) => locations.get(p.baseImagePath) === 'r2').map((p) => p.id));
 
-  const needsRefresh = rows.filter(
+  const needsRefresh = needOriginal.filter(
     (p) => onR2.has(p.id) || !p.baseImageSignedUrlExpiresAt || p.baseImageSignedUrlExpiresAt < now + ONE_HOUR_MS,
   );
   const refreshPaths = needsRefresh.map((p) => p.baseImagePath).filter(Boolean) as string[];
@@ -70,7 +86,7 @@ export async function GET(): Promise<NextResponse> {
   }
 
   const signedUrlById = new Map<number, string | null>(
-    rows.map((p) => {
+    needOriginal.map((p) => {
       if (!onR2.has(p.id) && p.baseImageSignedUrl && p.baseImageSignedUrlExpiresAt && p.baseImageSignedUrlExpiresAt >= now + ONE_HOUR_MS) {
         return [p.id, p.baseImageSignedUrl];
       }
@@ -89,7 +105,8 @@ export async function GET(): Promise<NextResponse> {
     approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
     totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
     ownerEmail: user.email ?? null,
-    baseImagePreviewUrl: signedUrlById.get(p.id) ?? null,
+    baseImagePreviewUrl: thumbUrlById.get(p.id) ?? signedUrlById.get(p.id) ?? null,
+    baseImageIsThumbnail: thumbUrlById.has(p.id),
   })));
 }
 
@@ -131,6 +148,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         updatedAt: now,
       })
       .returning();
+
+    // Make the thumbnail once, right after the project exists, without making the creator wait for it. It only reads the
+    // original and writes a separate object; if it fails the project is unaffected and the tab uses the original.
+    const makeThumb = () => ensureThumbnail(getStorage(), body.baseImagePath).then((r) => {
+      if (r.status === 'created') console.log(`[thumbnail] ${body.baseImagePath}: ${r.originalBytes} -> ${r.bytes} bytes`);
+    });
+    try { after(makeThumb); } catch { void makeThumb(); } // outside a request (tests, scripts) there is no after()
 
     return NextResponse.json(inserted[0], { status: 201 });
   } catch (err) {

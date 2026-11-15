@@ -306,7 +306,9 @@ describe('GET /api/v1/video-projects (dashboard) — signed URL cache [actual-ro
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json() as Array<{ baseImagePreviewUrl: string }>;
-    expect(signUrlsMock).not.toHaveBeenCalled();
+    // The only Storage call is the one batched lookup for the (here missing) thumbnails; the originals' cached URLs are used.
+    expect(signUrlsMock).toHaveBeenCalledOnce();
+    expect((signUrlsMock.mock.calls[0] as unknown[])[0]).toEqual(expect.arrayContaining([expect.stringContaining('/thumbs/')]));
     expect(body[0].baseImagePreviewUrl).toBe('https://cdn.example.com/base-fresh.jpg');
   });
 
@@ -331,7 +333,8 @@ describe('GET /api/v1/video-projects (dashboard) — signed URL cache [actual-ro
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json() as Array<{ baseImagePreviewUrl: string }>;
-    expect(signUrlsMock).toHaveBeenCalledOnce();
+    // One batched lookup for thumbnails (none exist here), then the original is signed as before.
+    expect(signUrlsMock).toHaveBeenCalledTimes(2);
     expect(body[0].baseImagePreviewUrl).toBe(newUrl);
     expect(updateMock).toHaveBeenCalled();
   });
