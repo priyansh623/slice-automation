@@ -11,7 +11,8 @@ import {
   videoGenerations,
   promptGenerationTasks,
 } from '@/db/schema.pg';
-import { and, desc, eq, inArray, max } from 'drizzle-orm';
+import { invalidateSceneApproval, incompleteScenes } from '@/services/scene-management';
+import { and, desc, eq, gt, inArray, max } from 'drizzle-orm';
 import { callClaude, encodeImageFromStorage, loadConversation } from './anthropic';
 import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 import { getSkillContent } from '@/lib/ugc-skill';
@@ -94,7 +95,7 @@ export function validatePrompt(
     }
   }
 
-  if (durationSeconds) {
+  if (durationSeconds && dialogue.trim()) {
     const wordCount = dialogue.trim().split(/\s+/).filter(Boolean).length;
     const DURATION_RANGES: Record<number, [number, number]> = {
       4: [10, 15],
@@ -320,11 +321,21 @@ function buildCreativeDirectionBlock(brief: CreativeBrief, screen1PromptText: st
   return block;
 }
 
+/**
+ * The line that tells the model what a scene says. A scene with no dialogue (a manually added scene may have none)
+ * says so explicitly: the model is never left to fill the gap with words the user did not write.
+ */
+export function sceneDialogueLine(screenNumber: number, dialogue: string): string {
+  return dialogue.trim()
+    ? `Scene ${screenNumber} dialogue: "${dialogue}"`
+    : `Scene ${screenNumber} has NO spoken dialogue. Do not write, invent or imply any dialogue: the Dialogue section says there is none, the character does not speak, and the Audio section describes only natural ambient sound.`;
+}
+
 async function gatherProjectScopeFeedback(videoProjectId: number): Promise<string | null> {
   const screens = await db
     .select({ id: videoScreens.id })
     .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, videoProjectId));
+    .where(and(eq(videoScreens.videoProjectId, videoProjectId), gt(videoScreens.screenNumber, 0)));
   if (screens.length === 0) return null;
 
   const screenIds = screens.map((s) => s.id);
@@ -417,7 +428,7 @@ export async function generateScreen1Prompt(
       `Return the full formatted scene prompt. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.` +
       scene1CreativeBlock +
       `\n\nFull script:\n${project.approvedScript ?? project.originalScript}\n\n` +
-      `Scene 1 dialogue: "${screen.dialogue}"` +
+      sceneDialogueLine(1, screen.dialogue) +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
       (latestVersion ? `\n\nCurrent prompt:\n${latestVersion.promptText}` : '');
 
@@ -440,7 +451,7 @@ export async function generateScreen1Prompt(
       `Use the skill to write out the prompt for Google Flow.\n` +
       `Return the full formatted scene prompt. Preserve the original dialogue exactly. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.\n\n` +
       `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
-      `Script for Scene 1: "${screen.dialogue}"` +
+      (screen.dialogue.trim() ? `Script for Scene 1: "${screen.dialogue}"` : sceneDialogueLine(1, screen.dialogue)) +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
       `\n\n${hookText}`;
   }
@@ -481,7 +492,7 @@ export async function generateInitialScreenPrompt(
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
     (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
     `\n\nFull script:\n${project.approvedScript ?? project.originalScript}` +
-    `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
+    `\n\n${sceneDialogueLine(screen.screenNumber, screen.dialogue)}` +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
 
   const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));
@@ -495,13 +506,86 @@ export async function generateInitialScreenPrompt(
   return { promptText, version, validation };
 }
 
+export interface ManualSceneBrief {
+  /** What happens in the scene. Required. */
+  description: string;
+  /** Visual instructions the creator wrote (framing, setting, props, mood...). Optional. */
+  visualInstructions?: string;
+}
+
+/**
+ * Writes the first prompt for a scene the creator added by hand. It uses the same project context as every other
+ * scene (the script, the creator reference image, the creative direction taken from approved Scene 1, project-wide
+ * feedback) and the same skill and model; the creator's description and visual instructions are added as the source of
+ * truth for what happens. The result is saved as an ordinary prompt version, so it can be edited, revised and approved
+ * like any other. Nothing is approved here, and no video is requested.
+ */
+export async function generateManualScenePrompt(
+  videoProjectId: number,
+  videoScreenId: number,
+  scene: ManualSceneBrief,
+): Promise<{ promptText: string; version: number; validation: ValidationResult }> {
+  const [screenRows, projectRows] = await Promise.all([
+    db.select().from(videoScreens).where(eq(videoScreens.id, videoScreenId)).limit(1),
+    db.select().from(videoProjects).where(eq(videoProjects.id, videoProjectId)).limit(1),
+  ]);
+  const screen = screenRows[0];
+  const project = projectRows[0];
+  if (!screen) throw new Error(`Screen ${videoScreenId} not found`);
+  if (!project) throw new Error(`Video project ${videoProjectId} not found`);
+
+  const skillContent = getSkillContent(project.skillVersion);
+  const brief = parseBrief(project.creativeBrief);
+  const image = await encodeImageFromStorage(project.baseImagePath, UPLOADS_BUCKET());
+  const isFirst = screen.screenNumber === 1;
+  const screen1Info = isFirst ? null : await getScreen1ApprovedPromptInfo(videoProjectId);
+  const creativeDirectionBlock = isFirst ? '' : buildCreativeDirectionBlock(brief, screen1Info?.promptText ?? null, project.creatorDescription);
+  const projectFeedback = await gatherProjectScopeFeedback(videoProjectId);
+  const hasDialogue = screen.dialogue.trim().length > 0;
+
+  const characterPart = isFirst
+    ? (project.creatorDescription
+        ? `This is my character and ${project.creatorDescription}\n`
+        : `This is my character — see the reference image for their appearance.\n`)
+    : '';
+
+  const userMessage =
+    characterPart +
+    `Here is the original video script and the reference image of the creator.` +
+    `\nUsing the UGC skill, generate the Google Flow video prompt for Scene ${screen.screenNumber} only.` +
+    `\nThis scene was added by the creator and is not part of the script, so the creator's description below is the source of truth for what happens in it.` +
+    `\nReturn the full formatted scene prompt for this scene only. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not include scene breakdown, analysis, or content for other scenes. Do not add a Notes section or commentary after the prompt.` +
+    (hasDialogue ? `\nPreserve the dialogue exactly.` : '') +
+    creativeDirectionBlock +
+    (isFirst ? '' : SELF_CONTAINED_PROMPT_INSTRUCTION) +
+    (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
+    `\n\nWhat happens in this scene (from the creator):\n${scene.description.trim()}` +
+    (scene.visualInstructions?.trim() ? `\n\nVisual instructions from the creator (follow them exactly; do not drop or soften any of them):\n${scene.visualInstructions.trim()}` : '') +
+    `\n\nFull script (context only):\n${project.approvedScript ?? project.originalScript}` +
+    `\n\n${sceneDialogueLine(screen.screenNumber, screen.dialogue)}` +
+    (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
+
+  const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, { videoScreenId, image }));
+  // The creator's own words are kept on the version, so it is always clear where the prompt came from.
+  const provenance =
+    `Scene brief: ${scene.description.trim()}` +
+    (scene.visualInstructions?.trim() ? `\nVisual instructions: ${scene.visualInstructions.trim()}` : '');
+  const version = await insertPromptVersion(
+    videoScreenId, promptText, 'claude', provenance, 'scene',
+    screen1Info?.versionId ?? null,
+    isFirst ? null : project.creativeBrief ?? null,
+  );
+  const validation = validatePrompt(promptText, screen.dialogue, screen.durationSeconds, brief);
+  return { promptText, version, validation };
+}
+
 export async function generateRemainingPrompts(
   videoProjectId: number,
 ): Promise<Array<{ videoScreenId: number; promptText: string; version: number }>> {
   const allScreens = await db
     .select()
     .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, videoProjectId));
+    .where(and(eq(videoScreens.videoProjectId, videoProjectId), gt(videoScreens.screenNumber, 0)));
   const screens = allScreens.filter((s) => s.screenNumber > 1).sort((a, b) => a.position - b.position);
 
   const projectRows = await db.select().from(videoProjects).where(eq(videoProjects.id, videoProjectId)).limit(1);
@@ -526,7 +610,7 @@ export async function generateRemainingPrompts(
       SELF_CONTAINED_PROMPT_INSTRUCTION +
       (projectFeedback ? `\n\nProject-wide creator feedback (apply to all scenes): ${projectFeedback}` : '') +
       `\n\nFull script:\n${project.approvedScript ?? project.originalScript}` +
-      `\n\nScene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
+      `\n\n${sceneDialogueLine(screen.screenNumber, screen.dialogue)}` +
       (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '');
 
     const promptText = stripNotesSection(await callClaude(videoProjectId, userMessage, skillContent, {
@@ -583,7 +667,7 @@ export async function revisePrompt(
     `Revise the Scene ${screen.screenNumber} prompt based on this feedback: ${nlFeedback}\n\n` +
     `Return the full formatted scene prompt. Include detailed character expressions, specific emotional delivery cues, and a fully written Audio section. Do not add a Notes section or commentary after the prompt.\n\n` +
     `Full script:\n${project.approvedScript ?? project.originalScript}\n\n` +
-    `Scene ${screen.screenNumber} dialogue: "${screen.dialogue}"` +
+    sceneDialogueLine(screen.screenNumber, screen.dialogue) +
     (screen.durationSeconds ? `\nTarget duration: ${screen.durationSeconds} seconds` : '') +
     creativeDirectionBlock +
     (screen.screenNumber > 1 ? SELF_CONTAINED_PROMPT_INSTRUCTION : '') +
@@ -628,9 +712,12 @@ export async function enqueueScreen1ApprovalTasks(
   const allScreens = await db
     .select()
     .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, videoProjectId));
+    .where(and(eq(videoScreens.videoProjectId, videoProjectId), gt(videoScreens.screenNumber, 0)));
+  // A scene added by the creator whose prompt is not finished is completed from its own saved brief (Retry), never by
+  // the generic queue, which would write it without the creator's description.
+  const unfinished = await incompleteScenes(videoProjectId);
   const remainingScreens = allScreens
-    .filter((s) => s.screenNumber > 1)
+    .filter((s) => s.screenNumber > 1 && !unfinished.has(s.id))
     .sort((a, b) => a.position - b.position);
 
   for (const screen of remainingScreens) {
@@ -784,7 +871,7 @@ export async function enqueueAllSceneGenerations(
   const allScreens = await db
     .select()
     .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, videoProjectId));
+    .where(and(eq(videoScreens.videoProjectId, videoProjectId), gt(videoScreens.screenNumber, 0)));
   const screens = allScreens
     .filter((s) => !s.approvedGenerationId)
     .sort((a, b) => a.position - b.position);
@@ -1023,6 +1110,9 @@ async function insertPromptVersion(
     creativeBriefSnapshot: creativeBriefSnapshot ?? null,
     createdAt: Date.now(),
   });
+
+  // A new prompt means the scene will produce something different from the clip that was approved for the old one.
+  await invalidateSceneApproval([videoScreenId]);
 
   return nextVersion;
 }

@@ -9,7 +9,7 @@ import {
 } from '@/db/schema.pg';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { requireUser } from '@/lib/api-auth';
-import { eq, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
 
 export async function GET(req: Request): Promise<NextResponse> {
   const authResult = await requireUser();
@@ -37,7 +37,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       approvedGenerationId: videoScreens.approvedGenerationId,
     })
     .from(videoScreens)
-    .where(inArray(videoScreens.videoProjectId, projectIds));
+    .where(and(inArray(videoScreens.videoProjectId, projectIds), gt(videoScreens.screenNumber, 0)));
 
   type ScreenSummary = { total: number; approved: number; ids: number[] };
   const screensByProject = new Map<number, ScreenSummary>();

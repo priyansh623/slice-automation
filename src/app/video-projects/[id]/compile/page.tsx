@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { Play, RotateCcw, ChevronRight } from 'lucide-react';
 import { compilationView, describeActiveCompilation } from '@/lib/compilation-versions';
+import { summarizeApproval } from '@/lib/scene-approval';
 
 interface Screen {
   id: number;
@@ -105,6 +106,8 @@ export default function CompilePage() {
           videoScreenId: s.id,
           videoGenerationId: s.approvedGenerationId!,
         })),
+        // The scenes this page saw: the server refuses if one was added or deleted since, instead of compiling a stale list.
+        knownSceneIds: project.screens.map((s) => s.id),
       }),
     });
     setShowModal(false);
@@ -130,9 +133,9 @@ export default function CompilePage() {
     );
   }
 
-  const approvedCount = project.screens.filter((s) => s.approvedGenerationId).length;
-  const totalCount = project.screens.length;
-  const allApproved = approvedCount === totalCount && totalCount > 0;
+  const approval = summarizeApproval(project.screens);
+  const approvedCount = approval.approved;
+  const allApproved = approval.eligible;
 
   const activeText = view.active ? describeActiveCompilation(view.active.status, view.nextVersion, currentComp?.version ?? null) : null;
 

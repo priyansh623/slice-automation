@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, promptGenerationTasks } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { enqueueScreen1ApprovalTasks } from '@/services/video-workflow';
 
 export async function POST(
@@ -21,7 +21,7 @@ export async function POST(
   const project = projectRows[0];
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  const allScreens = await db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   const screen1 = allScreens.sort((a, b) => a.position - b.position)[0];
 
   if (!screen1) return NextResponse.json({ error: 'No screens found' }, { status: 400 });

@@ -4,7 +4,7 @@ import { adminSettings, videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { getStorage } from '@/lib/object-store';
 import { locate } from '@/lib/object-store/registry';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
@@ -21,7 +21,7 @@ export async function GET(): Promise<NextResponse> {
     ? await db
         .select({ videoProjectId: videoScreens.videoProjectId, approvedGenerationId: videoScreens.approvedGenerationId })
         .from(videoScreens)
-        .where(inArray(videoScreens.videoProjectId, projectIds))
+        .where(and(inArray(videoScreens.videoProjectId, projectIds), gt(videoScreens.screenNumber, 0)))
     : [];
 
   const screensByProject = new Map<number, { total: number; approved: number }>();

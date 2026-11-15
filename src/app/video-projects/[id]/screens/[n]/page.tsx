@@ -1,11 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
 import { useProject } from '@/contexts/ProjectContext';
+import CompileButton from '@/components/CompileButton';
+import { AddSceneModal, DeleteSceneModal, readAddSceneDraft } from '@/components/SceneModals';
+import { summarizeApproval } from '@/lib/scene-approval';
 
 const SUPPORTED_DURATIONS = [4, 6, 8, 10];
 
@@ -95,6 +98,9 @@ function IconArrowRight() {
 export default function ScreenPage() {
   const { id, n } = useParams<{ id: string; n: string }>();
   const { project, refreshProject } = useProject();
+  const router = useRouter();
+  const [showAddScene, setShowAddScene] = useState(false);
+  const [sceneToDelete, setSceneToDelete] = useState<{ id: number; screenNumber: number; approvedGenerationId: number | null } | null>(null);
 
   const [promptHistory, setPromptHistory] = useState<PromptVersion[]>([]);
   const [generations, setGenerations] = useState<Generation[]>([]);
@@ -105,6 +111,13 @@ export default function ScreenPage() {
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  // Undo for a just-deleted scene (shown for a short while) and the scenes that can still be restored.
+  const [undo, setUndo] = useState<{ screenId: number; screenNumber: number } | null>(null);
+  const [deletedScenes, setDeletedScenes] = useState<Array<{ id: number; dialogue: string; originalNumber: number | null; approved: boolean }>>([]);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
   const [activePromptVersionId, setActivePromptVersionId] = useState<number | null>(null);
   const [validation, setValidation] = useState<{ issues: string[]; warnings: string[] } | null>(null);
   const [projectScopePending, setProjectScopePending] = useState(false);
@@ -215,11 +228,12 @@ export default function ScreenPage() {
       body: JSON.stringify(body),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; setError(d.error ?? 'Failed'); setWritingPrompt(false); return; }
-    const data = await res.json() as { promptText: string; validation?: { issues: string[]; warnings: string[] } };
+    const data = await res.json() as { promptText: string; validation?: { issues: string[]; warnings: string[] }; approvalCleared?: boolean };
     setCurrentPrompt(data.promptText);
     if (data.validation) setValidation(data.validation);
     setFeedback('');
-    await loadSceneData();
+    if (data.approvalCleared) setNotice('The prompt changed, so this scene is no longer approved. Generate and approve a video for the new prompt.');
+    await Promise.all([loadSceneData(), refreshProject()]);
     setWritingPrompt(false);
   }
 
@@ -232,7 +246,9 @@ export default function ScreenPage() {
       body: JSON.stringify({ promptText: currentPrompt }),
     });
     if (!res.ok) { setError('Save failed'); setSavingPrompt(false); return; }
-    await loadSceneData();
+    const saved = await res.json().catch(() => ({})) as { approvalCleared?: boolean };
+    if (saved.approvalCleared) setNotice('The prompt changed, so this scene is no longer approved. Generate and approve a video for the new prompt.');
+    await Promise.all([loadSceneData(), refreshProject()]);
     setSavingPrompt(false);
   }
 
@@ -274,6 +290,7 @@ export default function ScreenPage() {
 
   async function handleApprove(generationId: number) {
     setApproving(true);
+    setNotice('');
     const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,6 +318,122 @@ export default function ScreenPage() {
     } catch { /* */ } finally { setGeneratingAll(false); }
   }
 
+  async function handleSceneAdded(newNumber: number) {
+    setShowAddScene(false);
+    await refreshProject();
+    router.push(`/video-projects/${id}/screens/${newNumber}`);
+  }
+
+  // A refresh while a scene was being added: reopen the form with the saved text so the retry is one click.
+  useEffect(() => { if (readAddSceneDraft(id)?.inFlightAt) setShowAddScene(true); }, [id]);
+
+  // A scene whose prompt is still being written finishes (or is found interrupted) on the server: keep looking.
+  const anyWriting = project?.screens.some((s) => s.creationState === 'generating') ?? false;
+  useEffect(() => {
+    if (!anyWriting) return;
+    const timer = setInterval(() => { void refreshProject(); }, 4000);
+    return () => clearInterval(timer);
+  }, [anyWriting, refreshProject]);
+
+  // Retry on a failed or interrupted scene: finishes that same scene from its saved text, never adds another.
+  async function handleRetryCreation(screenId: number) {
+    if (retryingId !== null) return;
+    setRetryingId(screenId);
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/video-projects/${id}/screens/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ screenId }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        setError(d.error ?? 'Retry did not finish. Your text is saved: press Retry again.');
+      }
+    } catch {
+      setError('Could not reach the server. Your text is saved: press Retry again.');
+    } finally {
+      await Promise.all([refreshProject(), loadSceneData()]);
+      setRetryingId(null);
+    }
+  }
+
+  // The notice is about one scene: it goes away when you move to another.
+  useEffect(() => { setNotice(''); }, [n]);
+
+  const loadDeleted = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/video-projects/${id}/screens`);
+      if (!res.ok) return;
+      const d = await res.json() as { deleted?: typeof deletedScenes };
+      setDeletedScenes(d.deleted ?? []);
+    } catch { /* keep what is shown */ }
+  }, [id]);
+  useEffect(() => { void loadDeleted(); }, [loadDeleted]);
+
+  // The Undo bar lasts a short while. It is kept in session storage because moving to another scene remounts this
+  // page; the scene can still be restored later from "Deleted scenes".
+  const UNDO_MS = 15000;
+  const undoKey = `soma:undo-delete:${id}`;
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(undoKey);
+      if (!raw) return;
+      const u = JSON.parse(raw) as { screenId: number; screenNumber: number; at: number };
+      if (Date.now() - u.at < UNDO_MS) setUndo({ screenId: u.screenId, screenNumber: u.screenNumber });
+      else window.sessionStorage.removeItem(undoKey);
+    } catch { /* storage unavailable: no undo bar, the Deleted scenes list still works */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoKey]);
+  useEffect(() => {
+    if (!undo) return;
+    let left = UNDO_MS;
+    try {
+      const raw = window.sessionStorage.getItem(undoKey);
+      if (raw) left = Math.max(0, UNDO_MS - (Date.now() - (JSON.parse(raw) as { at: number }).at));
+    } catch { /* keep the full time */ }
+    const timer = setTimeout(() => { setUndo(null); try { window.sessionStorage.removeItem(undoKey); } catch { /* */ } }, left);
+    return () => clearTimeout(timer);
+  }, [undo, undoKey]);
+
+  async function handleSceneDeleted(deletedNumber: number) {
+    const deleted = sceneToDelete;
+    setSceneToDelete(null);
+    const remainingBefore = project?.screens.length ?? 1;
+    await Promise.all([refreshProject(), loadDeleted()]);
+    if (deleted) {
+      setUndo({ screenId: deleted.id, screenNumber: deletedNumber });
+      try { window.sessionStorage.setItem(undoKey, JSON.stringify({ screenId: deleted.id, screenNumber: deletedNumber, at: Date.now() })); } catch { /* */ }
+    }
+    const remaining = remainingBefore - 1;
+    const current = parseInt(n, 10);
+    if (remaining <= 0) { router.push(`/video-projects/${id}/screens/1`); return; }
+    // Numbers after the deleted scene moved down by one; keep looking at the same scene where it still exists.
+    if (deletedNumber < current) router.push(`/video-projects/${id}/screens/${current - 1}`);
+    else if (deletedNumber === current) router.push(`/video-projects/${id}/screens/${Math.min(current, remaining)}`);
+  }
+
+  async function handleRestore(screenId: number) {
+    if (restoring) return;
+    setRestoring(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/video-projects/${id}/screens/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ screenId }),
+      });
+      const d = await res.json().catch(() => ({})) as { error?: string; screenNumber?: number };
+      if (!res.ok || !d.screenNumber) { setError(d.error ?? 'Could not restore the scene.'); return; }
+      setUndo(null);
+      try { window.sessionStorage.removeItem(undoKey); } catch { /* */ }
+      await Promise.all([refreshProject(), loadDeleted()]);
+      router.push(`/video-projects/${id}/screens/${d.screenNumber}`);
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally { setRestoring(false); }
+  }
+
   // ─── Derived state ────────────────────────────────────────────────────────
 
   const currentScreenNum = parseInt(n, 10);
@@ -317,9 +450,10 @@ export default function ScreenPage() {
   const completedGens = generations.filter((g) => g.generation.status === 'completed' && g.generation.videoStoragePath);
   const resolvedDisplayGenId = displayGenId ?? completedGens[0]?.generation.id ?? null;
   const displayGen = generations.find((g) => g.generation.id === resolvedDisplayGenId) ?? generations[0] ?? null;
-  const approvedCount = project?.screens.filter((s) => !!s.approvedGenerationId).length ?? 0;
-  const totalScreens = project?.screens.length ?? 0;
-  const allScenesApproved = totalScreens > 0 && approvedCount === totalScreens;
+  const approval = summarizeApproval(project?.screens ?? []);
+  const approvedCount = approval.approved;
+  const totalScreens = approval.total;
+  const allScenesApproved = approval.eligible;
 
   // For "Generation N" label: reverse-index by createdAt so oldest = Gen 1
   const genIndex = (genId: number) => {
@@ -355,7 +489,12 @@ export default function ScreenPage() {
 
   return (
     <AppShell fullscreen>
-      <ProjectHeader projectId={id} projectName={project.name} steps={projectSteps} />
+      <ProjectHeader
+        projectId={id}
+        projectName={project.name}
+        steps={projectSteps}
+        actions={<CompileButton projectId={id} screens={project.screens} onStale={() => void refreshProject()} />}
+      />
 
       <div className="workspace-shell">
 
@@ -386,6 +525,16 @@ export default function ScreenPage() {
               <IconLayers />
               {generatingAll ? 'Queuing…' : 'Generate all scenes'}
             </button>
+            <button
+              onClick={() => setShowAddScene(true)}
+              style={{
+                width: '100%', height: 34, marginTop: 8, border: '1px dashed #6C47FF', borderRadius: 8,
+                background: '#F5F3FF', font: '600 13px/1 Satoshi', color: '#6C47FF', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              + Add scene
+            </button>
           </div>
 
           {/* Scene list */}
@@ -394,18 +543,23 @@ export default function ScreenPage() {
               const isActive = s.screenNumber === currentScreenNum;
               const approved = !!s.approvedGenerationId;
               return (
-                <Link
+                <div
                   key={s.id}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start',
+                    background: isActive ? '#F5F3FF' : 'transparent',
+                    borderLeft: `2px solid ${isActive ? '#6C47FF' : 'transparent'}`,
+                    transition: 'background 0.1s',
+                  }}
+                >
+                <Link
                   href={`/video-projects/${id}/screens/${s.screenNumber}`}
-                  style={{ textDecoration: 'none' }}
+                  style={{ textDecoration: 'none', flex: 1, minWidth: 0 }}
                 >
                   <div style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
-                    padding: '10px 16px',
-                    background: isActive ? '#F5F3FF' : 'transparent',
-                    borderLeft: `2px solid ${isActive ? '#6C47FF' : 'transparent'}`,
+                    padding: '10px 4px 10px 16px',
                     cursor: 'pointer',
-                    transition: 'background 0.1s',
                   }}>
                     {/* Circle indicator */}
                     <div style={{
@@ -426,6 +580,25 @@ export default function ScreenPage() {
                         const isGenerating = gen && ['queued', 'pending', 'processing'].includes(gen.status);
                         const isGenerated = gen && gen.status === 'completed';
                         const isMakingPrompt = s.promptTaskStatus === 'pending' || s.promptTaskStatus === 'processing';
+                        if (s.creationState) {
+                          const cs = s.creationState;
+                          const retrying = retryingId === s.id;
+                          const colors = cs === 'failed' ? ['#FEE2E2', '#B91C1C'] : cs === 'interrupted' ? ['#FEF3C7', '#92400E'] : ['#EDE9FE', '#6D28D9'];
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: colors[0], color: colors[1], font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
+                                {(cs === 'generating' || retrying) && <span style={{ width: 5, height: 5, borderRadius: '50%', background: colors[1], animation: 'pulse 1.2s ease-in-out infinite' }} />}
+                                {retrying || cs === 'generating' ? 'Generating' : cs === 'interrupted' ? 'Generation interrupted' : 'Generation failed'}
+                              </span>
+                              {cs !== 'generating' && !retrying && (
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleRetryCreation(s.id); }}
+                                  style={{ height: 20, padding: '0 8px', borderRadius: 6, border: '1px solid #D9D0FF', background: '#F5F3FF', color: '#6C47FF', font: '600 11px/1 Satoshi', cursor: 'pointer' }}
+                                >Retry</button>
+                              )}
+                            </span>
+                          );
+                        }
                         if (approved) {
                           return (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#DCFCE7', color: '#16A34A', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
@@ -444,7 +617,7 @@ export default function ScreenPage() {
                         if (isGenerated) {
                           return (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: '#DBEAFE', color: '#1D4ED8', font: '500 10px/1.4 Satoshi', letterSpacing: '0.02em' }}>
-                              Generated
+                              Ready for review
                             </span>
                           );
                         }
@@ -468,8 +641,56 @@ export default function ScreenPage() {
                     </div>
                   </div>
                 </Link>
+                {(() => {
+                  const busy = !!s.latestGen && ['queued', 'pending', 'processing'].includes(s.latestGen.status);
+                  return (
+                    <button
+                      onClick={() => setSceneToDelete({ id: s.id, screenNumber: s.screenNumber, approvedGenerationId: s.approvedGenerationId })}
+                      disabled={busy}
+                      aria-label={`Delete Scene ${s.screenNumber}`}
+                      title={busy ? 'This scene is generating a video. Wait for it to finish.' : `Delete Scene ${s.screenNumber}`}
+                      style={{
+                        flexShrink: 0, width: 30, height: 30, margin: '8px 10px 0 0', border: 'none', borderRadius: 7,
+                        background: 'transparent', color: busy ? '#D4D4D8' : '#9A9AA0', cursor: busy ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      onMouseEnter={(e) => { if (!busy) { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.color = '#DC2626'; } }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = busy ? '#D4D4D8' : '#9A9AA0'; }}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
+                  );
+                })()}
+                </div>
               );
             })}
+            {project.screens.length === 0 && (
+              <div style={{ padding: '20px 16px', font: '400 13px/1.5 Satoshi', color: '#75757C' }}>No scenes yet. Use Add scene to create one.</div>
+            )}
+            {deletedScenes.length > 0 && (
+              <div style={{ borderTop: '1px solid #ECECE8', marginTop: 8 }}>
+                <button
+                  onClick={() => setShowDeleted((v) => !v)} aria-expanded={showDeleted}
+                  style={{ width: '100%', textAlign: 'left', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', font: '600 12px/1 Satoshi', color: '#75757C' }}
+                >
+                  {showDeleted ? '▾' : '▸'} Deleted scenes ({deletedScenes.length})
+                </button>
+                {showDeleted && deletedScenes.map((d) => (
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px 6px 20px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ font: '600 12px/1.3 Satoshi', color: '#5E5E65' }}>{d.originalNumber ? `Was Scene ${d.originalNumber}` : 'Deleted scene'}</div>
+                      <div style={{ font: '400 11px/1.3 Satoshi', color: '#9A9AA0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.dialogue || 'No dialogue'}</div>
+                    </div>
+                    <button
+                      onClick={() => void handleRestore(d.id)} disabled={restoring}
+                      style={{ height: 26, padding: '0 10px', borderRadius: 7, border: '1px solid #D9D0FF', background: '#F5F3FF', color: '#6C47FF', font: '600 12px/1 Satoshi', cursor: restoring ? 'wait' : 'pointer' }}
+                    >Restore</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </nav>
 
@@ -578,10 +799,52 @@ export default function ScreenPage() {
               </div>
             )}
 
+            {notice && (
+              <div role="status" style={{ marginBottom: 14, padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#92400E', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{notice}</span>
+                <button onClick={() => setNotice('')} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'inherit', lineHeight: 1, padding: 0 }}>×</button>
+              </div>
+            )}
+
+            {!screen && (
+              <div style={{ textAlign: 'center', padding: '56px 0', font: '400 14px/1.5 Satoshi', color: '#75757C' }}>
+                {project.screens.length === 0
+                  ? 'This video has no scenes. Use Add scene to create one.'
+                  : `Scene ${n} does not exist. Pick a scene from the list.`}
+              </div>
+            )}
+
             {/* Prompt tab */}
-            {activeTab === 'prompt' && (
+            {screen && activeTab === 'prompt' && (
               <>
-                {promptHistory.length === 0 ? (
+                {promptHistory.length === 0 && screen.creationState ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
+                    <div style={{ font: '600 15px/1.3 Satoshi' }}>
+                      {screen.creationState === 'generating' || retryingId === screen.id ? 'Writing the prompt…' : screen.creationState === 'interrupted' ? 'Generation interrupted' : 'Generation failed'}
+                    </div>
+                    <div style={{ font: '400 13px/1.5 Satoshi', color: '#5E5E65' }}>
+                      {screen.creationState === 'generating' || retryingId === screen.id
+                        ? 'This scene was just added and its prompt is being written. This page updates by itself.'
+                        : 'The prompt for this scene was not finished. What you entered is saved: press Retry and nothing needs to be typed again. The scene cannot be approved or compiled until it has a prompt and a video.'}
+                    </div>
+                    {screen.creationBrief && (
+                      <div style={{ border: '1px solid #ECECE8', borderRadius: 10, padding: '10px 12px', background: '#FAFAF8', font: '400 13px/1.5 Satoshi', color: '#3F3F46', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div><strong>What happens:</strong> {screen.creationBrief.description}</div>
+                        <div><strong>Dialogue:</strong> {screen.creationBrief.dialogue || 'None'}</div>
+                        {screen.creationBrief.visualInstructions && <div><strong>Visual instructions:</strong> {screen.creationBrief.visualInstructions}</div>}
+                      </div>
+                    )}
+                    <div>
+                      <button
+                        onClick={() => void handleRetryCreation(screen.id)}
+                        disabled={screen.creationState === 'generating' || retryingId !== null}
+                        style={{ height: 38, padding: '0 18px', borderRadius: 10, background: '#6C47FF', color: '#fff', border: 'none', font: '600 14px/1 Satoshi', cursor: 'pointer', opacity: (screen.creationState === 'generating' || retryingId !== null) ? 0.5 : 1 }}
+                      >
+                        {retryingId === screen.id ? 'Retrying…' : 'Retry'}
+                      </button>
+                    </div>
+                  </div>
+                ) : promptHistory.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '48px 0' }}>
                     <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F0F0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, color: '#6C47FF' }}>
                       <IconSparkle />
@@ -646,7 +909,7 @@ export default function ScreenPage() {
             )}
 
             {/* Requests tab */}
-            {activeTab === 'requests' && (
+            {screen && activeTab === 'requests' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {promptHistory.length <= 1 ? (
                   <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', textAlign: 'center', padding: '32px 0' }}>No revision requests yet.</div>
@@ -918,6 +1181,20 @@ export default function ScreenPage() {
         </div>
 
       </div>
+
+      {undo && (
+        <div role="status" style={{ position: 'fixed', left: 88, bottom: 24, zIndex: 900, display: 'flex', alignItems: 'center', gap: 14, background: '#111113', color: '#fff', padding: '12px 16px', borderRadius: 12, font: '500 13px/1.3 Satoshi', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
+          <span>Scene {undo.screenNumber} deleted.</span>
+          <button onClick={() => void handleRestore(undo.screenId)} disabled={restoring} style={{ background: 'none', border: 'none', color: '#B9A9FF', font: '700 13px/1 Satoshi', cursor: 'pointer', padding: 0 }}>Undo</button>
+          <button onClick={() => { setUndo(null); try { window.sessionStorage.removeItem(undoKey); } catch { /* */ } }} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: '#9A9AA0', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+      )}
+      {showAddScene && (
+        <AddSceneModal projectId={id} scenes={project.screens} onClose={() => setShowAddScene(false)} onAdded={handleSceneAdded} />
+      )}
+      {sceneToDelete && (
+        <DeleteSceneModal projectId={id} scene={sceneToDelete} onClose={() => setSceneToDelete(null)} onDeleted={handleSceneDeleted} />
+      )}
     </AppShell>
   );
 }

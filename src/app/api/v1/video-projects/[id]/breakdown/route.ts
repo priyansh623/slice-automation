@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, videoGenerations } from '@/db/schema.pg';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { requireUser, requireProject } from '@/lib/api-auth';
+import { invalidateSceneApproval } from '@/services/scene-management';
 
 class BreakdownBlockedError extends Error {
   screenNumbers: number[];
@@ -48,7 +49,7 @@ export async function PUT(
   const existingScreens = await db
     .select()
     .from(videoScreens)
-    .where(eq(videoScreens.videoProjectId, projectId));
+    .where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
 
   const removedScreens = existingScreens.filter((s) => !incomingNumbers.has(s.screenNumber));
 
@@ -94,22 +95,28 @@ export async function PUT(
 
   const now = Date.now();
 
-  // Mark existing prompt versions as stale for screens whose dialogue changed
+  // A change to what a scene says or how long it runs means its approved clip no longer matches it.
   const existingByNumber = new Map(existingScreens.map((s) => [s.screenNumber, s]));
   const dialogueChangedIds: number[] = [];
+  const contentChangedIds: number[] = [];
   for (const incoming of body.screens) {
     const existing = existingByNumber.get(incoming.screenNumber);
-    if (existing && existing.dialogue !== incoming.dialogue) {
-      dialogueChangedIds.push(existing.id);
-    }
+    if (!existing) continue;
+    const dialogueChanged = existing.dialogue !== incoming.dialogue;
+    const durationChanged = (existing.durationSeconds ?? null) !== (incoming.durationSeconds ?? null);
+    if (dialogueChanged) dialogueChangedIds.push(existing.id);
+    if (dialogueChanged || durationChanged) contentChangedIds.push(existing.id);
   }
 
+  // Existing prompt versions no longer match a changed dialogue
   if (dialogueChangedIds.length > 0) {
     await db
       .update(screenPromptVersions)
       .set({ isStale: true })
       .where(inArray(screenPromptVersions.videoScreenId, dialogueChangedIds));
   }
+  // The shared rule that withdraws approval (also used when a prompt changes). Unchanged scenes keep theirs.
+  await invalidateSceneApproval(contentChangedIds);
 
   // Delete removed screens (verified above that they have no history)
   if (removedScreens.length > 0) {
@@ -172,7 +179,7 @@ export async function PUT(
     })
     .where(eq(videoProjects.id, projectId));
 
-  const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  const allScreens = await db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   const screens = allScreens.sort((a, b) => a.position - b.position);
 
   return NextResponse.json({ screens });

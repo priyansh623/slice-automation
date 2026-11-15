@@ -7,7 +7,7 @@ import {
   videoScreens,
   videoGenerations,
 } from '@/db/schema.pg';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { requireUser, requireProject } from '@/lib/api-auth';
 import { annotateVersions, ffmpegClipLimitMessage, MAX_COMPILATION_CLIPS, MAX_FFMPEG_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '@/lib/compilation-versions';
 
@@ -81,7 +81,7 @@ export async function POST(
   const projectResult = await requireProject(projectId);
   if (projectResult instanceof NextResponse) return projectResult;
 
-  let body: { scenes?: Array<{ videoScreenId: number; videoGenerationId: number }> };
+  let body: { scenes?: Array<{ videoScreenId: number; videoGenerationId: number }>; knownSceneIds?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -92,6 +92,7 @@ export async function POST(
     return NextResponse.json({ error: 'scenes array required' }, { status: 400 });
   }
   const scenes = body.scenes;
+  const knownSceneIds = Array.isArray(body.knownSceneIds) && body.knownSceneIds.every((v) => Number.isInteger(v)) ? (body.knownSceneIds as number[]) : null;
   if (scenes.length < MIN_COMPILATION_CLIPS || scenes.length > MAX_COMPILATION_CLIPS) {
     return NextResponse.json(
       { error: `A compilation needs between ${MIN_COMPILATION_CLIPS} and ${MAX_COMPILATION_CLIPS} scenes (got ${scenes.length}).` },
@@ -170,6 +171,24 @@ export async function POST(
     const compilation = await db.transaction(async (tx) => {
       await tx.select({ id: videoProjects.id }).from(videoProjects).where(eq(videoProjects.id, projectId)).for('update');
 
+      // The same lock is taken when a scene is added or deleted, so this is the sequence as it is right now.
+      // A scene that has been deleted can never be compiled. Compiling a chosen subset of scenes stays supported (the
+      // API always allowed it); a page that wants to be sure it is compiling the whole current sequence says which
+      // scenes it saw (`knownSceneIds`), and is refused if a scene was added or deleted since.
+      const currentScenes = await tx
+        .select({ id: videoScreens.id, screenNumber: videoScreens.screenNumber })
+        .from(videoScreens)
+        .where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
+      const current = new Set(currentScenes.map((s) => s.id));
+      const staleMessage = 'The scenes changed since this page loaded. Reload the page and compile again.';
+      if (scenes.some((s) => !current.has(s.videoScreenId))) {
+        return { stale: 'The scenes changed since this page loaded (a scene was deleted). Reload the page and compile again.' } as const;
+      }
+      if (knownSceneIds) {
+        const known = new Set(knownSceneIds);
+        if (known.size !== current.size || [...current].some((sid) => !known.has(sid))) return { stale: staleMessage } as const;
+      }
+
       const active = await tx
         .select({ id: videoCompilations.id })
         .from(videoCompilations)
@@ -196,6 +215,7 @@ export async function POST(
       return { created } as const;
     });
 
+    if ('stale' in compilation) return NextResponse.json({ error: compilation.stale, code: 'scenes_changed' }, { status: 409 });
     if ('activeId' in compilation) return alreadyRunning(compilation.activeId ?? null);
     return NextResponse.json({ ...compilation.created, version: null, isCurrent: false }, { status: 201 });
   } catch (err) {

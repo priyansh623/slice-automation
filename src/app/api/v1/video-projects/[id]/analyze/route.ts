@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 
 export const maxDuration = 60;
 import { analyzeScript } from '@/services/video-workflow';
@@ -38,7 +38,7 @@ export async function POST(
   const breakdown = await analyzeScript(projectId);
   const now = Date.now();
 
-  await db.delete(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  await db.delete(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   await db
     .update(videoProjects)
     .set({ breakdownApprovedAt: null, updatedAt: now })
@@ -57,7 +57,7 @@ export async function POST(
     });
   }
 
-  const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  const allScreens = await db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   const screens = allScreens.sort((a, b) => a.position - b.position);
 
   return NextResponse.json({ screens, possibleTypos: breakdown.possibleTypos });

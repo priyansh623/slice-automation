@@ -5,7 +5,8 @@ import { getStorage } from '@/lib/object-store';
 import { locate } from '@/lib/object-store/registry';
 import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/api-auth';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
+import { incompleteScenes } from '@/services/scene-management';
 
 export async function GET(
   _req: NextRequest,
@@ -21,7 +22,7 @@ export async function GET(
 
   const [projectRows, allScreens] = await Promise.all([
     db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1),
-    db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId)),
+    db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0))),
   ]);
 
   const project = projectRows[0];
@@ -73,7 +74,7 @@ export async function GET(
 
   // Fetch only the columns needed by the breakdown view; avoid pulling every generation column.
   type GenRow = { id: number; videoScreenId: number; status: string; videoStoragePath: string | null; updatedAt: number };
-  const [promptRows, allGens, promptTaskRows] = await Promise.all([
+  const [promptRows, allGens, promptTaskRows, incomplete] = await Promise.all([
     screenIds.length > 0
       ? db.select({ videoScreenId: screenPromptVersions.videoScreenId }).from(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds))
       : Promise.resolve([] as { videoScreenId: number }[]),
@@ -91,6 +92,8 @@ export async function GET(
           .from(promptGenerationTasks)
           .where(inArray(promptGenerationTasks.videoScreenId, screenIds))
       : Promise.resolve([] as { videoScreenId: number | null; status: string }[]),
+    // Scenes whose prompt is not finished (being written, interrupted, or failed), with the text saved for a retry.
+    incompleteScenes(projectId),
   ]);
 
   const promptPresence = new Map<number, boolean>();
@@ -130,6 +133,8 @@ export async function GET(
     latestGen: latestGenByScreen.get(s.id) ?? null,
     latestCompletedGen: latestCompletedGenByScreen.get(s.id) ?? null,
     promptTaskStatus: promptTaskByScreen.get(s.id) ?? null,
+    creationState: incomplete.get(s.id)?.state ?? null,
+    creationBrief: incomplete.get(s.id)?.brief ?? null,
   }));
 
   return NextResponse.json({

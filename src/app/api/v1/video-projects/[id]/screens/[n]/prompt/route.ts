@@ -54,7 +54,8 @@ export async function POST(
     result = await revisePrompt(projectId, screen.id, body.nlFeedback, body.reviewingGenerationId);
   }
 
-  return NextResponse.json(result);
+  // A new prompt withdraws the scene's approval (see invalidateSceneApproval): tell the page so it can say so.
+  return NextResponse.json({ ...result, approvalCleared: screen.approvedGenerationId != null });
 }
 
 export async function PUT(
@@ -88,5 +89,5 @@ export async function PUT(
   if (!body.promptText) return NextResponse.json({ error: 'promptText required' }, { status: 400 });
 
   const result = await saveManualPromptEdit(screen.id, body.promptText);
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, approvalCleared: screen.approvedGenerationId != null });
 }

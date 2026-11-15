@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { videoProjects, videoScreens, screenPromptVersions, promptGenerationTasks } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, gt, inArray, ne } from 'drizzle-orm';
 import { enqueueAllSceneGenerations } from '@/services/video-workflow';
+import { incompleteScenes } from '@/services/scene-management';
 
 export async function POST(
   _req: NextRequest,
@@ -27,7 +28,7 @@ export async function POST(
   // Also enqueue prompt tasks for screens that don't have a prompt yet,
   // so the full flow (prompt → video) completes automatically.
   // Requires Screen 1 to be approved (brief extraction prerequisite).
-  const allScreens = await db.select().from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
+  const allScreens = await db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screen1 = screens[0];
   let promptsQueued = 0;
@@ -55,8 +56,10 @@ export async function POST(
       : [];
     const screensWithActiveTasks = new Set(activeTasks.map((t) => t.videoScreenId));
 
+    // Scenes the creator added whose prompt is unfinished are completed with Retry (from their saved brief), not here.
+    const unfinished = await incompleteScenes(projectId);
     const screensNeedingPrompts = screens.filter(
-      (s) => !screensWithPrompts.has(s.id) && !screensWithActiveTasks.has(s.id),
+      (s) => !screensWithPrompts.has(s.id) && !screensWithActiveTasks.has(s.id) && !unfinished.has(s.id),
     );
 
     if (screensNeedingPrompts.length > 0) {

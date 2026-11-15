@@ -13,6 +13,9 @@ export interface Screen {
   latestGen: { id: number; status: string; videoStoragePath: string | null; updatedAt: number } | null;
   latestCompletedGen: { id: number; videoStoragePath: string } | null;
   promptTaskStatus: string | null;
+  /** Set only for a scene added by the creator whose prompt is not finished (see scene-management.ts). */
+  creationState?: 'generating' | 'interrupted' | 'failed' | null;
+  creationBrief?: { description: string; visualInstructions: string; dialogue: string } | null;
 }
 
 export interface VideoProject {

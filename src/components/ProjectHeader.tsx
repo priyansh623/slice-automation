@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, ChevronRight } from 'lucide-react';
 
@@ -16,6 +17,8 @@ interface Props {
   statusLabel?: string;
   statusBg?: string;
   statusFg?: string;
+  /** Shown at the right end of the header, after the status pill (for example the Compile button). */
+  actions?: ReactNode;
 }
 
 const STEP_URLS = (projectId: number | string) => [
@@ -34,6 +37,7 @@ export default function ProjectHeader({
   statusLabel,
   statusBg = '#F0F0EC',
   statusFg = '#111113',
+  actions,
 }: Props) {
   const router = useRouter();
   const urls = STEP_URLS(projectId);
@@ -166,6 +170,7 @@ export default function ProjectHeader({
             {statusLabel}
           </span>
         )}
+        {actions}
       </div>
     </header>
   );
