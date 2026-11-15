@@ -9,14 +9,10 @@ import { desc, eq } from 'drizzle-orm';
 // Writing the prompt is the same model call as "Write prompt" on a scene, so it has the same time allowance.
 export const maxDuration = 60;
 
-const MAX_DESCRIPTION = 4000;
 const MAX_DIALOGUE = 2000;
-const MAX_VISUAL = 4000;
 
 interface AddSceneBody {
-  description?: unknown;
   dialogue?: unknown;
-  visualInstructions?: unknown;
   /** Put the new scene right after this scene. Omit or null to add it at the end. */
   afterScreenId?: unknown;
   /** Identifies this attempt: a retry with the same id never adds a second scene. */
@@ -45,14 +41,10 @@ export async function POST(
   if (projectResult instanceof NextResponse) return projectResult;
 
   const body = (await req.json().catch(() => ({}))) as AddSceneBody;
-  const description = text(body.description);
   const dialogue = text(body.dialogue);
-  const visualInstructions = text(body.visualInstructions);
 
-  if (!description) return NextResponse.json({ error: 'Describe what happens in this scene.' }, { status: 400 });
-  if (description.length > MAX_DESCRIPTION) return NextResponse.json({ error: `The description is too long (max ${MAX_DESCRIPTION} characters).` }, { status: 400 });
+  if (!dialogue) return NextResponse.json({ error: 'Enter the dialogue for this scene.' }, { status: 400 });
   if (dialogue.length > MAX_DIALOGUE) return NextResponse.json({ error: `The dialogue is too long (max ${MAX_DIALOGUE} characters).` }, { status: 400 });
-  if (visualInstructions.length > MAX_VISUAL) return NextResponse.json({ error: `The visual instructions are too long (max ${MAX_VISUAL} characters).` }, { status: 400 });
 
   let afterScreenId: number | null = null;
   if (body.afterScreenId !== undefined && body.afterScreenId !== null) {
@@ -69,7 +61,7 @@ export async function POST(
   let creation;
   try {
     creation = await createSceneRow(projectId, {
-      dialogue, afterScreenId, requestId, userId: authResult.user.id, brief: { description, visualInstructions },
+      dialogue, afterScreenId, requestId, userId: authResult.user.id,
     });
   } catch (err) {
     if (err instanceof SceneError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
@@ -95,7 +87,7 @@ export async function POST(
   }
 
   const screen = creation.screen;
-  const outcome = await writeScenePrompt(projectId, screen.id, creation.eventId, { description, visualInstructions });
+  const outcome = await writeScenePrompt(projectId, screen.id, creation.eventId);
   if (outcome.ok) {
     const { ok: _ok, ...prompt } = outcome;
     return NextResponse.json({ screen: { id: screen.id, screenNumber: screen.screenNumber }, ...prompt }, { status: 201 });

@@ -30,7 +30,7 @@ export async function POST(
     if (err instanceof SceneError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
     throw err;
   }
-  const outcome = await writeScenePrompt(projectId, begun.screen.id, begun.eventId, begun.brief);
+  const outcome = await writeScenePrompt(projectId, begun.screen.id, begun.eventId);
   if (!outcome.ok) {
     return NextResponse.json({ error: 'The prompt could not be written. Your text is saved: try Retry again.', code: 'prompt_failed' }, { status: 502 });
   }

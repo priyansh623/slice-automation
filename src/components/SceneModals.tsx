@@ -44,7 +44,7 @@ interface AddProps {
 
 // What the person typed is kept in this browser until the scene exists, so a failure, a timeout or a refresh never means
 // typing it again. `requestId` names this one "Add scene" attempt: the server uses it so a retry never adds a second scene.
-interface Draft { requestId: string; description: string; dialogue: string; visual: string; after: string; inFlightAt: number | null }
+interface Draft { requestId: string; dialogue: string; after: string; inFlightAt: number | null }
 const draftKey = (projectId: number | string) => `soma:add-scene-draft:${projectId}`;
 const newRequestId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `r${Date.now()}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '');
 
@@ -53,7 +53,7 @@ export function readAddSceneDraft(projectId: number | string): Draft | null {
     const raw = window.localStorage.getItem(draftKey(projectId));
     if (!raw) return null;
     const d = JSON.parse(raw) as Draft;
-    return d && typeof d.requestId === 'string' && typeof d.description === 'string' ? d : null;
+    return d && typeof d.requestId === 'string' && typeof d.dialogue === 'string' ? d : null;
   } catch { return null; }
 }
 function writeDraft(projectId: number | string, d: Draft | null) {
@@ -65,9 +65,7 @@ function writeDraft(projectId: number | string, d: Draft | null) {
 
 export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps) {
   const restored = useRef<Draft | null>(typeof window !== 'undefined' ? readAddSceneDraft(projectId) : null);
-  const [description, setDescription] = useState(restored.current?.description ?? '');
   const [dialogue, setDialogue] = useState(restored.current?.dialogue ?? '');
-  const [visual, setVisual] = useState(restored.current?.visual ?? '');
   // 'end' or the id of the scene to insert after
   const [after, setAfter] = useState<string>(restored.current?.after && (restored.current.after === 'end' || scenes.some((s) => String(s.id) === restored.current!.after)) ? restored.current.after : 'end');
   const [submitting, setSubmitting] = useState(false);
@@ -87,9 +85,9 @@ export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps)
 
   // Keep the draft up to date while typing.
   useEffect(() => {
-    if (!description && !dialogue && !visual) { writeDraft(projectId, null); return; }
-    writeDraft(projectId, { requestId: requestId.current, description, dialogue, visual, after, inFlightAt: inFlight.current ? Date.now() : null });
-  }, [projectId, description, dialogue, visual, after]);
+    if (!dialogue) { writeDraft(projectId, null); return; }
+    writeDraft(projectId, { requestId: requestId.current, dialogue, after, inFlightAt: inFlight.current ? Date.now() : null });
+  }, [projectId, dialogue, after]);
   const first = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { first.current?.focus(); }, []);
@@ -99,25 +97,23 @@ export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps)
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const missingDescription = description.trim().length === 0;
+  const missingDialogue = dialogue.trim().length === 0;
 
   async function submit() {
     setTouched(true);
-    if (missingDescription || inFlight.current) return;
+    if (missingDialogue || inFlight.current) return;
     inFlight.current = true;
     setSubmitting(true);
     setError('');
     setFailed(false);
     // Remember that a request is out, so a refresh while it runs can offer a safe retry.
-    writeDraft(projectId, { requestId: requestId.current, description, dialogue, visual, after, inFlightAt: Date.now() });
+    writeDraft(projectId, { requestId: requestId.current, dialogue, after, inFlightAt: Date.now() });
     try {
       const res = await fetch(`/api/v1/video-projects/${projectId}/screens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description,
           dialogue,
-          visualInstructions: visual,
           afterScreenId: after === 'end' ? null : Number(after),
           requestId: requestId.current,
         }),
@@ -135,7 +131,7 @@ export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps)
           ? 'Writing the prompt took too long. Your text is saved: press Retry.'
           : 'Could not add the scene. Your text is saved: press Retry.'));
         setFailed(true);
-        writeDraft(projectId, { requestId: requestId.current, description, dialogue, visual, after, inFlightAt: null });
+        writeDraft(projectId, { requestId: requestId.current, dialogue, after, inFlightAt: null });
         return;
       }
       writeDraft(projectId, null);
@@ -144,7 +140,7 @@ export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps)
       if (leaving.current) return; // the page is going away: keep the draft as it was written when the request left
       setError('Could not reach the server. Your text is saved: press Retry.');
       setFailed(true);
-      writeDraft(projectId, { requestId: requestId.current, description, dialogue, visual, after, inFlightAt: null });
+      writeDraft(projectId, { requestId: requestId.current, dialogue, after, inFlightAt: null });
     } finally {
       inFlight.current = false;
       setSubmitting(false);
@@ -156,28 +152,18 @@ export function AddSceneModal({ projectId, scenes, onClose, onAdded }: AddProps)
       <div style={{ ...card, maxWidth: 520 }}>
         <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 4 }}>Add a scene</div>
         <div style={{ font: '400 13px/1.5 Satoshi', color: '#5E5E65', marginBottom: 18 }}>
-          Describe the scene and we&apos;ll write its prompt from your project&apos;s script, character and creative direction. You can edit the prompt and must approve the video before it is used.
+          Enter the dialogue and we&apos;ll write the scene&apos;s prompt the same way as for every other scene. You can edit the prompt and must approve the video before it is used.
         </div>
 
-        <label htmlFor="scene-description" style={label}>What happens in this scene? <span style={{ color: '#DC2626' }}>*</span></label>
+        <label htmlFor="scene-dialogue" style={label}>Dialogue <span style={{ color: '#DC2626' }}>*</span></label>
+        <div style={hint}>The exact words spoken in this scene.</div>
         <textarea
-          id="scene-description" ref={first} rows={4} value={description} disabled={submitting}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g. He holds up the card and shows the camera how it looks."
-          aria-invalid={touched && missingDescription}
-          style={{ ...field, borderColor: touched && missingDescription ? '#DC2626' : '#E4E4E0' }}
+          id="scene-dialogue" ref={first} rows={4} value={dialogue} disabled={submitting}
+          onChange={(e) => setDialogue(e.target.value)}
+          aria-invalid={touched && missingDialogue}
+          style={{ ...field, borderColor: touched && missingDialogue ? '#DC2626' : '#E4E4E0' }}
         />
-        {touched && missingDescription && <div style={{ font: '400 12px/1.4 Satoshi', color: '#DC2626', marginTop: 4 }}>Describe what happens in this scene.</div>}
-
-        <div style={{ height: 14 }} />
-        <label htmlFor="scene-dialogue" style={label}>Dialogue <span style={{ font: '400 12px/1 Satoshi', color: '#9A9AA0' }}>(optional)</span></label>
-        <div style={hint}>The exact words spoken. Leave empty for a scene with no speech: nothing will be written for you.</div>
-        <textarea id="scene-dialogue" rows={2} value={dialogue} disabled={submitting} onChange={(e) => setDialogue(e.target.value)} style={field} />
-
-        <div style={{ height: 14 }} />
-        <label htmlFor="scene-visual" style={label}>Visual instructions <span style={{ font: '400 12px/1 Satoshi', color: '#9A9AA0' }}>(optional)</span></label>
-        <div style={hint}>Framing, setting, props, lighting or mood you want to see.</div>
-        <textarea id="scene-visual" rows={2} value={visual} disabled={submitting} onChange={(e) => setVisual(e.target.value)} style={field} />
+        {touched && missingDialogue && <div style={{ font: '400 12px/1.4 Satoshi', color: '#DC2626', marginTop: 4 }}>Enter the dialogue for this scene.</div>}
 
         <div style={{ height: 14 }} />
         <label htmlFor="scene-position" style={label}>Position</label>

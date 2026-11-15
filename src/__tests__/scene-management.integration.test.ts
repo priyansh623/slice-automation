@@ -144,47 +144,53 @@ describe('compile eligibility (the existing approval rule, shared)', () => {
 });
 
 describe('adding a scene', () => {
-  it('adds at the end, writes the prompt from the description and visual instructions, and does not approve it', async () => {
+  it('adds at the end, writes the prompt from the dialogue, and does not approve it', async () => {
     const { projectId } = await makeProject(2);
-    const res = await add(projectId, { description: 'He shows the card to the camera', visualInstructions: 'close-up, warm light' });
+    const res = await add(projectId, { dialogue: 'Zero joining fee, zero hidden charges.' });
     expect(res.status).toBe(201);
     const body = await res.json() as { screen: { screenNumber: number }; promptText: string; version: number };
     expect(body.screen.screenNumber).toBe(3);
     expect(body.version).toBe(1);
 
     const msg = holder.messages[0];
-    expect(msg).toContain('He shows the card to the camera');
-    expect(msg).toContain('close-up, warm light');
-    expect(msg).toContain('Scene 3');
+    expect(msg).toContain('Scene 3 dialogue: "Zero joining fee, zero hidden charges."');
+    expect(msg).toContain('Preserve the original dialogue exactly.');
     expect(msg).toContain('script'); // the project's script is part of the context
 
     const seq = await sequence(projectId);
     expect(seq).toHaveLength(3);
+    expect(seq[2].dialogue).toBe('Zero joining fee, zero hidden charges.');
     expect(seq[2].approvedGenerationId).toBeNull();
     const versions = await db.select().from(schema.screenPromptVersions).where(eq(schema.screenPromptVersions.videoScreenId, seq[2].id));
     expect(versions).toHaveLength(1);
     expect(versions[0]).toMatchObject({ source: 'claude' });
-    expect(versions[0].nlFeedback).toContain('He shows the card to the camera');
     expect(await db.select().from(schema.videoGenerations).where(eq(schema.videoGenerations.videoScreenId, seq[2].id))).toHaveLength(0); // no video requested
     await expectConsistent(projectId);
   });
 
-  it('never invents dialogue when the field is empty, and keeps it exactly when given', async () => {
-    const { projectId } = await makeProject(1);
-    await add(projectId, { description: 'A quiet moment', dialogue: '   ' });
-    expect(holder.messages[0]).toContain('NO spoken dialogue');
-    expect(holder.messages[0]).toContain('Do not write, invent or imply any dialogue');
-    expect((await sequence(projectId))[1].dialogue).toBe('');
+  it('writes the prompt exactly the way "Write prompt" does for any other scene', async () => {
+    const a = await makeProject(2);
+    await add(a.projectId, { dialogue: 'Get yours today.' });
+    const viaAdd = holder.messages[0];
 
-    await add(projectId, { description: 'He says the offer', dialogue: 'Zero joining fee.' });
-    expect(holder.messages[1]).toContain('Scene 3 dialogue: "Zero joining fee."');
-    expect(holder.messages[1]).toContain('Preserve the dialogue exactly.');
-    expect(holder.messages[1]).not.toContain('NO spoken dialogue');
+    holder.messages = [];
+    const b = await makeProject(2);
+    const now = Date.now();
+    await db.insert(schema.videoScreens).values({ videoProjectId: b.projectId, screenNumber: 3, dialogue: 'Get yours today.', position: 3, createdAt: now, updatedAt: now });
+    expect((await postPrompt(json({}), ctxN(b.projectId, 3))).status).toBe(200);
+    expect(holder.messages[0]).toBe(viaAdd);
+  });
+
+  it('adding to a project with no scenes writes Scene 1 the way Scene 1 is normally written', async () => {
+    const { projectId } = await makeProject(1);
+    await del(projectId, 1, (await sequence(projectId))[0].id);
+    expect((await add(projectId, { dialogue: 'Welcome in.' })).status).toBe(201);
+    expect(holder.messages[0]).toContain('Script for Scene 1: "Welcome in."');
   });
 
   it('inserts between scenes, renumbering the later ones and keeping their approvals and history', async () => {
     const { projectId, screens } = await makeProject(3);
-    const res = await add(projectId, { description: 'Inserted', afterScreenId: screens[0].id });
+    const res = await add(projectId, { dialogue: 'Inserted', afterScreenId: screens[0].id });
     expect(res.status).toBe(201);
     expect(((await res.json()) as { screen: { screenNumber: number } }).screen.screenNumber).toBe(2);
 
@@ -199,12 +205,12 @@ describe('adding a scene', () => {
     expect((await db.select().from(schema.videoGenerations)).length).toBe(3); // nothing created or removed
   });
 
-  it('requires a description, and rejects an unknown insert position without changing anything', async () => {
+  it('requires dialogue, and rejects an unknown insert position without changing anything', async () => {
     const { projectId } = await makeProject(2);
-    expect((await add(projectId, { description: '   ' })).status).toBe(400);
-    expect((await add(projectId, { dialogue: 'x' })).status).toBe(400);
-    expect((await add(projectId, { description: 'x', afterScreenId: 999999 })).status).toBe(409);
-    expect((await add(projectId, { description: 'x', afterScreenId: 'a' })).status).toBe(400);
+    expect((await add(projectId, { dialogue: '   ' })).status).toBe(400);
+    expect((await add(projectId, {})).status).toBe(400);
+    expect((await add(projectId, { dialogue: 'x', afterScreenId: 999999 })).status).toBe(409);
+    expect((await add(projectId, { dialogue: 'x', afterScreenId: 'a' })).status).toBe(400);
     expect(await sequence(projectId)).toHaveLength(2);
     expect(holder.messages).toHaveLength(0);
   });
@@ -212,7 +218,7 @@ describe('adding a scene', () => {
   it('keeps the scene, marked failed with the typed text saved, when the prompt cannot be written', async () => {
     const { projectId, screens } = await makeProject(3);
     holder.failClaude = true;
-    const res = await add(projectId, { description: 'Will fail', dialogue: 'Say this', visualInstructions: 'Wide shot', afterScreenId: screens[0].id });
+    const res = await add(projectId, { dialogue: 'Say this', afterScreenId: screens[0].id });
     expect(res.status).toBe(502);
     expect(((await res.json()) as { code: string }).code).toBe('prompt_failed');
     // visible in the sequence, numbering intact, and described as failed with its brief
@@ -220,18 +226,18 @@ describe('adding a scene', () => {
     expect(seq).toHaveLength(4);
     await expectConsistent(projectId);
     const api = await apiScreensFull(projectId);
-    expect(api[1]).toMatchObject({ screenNumber: 2, creationState: 'failed', hasPrompt: false, creationBrief: { description: 'Will fail', dialogue: 'Say this', visualInstructions: 'Wide shot' } });
+    expect(api[1]).toMatchObject({ screenNumber: 2, creationState: 'failed', hasPrompt: false, creationBrief: { dialogue: 'Say this' } });
   });
 
   it('requires a signed-in user', async () => {
     const { projectId } = await makeProject(1);
     holder.userId = null;
-    expect((await add(projectId, { description: 'x' })).status).toBe(401);
+    expect((await add(projectId, { dialogue: 'x' })).status).toBe(401);
   });
 
   it('a manually added scene behaves like a normal one: it is edited, approved and compiled', async () => {
     const { projectId, screens } = await makeProject(2);
-    await add(projectId, { description: 'Extra scene' });
+    await add(projectId, { dialogue: 'Extra scene' });
     const seq = await sequence(projectId);
     const extra = seq[2];
 
@@ -328,7 +334,7 @@ describe('deleting a scene', () => {
     expect(await apiScreens(projectId)).toEqual([]);
     expect(summarizeApproval([]).eligible).toBe(false);
 
-    const res = await add(projectId, { description: 'A fresh start' });
+    const res = await add(projectId, { dialogue: 'A fresh start' });
     expect(res.status).toBe(201);
     expect(((await res.json()) as { screen: { screenNumber: number } }).screen.screenNumber).toBe(1);
     await expectConsistent(projectId);
@@ -355,7 +361,7 @@ describe('deleting a scene', () => {
 describe('rapid and repeated changes', () => {
   it('many simultaneous adds never produce a gap or a duplicate number', async () => {
     const { projectId } = await makeProject(2);
-    const results = await Promise.all(Array.from({ length: 6 }, (_, i) => add(projectId, { description: `scene ${i}` })));
+    const results = await Promise.all(Array.from({ length: 6 }, (_, i) => add(projectId, { dialogue: `scene ${i}` })));
     expect(results.every((r) => r.status === 201)).toBe(true);
     expect(await sequence(projectId)).toHaveLength(8);
     await expectConsistent(projectId);
@@ -365,7 +371,7 @@ describe('rapid and repeated changes', () => {
     const { projectId, screens } = await makeProject(5);
     const results = await Promise.all([
       del(projectId, 2, screens[1].id), del(projectId, 4, screens[3].id),
-      add(projectId, { description: 'a', afterScreenId: screens[0].id }), add(projectId, { description: 'b' }),
+      add(projectId, { dialogue: 'a', afterScreenId: screens[0].id }), add(projectId, { dialogue: 'b' }),
     ]);
     const statuses = results.map((r) => r.status);
     expect(statuses.every((s) => s === 200 || s === 201 || s === 409)).toBe(true);
@@ -379,11 +385,11 @@ describe('rapid and repeated changes', () => {
 
   it('add then delete then add keeps numbering contiguous after every step and across a reload', async () => {
     const { projectId, screens } = await makeProject(3);
-    await add(projectId, { description: 'x', afterScreenId: screens[0].id });
+    await add(projectId, { dialogue: 'x', afterScreenId: screens[0].id });
     await expectConsistent(projectId);
     await del(projectId, 3, screens[1].id);
     await expectConsistent(projectId);
-    await add(projectId, { description: 'y' });
+    await add(projectId, { dialogue: 'y' });
     await expectConsistent(projectId);
     const a = await apiScreens(projectId);
     const b = await apiScreens(projectId);
@@ -462,7 +468,7 @@ describe('approval is withdrawn by every change that alters what a scene produce
 
   it('moving scenes (add, delete, restore) changes no scene content, so approvals stay', async () => {
     const { projectId, screens } = await makeProject(3);
-    await add(projectId, { description: 'Between', afterScreenId: screens[0].id });
+    await add(projectId, { dialogue: 'Between', afterScreenId: screens[0].id });
     await del(projectId, 3, screens[1].id);
     await restore(projectId, screens[1].id);
     const approvals = await approvalOf(projectId);
@@ -483,11 +489,11 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
   it('a failed attempt keeps the scene, and the retry with the same requestId finishes that scene instead of adding another', async () => {
     const { projectId } = await makeProject(2);
     holder.failClaude = true;
-    const first = await add(projectId, { description: 'My scene', dialogue: 'Hi', requestId: 'req-failure-1' });
+    const first = await add(projectId, { dialogue: 'Hi', requestId: 'req-failure-1' });
     expect(first.status).toBe(502);
     expect(await countScenes(projectId)).toBe(3);
     holder.failClaude = false;
-    const second = await add(projectId, { description: 'My scene', dialogue: 'Hi', requestId: 'req-failure-1' });
+    const second = await add(projectId, { dialogue: 'Hi', requestId: 'req-failure-1' });
     expect(second.status).toBe(201);
     expect(await countScenes(projectId)).toBe(3);
   });
@@ -495,7 +501,7 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
   it('a request cut off by the time limit leaves a visible, unapprovable scene, and the retry takes that same scene over', async () => {
     const { projectId } = await makeProject(2);
     // Simulate the cut-off: the scene row exists (the prompt step never finished).
-    const created = await createSceneRow(projectId, { dialogue: '', requestId: 'req-timeout-01', userId: ALICE, brief: { description: 'My scene', visualInstructions: '' } });
+    const created = await createSceneRow(projectId, { dialogue: 'Hello there', requestId: 'req-timeout-01', userId: ALICE });
     expect(created.state).toBe('created');
     expect((await sequence(projectId)).map((s) => s.screenNumber)).toEqual([1, 2, 3]);
     // ...it can never be approved: it has no video
@@ -503,14 +509,14 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
     expect(summarizeApproval(await apiScreens(projectId)).eligible).toBe(false);
 
     // A retry right away is told to wait: the first request may still be running
-    const tooSoon = await add(projectId, { description: 'My scene', requestId: 'req-timeout-01' });
+    const tooSoon = await add(projectId, { dialogue: 'My scene', requestId: 'req-timeout-01' });
     expect(tooSoon.status).toBe(409);
     expect(((await tooSoon.json()) as { code: string }).code).toBe('in_progress');
     expect(await countScenes(projectId)).toBe(3);
 
     // After the lease has passed the earlier request is dead: the retry finishes the same scene
     await ageCreation(created.screen.id);
-    const retry = await add(projectId, { description: 'My scene', dialogue: 'Typed later', requestId: 'req-timeout-01' });
+    const retry = await add(projectId, { dialogue: 'Typed later', requestId: 'req-timeout-01' });
     expect(retry.status).toBe(201);
     expect(await countScenes(projectId)).toBe(3);
     const finished = (await sequence(projectId))[2];
@@ -522,10 +528,10 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
 
   it('repeating a request whose answer was lost returns the same scene without writing a second prompt', async () => {
     const { projectId } = await makeProject(2);
-    const first = await add(projectId, { description: 'Once', requestId: 'req-lost-0001' });
+    const first = await add(projectId, { dialogue: 'Once', requestId: 'req-lost-0001' });
     expect(first.status).toBe(201);
     const modelCalls = holder.messages.length;
-    const again = await add(projectId, { description: 'Once', requestId: 'req-lost-0001' });
+    const again = await add(projectId, { dialogue: 'Once', requestId: 'req-lost-0001' });
     expect(again.status).toBe(200);
     const a = (await first.json()) as { screen: { id: number } };
     const b = (await again.json()) as { screen: { id: number }; alreadyCreated: boolean };
@@ -537,7 +543,7 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
 
   it('duplicate submissions at the same moment create one scene', async () => {
     const { projectId } = await makeProject(2);
-    const results = await Promise.all([1, 2, 3].map(() => add(projectId, { description: 'Double click', requestId: 'req-double-01' })));
+    const results = await Promise.all([1, 2, 3].map(() => add(projectId, { dialogue: 'Double click', requestId: 'req-double-01' })));
     expect(results.filter((r) => r.status === 201)).toHaveLength(1);
     expect(results.every((r) => [200, 201, 409].includes(r.status))).toBe(true);
     expect(await countScenes(projectId)).toBe(3);
@@ -546,8 +552,8 @@ describe('adding a scene survives timeouts, retries and refreshes', () => {
 
   it('different attempts (different requestIds) are different scenes', async () => {
     const { projectId } = await makeProject(1);
-    await add(projectId, { description: 'A', requestId: 'req-aaaaaaaa' });
-    await add(projectId, { description: 'B', requestId: 'req-bbbbbbbb' });
+    await add(projectId, { dialogue: 'A', requestId: 'req-aaaaaaaa' });
+    await add(projectId, { dialogue: 'B', requestId: 'req-bbbbbbbb' });
     expect(await countScenes(projectId)).toBe(3);
   });
 });
@@ -618,7 +624,7 @@ describe('numbering is only a display of the order, never part of a scene or its
   it('inserting and deleting in the middle changes numbers, not prompts, videos or compilation references', async () => {
     const { projectId, screens } = await makeProject(4);
     const promptsBefore = (await db.select().from(schema.screenPromptVersions)).map((v) => [v.id, v.promptText]);
-    await add(projectId, { description: 'In the middle', afterScreenId: screens[1].id });
+    await add(projectId, { dialogue: 'In the middle', afterScreenId: screens[1].id });
     await del(projectId, 1, screens[0].id);
     expect((await db.select().from(schema.screenPromptVersions)).filter((v) => promptsBefore.some(([id]) => id === v.id)).map((v) => [v.id, v.promptText])).toEqual(promptsBefore);
 
@@ -644,7 +650,7 @@ describe('compiling a chosen subset stays supported', () => {
   it('a page that sends the sequence it saw is refused if a scene was added or deleted since, and accepted when current', async () => {
     const { projectId, screens } = await makeProject(3);
     const ids = screens.map((s) => s.id);
-    await add(projectId, { description: 'Added after the page loaded' });
+    await add(projectId, { dialogue: 'Added after the page loaded' });
     const stale = await startCompilation(json({ scenes: all(screens), knownSceneIds: ids }), ctx(projectId));
     expect(stale.status).toBe(409);
     expect(((await stale.json()) as { code: string }).code).toBe('scenes_changed');
@@ -665,25 +671,23 @@ describe('every added scene shows an accurate state, and an unfinished one can o
 
   it('is "generating" while the first request may still be running, and a refresh never shows it as ready', async () => {
     const { projectId } = await makeProject(2);
-    await createSceneRow(projectId, { dialogue: 'Hello', requestId: 'req-state-gen1', userId: ALICE, brief: { description: 'A scene', visualInstructions: 'Close-up' } });
+    await createSceneRow(projectId, { dialogue: 'Hello', requestId: 'req-state-gen1', userId: ALICE });
     for (let i = 0; i < 3; i++) expect(await stateOfScene(projectId, 3)).toBe('generating'); // every reload reads the server
     expect((await apiScreensFull(projectId))[2]).toMatchObject({ hasPrompt: false, approvedGenerationId: null });
   });
 
   it('becomes "interrupted" once the request is long dead, and Retry finishes the same scene from the saved text', async () => {
     const { projectId } = await makeProject(2);
-    const c = await createSceneRow(projectId, { dialogue: 'Say this exactly', requestId: 'req-state-int1', userId: ALICE, brief: { description: 'He waves at the camera', visualInstructions: 'Warm light' } });
+    const c = await createSceneRow(projectId, { dialogue: 'Say this exactly', requestId: 'req-state-int1', userId: ALICE });
     // retrying while it may still be running is refused
     expect((await retryRoute(projectId, c.screen.id)).status).toBe(409);
     await ageCreation(c.screen.id);
     expect(await stateOfScene(projectId, 3)).toBe('interrupted');
-    expect((await apiScreensFull(projectId))[2].creationBrief).toEqual({ description: 'He waves at the camera', visualInstructions: 'Warm light', dialogue: 'Say this exactly' });
+    expect((await apiScreensFull(projectId))[2].creationBrief).toEqual({ dialogue: 'Say this exactly' });
 
     const res = await retryRoute(projectId, c.screen.id);
     expect(res.status).toBe(200);
     expect(await countRows(projectId)).toBe(3); // no duplicate
-    expect(holder.messages.at(-1)).toContain('He waves at the camera');
-    expect(holder.messages.at(-1)).toContain('Warm light');
     expect(holder.messages.at(-1)).toContain('Say this exactly');
     expect(await stateOfScene(projectId, 3)).toBeNull();
     expect((await apiScreensFull(projectId))[2]).toMatchObject({ hasPrompt: true, approvedGenerationId: null });
@@ -694,12 +698,12 @@ describe('every added scene shows an accurate state, and an unfinished one can o
   it('a failed Retry leaves it failed with the text intact, and the next Retry can succeed', async () => {
     const { projectId } = await makeProject(2);
     holder.failClaude = true;
-    const res = await add(projectId, { description: 'Hard scene', dialogue: 'Keep me', visualInstructions: 'Dusk', requestId: 'req-state-fail1' });
+    const res = await add(projectId, { dialogue: 'Keep me', requestId: 'req-state-fail1' });
     expect(res.status).toBe(502);
     const id = (await sequence(projectId))[2].id;
     expect((await retryRoute(projectId, id)).status).toBe(502);
     expect(await stateOfScene(projectId, 3)).toBe('failed');
-    expect((await apiScreensFull(projectId))[2].creationBrief).toEqual({ description: 'Hard scene', visualInstructions: 'Dusk', dialogue: 'Keep me' });
+    expect((await apiScreensFull(projectId))[2].creationBrief).toEqual({ dialogue: 'Keep me' });
     holder.failClaude = false;
     expect((await retryRoute(projectId, id)).status).toBe(200);
     expect(await stateOfScene(projectId, 3)).toBeNull();
@@ -709,7 +713,7 @@ describe('every added scene shows an accurate state, and an unfinished one can o
   it('an unfinished scene cannot be approved or compiled, and does not block or change the other scenes', async () => {
     const { projectId, screens } = await makeProject(2);
     holder.failClaude = true;
-    await add(projectId, { description: 'x', requestId: 'req-state-gate1' });
+    await add(projectId, { dialogue: 'x', requestId: 'req-state-gate1' });
     const unfinished = (await sequence(projectId))[2];
     expect((await approveScene(json({ generationId: 1 }), ctxN(projectId, 3))).status).toBe(404);
     expect(summarizeApproval(await apiScreens(projectId))).toMatchObject({ eligible: false, unapprovedScreenNumbers: [3] });
@@ -722,7 +726,7 @@ describe('every added scene shows an accurate state, and an unfinished one can o
   it('is not picked up by the generic prompt queue, which would write it without the creator\'s description', async () => {
     const { projectId } = await makeProject(2);
     holder.failClaude = true;
-    await add(projectId, { description: 'x', requestId: 'req-state-queue' });
+    await add(projectId, { dialogue: 'x', requestId: 'req-state-queue' });
     holder.failClaude = false;
     await generateAll(new NextRequest('http://localhost/api', { method: 'POST' }), ctx(projectId));
     expect(await db.select().from(schema.promptGenerationTasks).where(eq(schema.promptGenerationTasks.videoProjectId, projectId))).toHaveLength(0);
@@ -730,7 +734,7 @@ describe('every added scene shows an accurate state, and an unfinished one can o
 
   it('cannot be deleted while it is being written, but can once it is interrupted, failed or finished; and can be restored', async () => {
     const { projectId } = await makeProject(2);
-    const c = await createSceneRow(projectId, { dialogue: '', requestId: 'req-state-del1', userId: ALICE, brief: { description: 'x', visualInstructions: '' } });
+    const c = await createSceneRow(projectId, { dialogue: 'Hello there', requestId: 'req-state-del1', userId: ALICE });
     const blocked = await del(projectId, 3, c.screen.id);
     expect(blocked.status).toBe(409);
     expect(((await blocked.json()) as { code: string }).code).toBe('generation_running');
@@ -744,7 +748,7 @@ describe('every added scene shows an accurate state, and an unfinished one can o
   it('breakdown scenes (no creation record) are untouched: no state, and their duration notes are never written or read by creation', async () => {
     const { projectId, screens } = await makeProject(2);
     await db.update(schema.videoScreens).set({ durationNote: '19 words at comfortable pace' }).where(eq(schema.videoScreens.id, screens[0].id));
-    await add(projectId, { description: 'x', requestId: 'req-state-note1' });
+    await add(projectId, { dialogue: 'x', requestId: 'req-state-note1' });
     const api = await apiScreensFull(projectId);
     expect(api[0]).toMatchObject({ creationState: null, durationNote: '19 words at comfortable pace' });
     expect(api[2].durationNote).toBeNull(); // the retry key is not stored on the scene
@@ -755,7 +759,7 @@ describe('every added scene shows an accurate state, and an unfinished one can o
       { screenNumber: 3, dialogue: '' },
     ]);
     expect(await stateOfScene(projectId, 3)).toBeNull();
-    const again = await add(projectId, { description: 'x', requestId: 'req-state-note1' });
+    const again = await add(projectId, { dialogue: 'x', requestId: 'req-state-note1' });
     expect(again.status).toBe(200);
     expect(await countRows(projectId)).toBe(3);
   });

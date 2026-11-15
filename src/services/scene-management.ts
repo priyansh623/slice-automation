@@ -96,9 +96,8 @@ export const SCENE_CREATION_EVENT = 'scene_creation';
 /** How long a "generating" record is believed: the request is cut off after 60 seconds, so past this it is dead. */
 export const ADD_SCENE_LEASE_MS = 90_000;
 
-export interface SceneBrief { description: string; visualInstructions: string }
 export type CreationStatus = 'generating' | 'failed' | 'done';
-interface CreationPayload extends SceneBrief {
+interface CreationPayload {
   requestId: string;
   screenId: number;
   dialogue: string;
@@ -128,9 +127,9 @@ async function creationRecords(executor: Pick<typeof db, 'select'>, projectId: n
  * For each scene of the project whose prompt is not finished, how far its creation got. A scene that has a prompt
  * (or no creation record, like every scene from the script breakdown) is not in the map.
  */
-export async function incompleteScenes(projectId: number): Promise<Map<number, { state: CreationState; error?: string; brief: SceneBrief & { dialogue: string } }>> {
+export async function incompleteScenes(projectId: number): Promise<Map<number, { state: CreationState; error?: string; brief: { dialogue: string } }>> {
   const records = await creationRecords(db, projectId);
-  const out = new Map<number, { state: CreationState; error?: string; brief: SceneBrief & { dialogue: string } }>();
+  const out = new Map<number, { state: CreationState; error?: string; brief: { dialogue: string } }>();
   const candidates = records.filter((r) => r.status !== 'done');
   if (candidates.length === 0) return out;
   const withPrompt = new Set((await db
@@ -141,7 +140,7 @@ export async function incompleteScenes(projectId: number): Promise<Map<number, {
   for (const r of candidates) {
     if (withPrompt.has(r.screenId)) continue; // finished, whatever the record says (e.g. the update was lost)
     const state = stateOf(r, now);
-    if (state) out.set(r.screenId, { state, error: r.error, brief: { description: r.description, visualInstructions: r.visualInstructions, dialogue: r.dialogue } });
+    if (state) out.set(r.screenId, { state, error: r.error, brief: { dialogue: r.dialogue } });
   }
   return out;
 }
@@ -158,7 +157,6 @@ export interface AddSceneInput {
   afterScreenId?: number | null;
   /** Identifies one "Add scene" attempt (the form keeps it until the scene exists). */
   requestId: string;
-  brief: SceneBrief;
   userId: string;
 }
 
@@ -189,7 +187,7 @@ export async function createSceneRow(projectId: number, input: AddSceneInput): P
       // Failed, or cut off before the prompt was written: take the same scene over, with the text as it is now.
       const [taken] = await tx.update(videoScreens).set({ dialogue: input.dialogue, updatedAt: now }).where(eq(videoScreens.id, earlierScreen.id)).returning();
       await tx.update(analyticsEvents).set({
-        payload: { ...earlier, ...input.brief, dialogue: input.dialogue, status: 'generating', at: now, error: undefined },
+        payload: { ...earlier, dialogue: input.dialogue, status: 'generating', at: now, error: undefined },
       }).where(eq(analyticsEvents.id, earlier.eventId));
       return { state: 'resumed' as const, screen: taken, eventId: earlier.eventId };
     }
@@ -224,17 +222,17 @@ export async function createSceneRow(projectId: number, input: AddSceneInput): P
         updatedAt: now,
       })
       .returning();
-    const payload: CreationPayload = { requestId: input.requestId, screenId: created.id, ...input.brief, dialogue: input.dialogue, status: 'generating', at: now };
+    const payload: CreationPayload = { requestId: input.requestId, screenId: created.id, dialogue: input.dialogue, status: 'generating', at: now };
     const [event] = await tx.insert(analyticsEvents).values({ userId: input.userId, videoProjectId: projectId, eventType: SCENE_CREATION_EVENT, payload, createdAt: now }).returning({ id: analyticsEvents.id });
     return { state: 'created' as const, screen: created, eventId: event.id };
   });
 }
 
 /**
- * Starts a retry of an interrupted or failed scene from its saved text: returns the scene and its brief, or throws if
+ * Starts a retry of an interrupted or failed scene from its saved text: returns the scene (its dialogue is saved on it), or throws if
  * the scene does not need one (finished, or another request is still writing it).
  */
-export async function beginRetry(projectId: number, screenId: number): Promise<{ screen: ScreenRow; brief: SceneBrief; eventId: number }> {
+export async function beginRetry(projectId: number, screenId: number): Promise<{ screen: ScreenRow; eventId: number }> {
   return db.transaction(async (tx) => {
     await lockProject(tx, projectId);
     const screen = (await tx.select().from(videoScreens).where(and(eq(videoScreens.id, screenId), eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0))))[0];
@@ -244,7 +242,7 @@ export async function beginRetry(projectId: number, screenId: number): Promise<{
     if (!rec || hasPrompt[0]) throw new SceneError('This scene already has its prompt.', 409, 'nothing_to_retry');
     if (stateOf(rec, Date.now()) === 'generating') throw new SceneError('This scene is still being written. Wait a moment, then try again.', 409, 'in_progress');
     await tx.update(analyticsEvents).set({ payload: { ...rec, status: 'generating', at: Date.now(), error: undefined } }).where(eq(analyticsEvents.id, rec.eventId));
-    return { screen, brief: { description: rec.description, visualInstructions: rec.visualInstructions }, eventId: rec.eventId };
+    return { screen, eventId: rec.eventId };
   });
 }
 

@@ -825,13 +825,11 @@ export default function ScreenPage() {
                     <div style={{ font: '400 13px/1.5 Satoshi', color: '#5E5E65' }}>
                       {screen.creationState === 'generating' || retryingId === screen.id
                         ? 'This scene was just added and its prompt is being written. This page updates by itself.'
-                        : 'The prompt for this scene was not finished. What you entered is saved: press Retry and nothing needs to be typed again. The scene cannot be approved or compiled until it has a prompt and a video.'}
+                        : 'The prompt for this scene was not finished. The dialogue is saved: press Retry and nothing needs to be typed again. The scene cannot be approved or compiled until it has a prompt and a video.'}
                     </div>
                     {screen.creationBrief && (
                       <div style={{ border: '1px solid #ECECE8', borderRadius: 10, padding: '10px 12px', background: '#FAFAF8', font: '400 13px/1.5 Satoshi', color: '#3F3F46', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div><strong>What happens:</strong> {screen.creationBrief.description}</div>
-                        <div><strong>Dialogue:</strong> {screen.creationBrief.dialogue || 'None'}</div>
-                        {screen.creationBrief.visualInstructions && <div><strong>Visual instructions:</strong> {screen.creationBrief.visualInstructions}</div>}
+                        <div><strong>Dialogue:</strong> {screen.creationBrief.dialogue}</div>
                       </div>
                     )}
                     <div>
