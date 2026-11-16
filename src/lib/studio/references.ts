@@ -32,11 +32,26 @@ export function isRemovedKeyError(err: unknown): boolean {
 }
 
 /**
+ * The original(s) a thumbnail key belongs to. A thumbnail is derived from its original's key and is not always stored in a table
+ * (a character's is not), so a thumbnail is protected whenever its original is.
+ */
+export function originalsOfThumb(key: string): string[] {
+  const m = /^(studio\/assets|studio\/projects\/\d+\/character|studio\/projects\/\d+\/outputs)\/thumbs\/([^/]+)\.webp$/.exec(key);
+  return m ? ['jpg', 'png', 'webp'].map((ext) => `${m[1]}/${m[2]}.${ext}`) : [];
+}
+
+/**
  * True if the key is registered or used anywhere: an asset (original or thumbnail), a project's character, a batch or job snapshot,
  * an output, or a key the server issued and that was registered at any time (a character image that was later replaced is
  * history, not an orphan).
  */
 export async function isKeyReferenced(key: string, exec: Exec = db): Promise<boolean> {
+  if (await isDirectlyReferenced(key, exec)) return true;
+  for (const original of originalsOfThumb(key)) if (await isDirectlyReferenced(original, exec)) return true;
+  return false;
+}
+
+async function isDirectlyReferenced(key: string, exec: Exec): Promise<boolean> {
   const checks = [
     exec.select({ id: studioAssets.id }).from(studioAssets).where(or(eq(studioAssets.storageKey, key), eq(studioAssets.thumbKey, key))).limit(1),
     exec.select({ id: studioProjects.id }).from(studioProjects).where(eq(studioProjects.characterKey, key)).limit(1),

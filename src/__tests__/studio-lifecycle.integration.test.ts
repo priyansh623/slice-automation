@@ -876,3 +876,42 @@ describe('migration 0026', () => {
     expect(idx).toContain('submit_unknown');
   });
 });
+
+// ───────────────────────────── final review findings ─────────────────────────────
+describe('final review: derived thumbnails, jobs with a provider id, permanent tombstones', () => {
+  it('a thumbnail that is stored in no table (a character\'s) is protected whenever its original is; an unrelated thumbnail is not', async () => {
+    const proj = (await call(projectsPost, { method: 'POST', body: { name: 'X' } })).json.project.id as number;
+    const id = crypto.randomUUID();
+    const ckey = `studio/projects/${proj}/character/${id}.png`; const cthumb = `studio/projects/${proj}/character/thumbs/${id}.webp`;
+    await recordUploadIntent(ckey, 'character', { projectId: proj });
+    r2.browserPut(ckey, await png('#884422'), 'image/png'); r2.browserPut(cthumb, await png('#884422', 20, 15), 'image/webp');
+    await db.update(schema.studioProjects).set({ characterKey: ckey }).where(eq(schema.studioProjects.id, proj));
+    expect(await isKeyReferenced(cthumb)).toBe(true);
+    expect(await discardIfUnreferenced(cthumb, 'try')).toBe(false);
+    expect(r2.has(cthumb)).toBe(true);
+    expect(await tombstones()).toHaveLength(0);
+    const stray = `studio/projects/${proj}/character/thumbs/${crypto.randomUUID()}.webp`;
+    r2.browserPut(stray, await png('#111111', 10, 10), 'image/webp');
+    expect(await isKeyReferenced(stray)).toBe(false);
+    expect(await discardIfUnreferenced(stray, 'stray')).toBe(true);
+  });
+
+  it('a queued job that already has a provider job id (a late answer arrived) is never sent again: it is polled', async () => {
+    const w = await world(1);
+    const batch = (await batchOf(w)).json.batch.id as number;
+    const [job] = await jobsOf(batch);
+    await db.update(schema.studioJobs).set({ providerJobId: 'already-there' }).where(eq(schema.studioJobs.id, job.id));
+    const provider = new MockReplacementProvider({ pollsBeforeDone: 99 });
+    await generationRound(depsFor(provider), { submit: 1, poll: 0 });
+    expect(provider.submitted).toHaveLength(0);
+    expect((await jobsOf(batch))[0]).toMatchObject({ status: 'processing', providerJobId: 'already-there' });
+  });
+
+  it('a tombstone row can be added but never deleted', async () => {
+    const packId = await newPack();
+    const { key } = await issuedKey(packId);
+    await discardIfUnreferenced(key, 'x');
+    await expect(pg.query(`delete from studio_deleted_keys where key = $1`, [key])).rejects.toThrow(/never deleted/);
+    expect(await tombstones()).toHaveLength(1);
+  });
+});

@@ -171,6 +171,8 @@ export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'pro
   const now = deps.now ?? Date.now;
   const providerMs = deps.providerTimeoutMs ?? PROVIDER_CALL_TIMEOUT_MS;
   const storageMs = deps.storageTimeoutMs ?? STORAGE_CALL_TIMEOUT_MS;
+  // A job that already has a provider job id (a late answer arrived after it was queued again) is never sent: it is only polled.
+  if (job.providerJobId) return (await adoptProviderJob(job.id, job.providerJobId, now())) ? 'processing' : 'failed';
   let provider: ReplacementProvider;
   let inputs: [Buffer, Buffer];
   // Nothing has been sent yet, so a failure here is a plain failure.

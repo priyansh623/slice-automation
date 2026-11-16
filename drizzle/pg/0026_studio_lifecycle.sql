@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS studio_upload_intents (
 );
 CREATE INDEX IF NOT EXISTS idx_studio_upload_intents_open ON studio_upload_intents (issued_at) WHERE state = 'issued';
 
+-- Tombstones are permanent: a row can be added but never deleted (reuses the guard function from 0025).
+DROP TRIGGER IF EXISTS studio_deleted_keys_no_delete ON studio_deleted_keys;
+CREATE TRIGGER studio_deleted_keys_no_delete BEFORE DELETE ON studio_deleted_keys FOR EACH ROW EXECUTE FUNCTION studio_forbid_delete();
+
 -- Runs whenever an asset or a project's character key is written. A key that has a tombstone can never be registered; a key that is
 -- registered is marked so. The SHARED advisory lock is held until the writing transaction ends, so a deletion (which takes the
 -- EXCLUSIVE lock on the same key before it checks for references) either sees this registration or makes this transaction fail.
