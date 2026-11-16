@@ -29,13 +29,13 @@ export default function SelectionPanel({ selection, busy, hasCharacter, generati
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {selection.length > 0 && <button className="btn btn-secondary" disabled={busy} onClick={onClear} style={{ height: 34 }}>Clear selection</button>}
-          <button className="btn btn-primary" disabled={busy || usable === 0 || archived.length > 0 || !hasCharacter || generation?.enabled === false} onClick={onGenerate} style={{ height: 34 }} title={generation?.enabled === false ? 'Image generation is not switched on' : !hasCharacter ? 'Upload the character image first' : archived.length > 0 ? 'Remove the archived images first' : ''}>
+          <button className="btn btn-primary" disabled={busy || usable === 0 || archived.length > 0 || !hasCharacter || (generation !== null && generation !== undefined && !generation.ready)} onClick={onGenerate} style={{ height: 34 }} title={generation && !generation.ready ? 'Image generation is not available right now' : !hasCharacter ? 'Upload the character image first' : archived.length > 0 ? 'Remove the archived images first' : ''}>
             {busy ? 'Submitting…' : `Generate ${usable} image${usable === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>
-      {generation?.enabled === false && <div role="alert" style={{ font: '400 12px/1.5 Satoshi', color: '#92400E', marginTop: 8 }}>{generation.reason ?? 'Image generation is not switched on yet.'}</div>}
-      {generation?.enabled && generation.testMode && <div role="status" style={{ font: '500 12px/1.5 Satoshi', color: '#6D28D9', marginTop: 8 }}>Test mode: generated images are placeholders, not real results. No provider is being used.</div>}
+      {generation && !generation.ready && <div role="alert" style={{ font: '400 12px/1.5 Satoshi', color: '#92400E', marginTop: 8 }}>{generation.worker?.status === 'provider_mismatch' ? 'Provider mismatch: ' : ''}{generation.message ?? generation.reason ?? 'Image generation is not available.'}</div>}
+      {generation?.mode === 'mock' && <div role="status" style={{ font: '500 12px/1.5 Satoshi', color: '#6D28D9', marginTop: 8 }}>TEST MODE: generated images are placeholders, not real results. No real provider is being used.</div>}
       {!hasCharacter && selection.length > 0 && <div role="status" style={{ font: '400 12px Satoshi', color: '#92400E', marginTop: 8 }}>Upload the base character image (step 1) before generating.</div>}
       {archived.length > 0 && <div role="alert" style={{ font: '400 12px/1.5 Satoshi', color: '#92400E', marginTop: 8 }}>{archived.length} selected image{archived.length === 1 ? ' is' : 's are'} archived and cannot be generated. Remove {archived.length === 1 ? 'it' : 'them'} to continue.</div>}
       {selection.length === 0 && <div style={{ font: '400 13px Satoshi', color: '#75757C', marginTop: 10 }}>Nothing selected yet.</div>}

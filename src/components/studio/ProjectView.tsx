@@ -15,7 +15,13 @@ const sub: React.CSSProperties = { font: '400 12px/1.5 Satoshi', color: '#75757C
 export default function ProjectView({ projectId }: { projectId: number }) {
   const [project, setProject] = useState<StudioProject | null>(null);
   const [generation, setGeneration] = useState<GenerationConfig | null>(null);
-  useEffect(() => { api<{ generation: GenerationConfig }>('/api/v1/studio/config').then((r) => setGeneration(r.generation)).catch(() => {}); }, []);
+  // Whether generation can run changes when a worker starts, stops or is reconfigured, so it is checked again every 30 seconds.
+  useEffect(() => {
+    const load = () => { api<{ generation: GenerationConfig }>('/api/v1/studio/config').then((r) => setGeneration(r.generation)).catch(() => {}); };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, []);
   const [script, setScript] = useState('');
   const [savedScript, setSavedScript] = useState('');
   const [name, setName] = useState('');

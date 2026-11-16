@@ -7,21 +7,20 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { studioAssets, studioBatches, studioJobs, studioOutputs, studioProjects, studioSelections } from '@/db/schema.pg';
 import { getProject } from './projects';
-import { generationConfig } from './mock-provider';
+import { assertGenerationReady } from './readiness';
 import { StudioError } from './repository';
 
 export const maxBatchJobs = (): number => { const n = parseInt(process.env.STUDIO_MAX_BATCH ?? '50', 10); return Number.isFinite(n) && n > 0 ? n : 50; };
-export const ACTIVE_JOB_STATUSES = ['queued', 'submitting', 'processing'] as const;
+/** 'submit_unknown' counts as active: the provider may be running (and charging for) that job, so no second job is queued for the image. */
+export const ACTIVE_JOB_STATUSES = ['queued', 'submitting', 'submit_unknown', 'processing'] as const;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Creates a batch from the project's selection (or from a chosen part of it) and queues one job per image. */
 export async function createBatch(projectId: number, userId: string, opts: { assetIds?: unknown } = {}) {
   await getProject(projectId);
-  // No provider, no batch: nothing is queued that could only sit waiting or be answered with fake pictures.
-  const config = generationConfig();
-  if (!config.enabled || !config.provider) throw new StudioError(config.reason ?? 'Image generation is not available.', 503, 'generation_disabled');
-  const providerId: string = config.provider;
+  // No provider, no worker, or a worker that uses a different provider: no batch. Nothing is queued that could only sit waiting.
+  const providerId: string = (await assertGenerationReady()).config.provider;
   return db.transaction(async (tx: Tx) => {
     // One batch is created at a time per project, so a double click cannot queue the same images twice.
     const project = (await tx.select().from(studioProjects).where(eq(studioProjects.id, projectId)).for('update'))[0];
@@ -66,10 +65,23 @@ export async function createBatch(projectId: number, userId: string, opts: { ass
  * same image in the same batch, linked to the earlier one. The earlier job and its outputs are kept, saved ones included.
  * Nothing else is touched.
  */
-export async function retryJob(jobId: number, userId: string, opts: { allowSucceeded?: boolean } = {}) {
+export async function retryJob(jobId: number, userId: string, opts: { allowSucceeded?: boolean; confirmDuplicate?: boolean } = {}) {
+  // Checked BEFORE the transaction opens (it reads other tables, and a transaction should not wait on a second connection).
+  const ready = await assertGenerationReady();
   return db.transaction(async (tx: Tx) => {
     const job = (await tx.select().from(studioJobs).where(eq(studioJobs.id, jobId)).for('update'))[0];
     if (!job) throw new StudioError('Job not found.', 404, 'job_not_found');
+    // A job whose submission outcome is unknown may already be running at the provider. A new job for the same image can only be
+    // created if the person explicitly accepts that it may be paid for twice; the unknown job is then closed (it is never deleted).
+    if (job.status === 'submit_unknown' && !opts.allowSucceeded) {
+      if (opts.confirmDuplicate !== true) {
+        throw new StudioError('The provider may already be generating this image (the answer to the request was never received). Generating it again could be charged twice. Wait for it, or confirm to generate it again anyway.', 409, 'submit_unknown');
+      }
+      const closed = await tx.update(studioJobs).set({ status: 'failed', errorCode: 'submit_unknown_abandoned', errorMessage: 'Closed by a person who chose to generate this image again. The provider may still have run it.', errorRetryable: true, claimedAt: null, nextPollAt: null, finishedAt: Date.now(), updatedAt: Date.now() })
+        .where(and(eq(studioJobs.id, job.id), eq(studioJobs.status, 'submit_unknown'))).returning({ id: studioJobs.id });
+      if (closed.length === 0) throw new StudioError('This job changed while you were deciding. Reload and look again.', 409, 'job_changed');
+      job.status = 'failed'; job.errorRetryable = true;
+    }
     if (job.status !== 'failed' && !(opts.allowSucceeded && job.status === 'succeeded')) {
       throw new StudioError(opts.allowSucceeded ? 'Only a finished job can be generated again.' : 'Only a failed job can be retried.', 409, 'not_failed');
     }
@@ -78,8 +90,9 @@ export async function retryJob(jobId: number, userId: string, opts: { allowSucce
     if (job.status === 'failed' && job.errorRetryable === false) {
       throw new StudioError(`This job failed in a way that retrying cannot fix${job.errorMessage ? ` (${job.errorMessage})` : ''}. Change the image or the character and generate it again from the selection.`, 409, 'not_retryable');
     }
-    // A retry goes to the provider the batch was created with, and only if that provider can run now.
-    if (!generationConfig().enabled) throw new StudioError(generationConfig().reason ?? 'Image generation is not available.', 503, 'generation_disabled');
+    // A retry goes to the provider the batch was created with, and only if that provider is the one the server runs now and a
+    // worker that uses it is ready.
+    if (job.provider !== ready.config.provider) throw new StudioError(`This job was made with the "${job.provider}" provider, but the server now uses "${ready.config.provider}". Select the image again and generate it as a new job.`, 409, 'provider_changed');
     const asset = (await tx.select().from(studioAssets).where(eq(studioAssets.id, job.assetId)))[0];
     if (asset?.archivedAt) throw new StudioError('This image is archived, so it cannot be generated again. Restore it first.', 409, 'asset_archived');
     const latest = (await tx.select({ attempt: sql<number>`max(${studioJobs.attempt})`.mapWith(Number) }).from(studioJobs).where(and(eq(studioJobs.batchId, job.batchId), eq(studioJobs.assetId, job.assetId))))[0];
@@ -114,7 +127,7 @@ export async function getBatchView(projectId: number, batchId: number) {
 export function summarise(jobs: Array<Pick<typeof studioJobs.$inferSelect, 'assetId' | 'attempt' | 'status'>>) {
   const latest = new Map<number, (typeof jobs)[number]>();
   for (const j of jobs) { const cur = latest.get(j.assetId); if (!cur || j.attempt > cur.attempt) latest.set(j.assetId, j); }
-  const out = { total: latest.size, queued: 0, submitting: 0, processing: 0, succeeded: 0, failed: 0, canceled: 0 };
+  const out = { total: latest.size, queued: 0, submitting: 0, submit_unknown: 0, processing: 0, succeeded: 0, failed: 0, canceled: 0 };
   for (const j of latest.values()) out[j.status as keyof typeof out] = ((out[j.status as keyof typeof out] as number) ?? 0) + 1;
   return out;
 }

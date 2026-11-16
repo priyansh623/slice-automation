@@ -4,6 +4,7 @@ import { StudioError, type AssetView } from './repository';
 import { signKeys } from './image-store';
 import { effectiveMetadata } from './metadata';
 import { characterThumbKey } from './keys';
+import { isTestProvider } from './mock-provider';
 
 /**
  * Every Character B-roll Studio route goes through this: a signed-in user is required, and that is the whole rule. There is
@@ -96,8 +97,8 @@ export async function serializeJobs(views: import('./batches').JobView[]) {
   const urls = await signKeys(keys);
   return views.map((v) => ({
     id: v.job.id, batchId: v.job.batchId, assetId: v.job.assetId, packId: v.job.packId, attempt: v.job.attempt, retryOfJobId: v.job.retryOfJobId,
-    status: v.job.status, provider: v.job.provider, providerJobId: v.job.providerJobId,
-    error: v.job.status === 'failed' ? { code: v.job.errorCode, message: v.job.errorMessage, retryable: v.job.errorRetryable } : null,
+    status: v.job.status, provider: v.job.provider, isTest: isTestProvider(v.job.provider), providerJobId: v.job.providerJobId,
+    error: v.job.status === 'failed' || v.job.status === 'submit_unknown' ? { code: v.job.errorCode, message: v.job.errorMessage, retryable: v.job.errorRetryable } : null,
     createdAt: v.job.createdAt, startedAt: v.job.startedAt, finishedAt: v.job.finishedAt,
     source: { thumbUrl: urls.get(v.asset.thumbKey ?? v.asset.storageKey) ?? null, originalFilename: v.asset.originalFilename, archived: v.asset.archivedAt !== null },
     outputs: v.outputs.map((o) => ({ id: o.id, thumbUrl: urls.get(o.thumbKey ?? o.storageKey) ?? null, imageUrl: null, width: o.width, height: o.height, reviewStatus: o.reviewStatus, createdAt: o.createdAt })),
@@ -111,7 +112,7 @@ export async function serializeOutputs(views: import('./outputs').OutputView[], 
   const urls = await signKeys(keys);
   return views.map((v) => ({
     id: v.output.id, projectId: v.output.projectId, reviewStatus: v.output.reviewStatus, reviewedBy: v.output.reviewedBy, reviewedAt: v.output.reviewedAt, createdAt: v.output.createdAt,
-    width: v.output.width, height: v.output.height, sizeBytes: v.output.sizeBytes,
+    width: v.output.width, height: v.output.height, sizeBytes: v.output.sizeBytes, isTest: isTestProvider(v.job.provider),
     thumbUrl: urls.get(v.output.thumbKey ?? v.output.storageKey) ?? null, imageUrl: opts.full ? (urls.get(v.output.storageKey) ?? null) : null,
     job: { id: v.job.id, attempt: v.job.attempt, retryOfJobId: v.job.retryOfJobId, status: v.job.status, providerJobId: v.job.providerJobId, provider: v.job.provider },
     batch: { id: v.batch.id, createdAt: v.batch.createdAt, createdBy: v.batch.createdBy },

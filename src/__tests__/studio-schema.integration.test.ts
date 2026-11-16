@@ -51,7 +51,8 @@ describe('server-only tables', () => {
   it('has row level security on every studio table, with no policy (only the server can read or write)', async () => {
     const tables = await q<{ relname: string; relrowsecurity: boolean }>(`select relname, relrowsecurity from pg_class where relname like 'studio\\_%' and relkind = 'r' order by relname`);
     expect(tables.map((t) => t.relname)).toEqual([
-      'studio_asset_metadata', 'studio_assets', 'studio_batches', 'studio_jobs', 'studio_outputs', 'studio_packs', 'studio_project_packs', 'studio_projects', 'studio_selections',
+      'studio_asset_metadata', 'studio_assets', 'studio_batches', 'studio_budget_usage', 'studio_deleted_keys', 'studio_jobs', 'studio_outputs', 'studio_packs',
+      'studio_project_packs', 'studio_projects', 'studio_selections', 'studio_upload_intents', 'studio_worker_status',
     ]);
     expect(tables.every((t) => t.relrowsecurity)).toBe(true);
     expect(await q(`select 1 from pg_policies where tablename like 'studio\\_%'`)).toHaveLength(0);

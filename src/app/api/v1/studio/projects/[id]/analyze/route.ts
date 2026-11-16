@@ -11,5 +11,5 @@ export const maxDuration = 60;
 export const POST = studioRoute<{ id: string }>(async ({ req, params }) => {
   const body = await readJson(req).catch(() => ({} as Record<string, unknown>));
   const project = await analyseProjectScript(parseId(params.id), { force: body.force === true });
-  return NextResponse.json({ project: await serializeProject(project) });
+  return NextResponse.json({ project: await serializeProject(project, { full: true }) });
 });

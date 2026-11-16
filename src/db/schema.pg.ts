@@ -452,8 +452,10 @@ export const studioJobs = pgTable('studio_jobs', {
   characterKey: text('character_key').notNull(),
   provider: text('provider').notNull(),
   providerJobId: text('provider_job_id'),
-  status: text('status').notNull().default('queued'),      // queued | submitting | processing | succeeded | failed | canceled
+  status: text('status').notNull().default('queued'),      // queued | submitting | submit_unknown | processing | succeeded | failed | canceled
   attempt: integer('attempt').notNull().default(1),
+  submitAttempts: integer('submit_attempts').notNull().default(0),
+  ambiguousAt: bigint('ambiguous_at', { mode: 'number' }),
   retryOfJobId: integer('retry_of_job_id'),
   request: jsonb('request'),
   errorCode: text('error_code'),
@@ -486,3 +488,48 @@ export const studioOutputs = pgTable('studio_outputs', {
   reviewedAt: bigint('reviewed_at', { mode: 'number' }),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 });
+
+// ── Studio lifecycle and cost controls (migration 0026) ─────────────────────
+
+export const studioDeletedKeys = pgTable('studio_deleted_keys', {
+  key: text('key').primaryKey(),
+  reason: text('reason').notNull(),
+  requestedAt: bigint('requested_at', { mode: 'number' }).notNull(),
+  removedAt: bigint('removed_at', { mode: 'number' }),
+});
+
+export const studioUploadIntents = pgTable('studio_upload_intents', {
+  key: text('key').primaryKey(),
+  kind: text('kind').notNull(),                 // asset | character
+  projectId: integer('project_id'),
+  packId: integer('pack_id'),
+  state: text('state').notNull().default('issued'), // issued | registered
+  createdBy: uuid('created_by'),
+  issuedAt: bigint('issued_at', { mode: 'number' }).notNull(),
+  registeredAt: bigint('registered_at', { mode: 'number' }),
+});
+
+export const studioWorkerStatus = pgTable('studio_worker_status', {
+  workerId: text('worker_id').primaryKey(),
+  provider: text('provider'),
+  mode: text('mode').notNull(),                 // disabled | mock | real
+  generationReady: boolean('generation_ready').notNull(),
+  r2Ready: boolean('r2_ready').notNull(),
+  workerEnabled: boolean('worker_enabled').notNull(),
+  analysisReady: boolean('analysis_ready').notNull(),
+  details: jsonb('details'),
+  startedAt: bigint('started_at', { mode: 'number' }).notNull(),
+  lastSeenAt: bigint('last_seen_at', { mode: 'number' }).notNull(),
+});
+
+export const studioBudgetUsage = pgTable('studio_budget_usage', {
+  kind: text('kind').notNull(),
+  windowStart: bigint('window_start', { mode: 'number' }).notNull(),
+  reserved: integer('reserved').notNull().default(0),
+  refunded: integer('refunded').notNull().default(0),
+  succeeded: integer('succeeded').notNull().default(0),
+  failed: integer('failed').notNull().default(0),
+  limitPerWindow: integer('limit_per_window'),
+  exhaustedAt: bigint('exhausted_at', { mode: 'number' }),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+}, (t) => ({ pk: primaryKey({ columns: [t.kind, t.windowStart] }) }));

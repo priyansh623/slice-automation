@@ -10,7 +10,7 @@
 import { getStorage, ObjectExistsError } from '@/lib/object-store';
 import { registerObjectIfAbsent } from '@/lib/object-store/registry';
 import { assetThumbKey, checkImageInit, isStudioAssetKey, newAssetKey, STUDIO_MAX_PIXELS, STUDIO_UPLOAD_TTL_S, STUDIO_IMAGE_MAX_BYTES, STUDIO_IMAGE_TYPES, verifyStoredImage } from './keys';
-import { discardIfUnreferenced } from './references';
+import { discardIfUnreferenced, isRemovedKeyError, recordUploadIntent } from './references';
 import { inspectImage, makeGridThumbnail, sha256Of } from './image-store';
 import { findExistingAsset, getPack, registerAsset, StudioError, type RegisterResult } from './repository';
 
@@ -23,7 +23,7 @@ export interface PreparedUpload {
   maxBytes: number;
 }
 
-export async function prepareUpload(packId: number, input: { contentType?: unknown; fileSize?: unknown; fileName?: unknown }): Promise<PreparedUpload> {
+export async function prepareUpload(packId: number, input: { contentType?: unknown; fileSize?: unknown; fileName?: unknown }, userId: string | null = null): Promise<PreparedUpload> {
   const pack = await getPack(packId);
   if (pack.archivedAt) throw new StudioError('This Scene Pack is archived. Restore it before adding images.', 409, 'pack_archived');
   const check = checkImageInit(input);
@@ -33,6 +33,8 @@ export async function prepareUpload(packId: number, input: { contentType?: unkno
     throw new StudioError('Image uploads need Cloudflare R2, which is not available right now. Nothing was uploaded (Studio images are never stored anywhere else).', 503, 'r2_unavailable');
   }
   const storageKey = newAssetKey(check.ext);
+  // Recorded BEFORE the link exists, so an upload that is never completed can be found and cleaned up later.
+  await recordUploadIntent(storageKey, 'asset', { packId, userId });
   try {
     const upload = await storage.signedDirectUpload('uploads', storageKey, check.contentType, check.size, STUDIO_UPLOAD_TTL_S);
     return { storageKey, uploadUrl: upload.url, method: upload.method, headers: upload.headers, expiresInSeconds: STUDIO_UPLOAD_TTL_S, maxBytes: STUDIO_IMAGE_MAX_BYTES };
@@ -54,7 +56,7 @@ export interface CompleteInput {
 const FORMAT_TYPE: Record<string, string> = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
 /** Removes the object of a rejected upload, but only if nothing references it (a registered original is never deleted). */
-const discard = (key: string): Promise<boolean> => discardIfUnreferenced(key);
+const discard = (key: string, reason = 'rejected upload'): Promise<boolean> => discardIfUnreferenced(key, reason);
 
 export async function completeUpload(input: CompleteInput, userId: string): Promise<RegisterResult> {
   const key = input.storageKey;
@@ -76,32 +78,30 @@ export async function completeUpload(input: CompleteInput, userId: string): Prom
 
   const head = await storage.headR2('uploads', key);
   const verdict = verifyStoredImage(head, { size, contentType });
-  if (!verdict.ok) {
-    if (head && verdict.status !== 409) await discard(key);
-    throw new StudioError(verdict.error, verdict.status, 'upload_rejected');
-  }
+  // A request that merely DESCRIBES the stored file wrongly (size, type) is refused and removes nothing: the file may be a good upload
+  // that a different request is completing right now. Unused uploads are cleaned up later by sweepAbandonedUploads.
+  if (!verdict.ok) throw new StudioError(verdict.error, verdict.status, 'upload_rejected');
 
   const original = await storage.downloadR2Only('uploads', key);
   const sha256 = sha256Of(original);
 
   let info;
   try { info = await inspectImage(original); } catch {
-    await discard(key);
+    await discard(key, 'not an image');
     throw new StudioError('That file is not a readable JPEG, PNG or WEBP image.', 422, 'not_an_image');
   }
   if (FORMAT_TYPE[info.format] !== contentType) {
-    await discard(key);
-    throw new StudioError('The image is not the type it was declared as.', 422, 'type_mismatch');
+    throw new StudioError('The image is not the type it was declared as.', 422, 'type_mismatch'); // describes the file wrongly: nothing is removed
   }
   if (info.width * info.height > STUDIO_MAX_PIXELS) {
-    await discard(key);
+    await discard(key, 'too many pixels');
     throw new StudioError(`That image has ${(info.width * info.height / 1_000_000).toFixed(0)} megapixels. The limit is ${STUDIO_MAX_PIXELS / 1_000_000} megapixels. Resize it and upload it again (nothing was changed).`, 422, 'too_many_pixels');
   }
 
   // The pack already holds this exact image: return that asset and drop the extra copy that was just uploaded.
   const dup = await findExistingAsset(input.packId, key, sha256);
   if (dup) {
-    await discard(key);
+    await discard(key, 'duplicate copy');
     return { asset: dup.asset, created: false, duplicate: true };
   }
 
@@ -123,8 +123,14 @@ export async function completeUpload(input: CompleteInput, userId: string): Prom
 
   const name = typeof input.fileName === 'string' && input.fileName.trim() ? input.fileName.trim().slice(0, 200) : null;
   const group = typeof input.ingestGroup === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.ingestGroup) ? input.ingestGroup : null;
-  return registerAsset({
-    packId: input.packId, storageKey: key, thumbKey, originalFilename: name, mime: contentType, sizeBytes: original.length, sha256,
-    width: info.width, height: info.height, ingestGroup: group,
-  }, userId);
+  try {
+    return await registerAsset({
+      packId: input.packId, storageKey: key, thumbKey, originalFilename: name, mime: contentType, sizeBytes: original.length, sha256,
+      width: info.width, height: info.height, ingestGroup: group,
+    }, userId);
+  } catch (err) {
+    // The database refuses a key that was already removed (for example by the clean-up of an abandoned upload).
+    if (isRemovedKeyError(err)) throw new StudioError('This upload was removed before it could be saved. Please upload the image again.', 409, 'upload_removed');
+    throw err;
+  }
 }

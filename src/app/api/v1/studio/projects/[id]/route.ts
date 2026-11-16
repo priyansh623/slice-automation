@@ -4,7 +4,7 @@ import { getProject, setProjectArchived, updateProject } from '@/lib/studio/proj
 import { serializeProject } from '@/lib/studio/project-api';
 
 export const GET = studioRoute<{ id: string }>(async ({ params }) => {
-  return NextResponse.json({ project: await serializeProject(await getProject(parseId(params.id))) });
+  return NextResponse.json({ project: await serializeProject(await getProject(parseId(params.id)), { full: true }) });
 });
 
 // Renames the project and/or saves the complete script, and/or archives or restores it ({ archived: true | false }). Everything
@@ -16,5 +16,5 @@ export const PUT = studioRoute<{ id: string }>(async ({ req, params }) => {
   // An empty request still goes to updateProject, which answers 400 "nothing to change".
   if (body.name !== undefined || body.script !== undefined || body.archived === undefined) project = await updateProject(id, { name: body.name, script: body.script });
   if (body.archived !== undefined) project = await setProjectArchived(id, body.archived === true);
-  return NextResponse.json({ project: await serializeProject(project) });
+  return NextResponse.json({ project: await serializeProject(project, { full: true }) });
 });

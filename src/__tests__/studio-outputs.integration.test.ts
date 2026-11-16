@@ -6,7 +6,7 @@ import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '@/db/schema.pg';
-import { FakeR2, migrate, call } from './helpers/studio-fakes';
+import { FakeR2, migrate, call, reportFakeWorker } from './helpers/studio-fakes';
 
 const USER_A = '00000000-0000-4000-8000-00000000000a';
 const USER_B = '00000000-0000-4000-8000-00000000000b';
@@ -35,6 +35,7 @@ afterAll(async () => { await pg.close(); delete process.env.STUDIO_PROVIDER; });
 beforeEach(async () => {
   r2 = new FakeR2(); holder.store = r2; holder.userId = USER_A;
   process.env.STUDIO_PROVIDER = 'mock'; // generation is off unless a provider is chosen on purpose
+  await reportFakeWorker(pg);          // and batches need a worker that reports the same provider
   await pg.exec('truncate studio_outputs, studio_jobs, studio_batches, studio_selections, studio_project_packs, studio_asset_metadata, studio_assets, studio_packs, studio_projects restart identity cascade');
 });
 

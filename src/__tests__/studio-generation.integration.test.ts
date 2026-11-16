@@ -12,7 +12,7 @@ import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '@/db/schema.pg';
-import { FakeR2, migrate, call } from './helpers/studio-fakes';
+import { FakeR2, migrate, call, reportFakeWorker } from './helpers/studio-fakes';
 
 const USER = '00000000-0000-4000-8000-00000000000a';
 const holder = vi.hoisted(() => ({ db: undefined as unknown, store: undefined as unknown, userId: '00000000-0000-4000-8000-00000000000a' as string | null }));
@@ -40,6 +40,7 @@ afterAll(async () => { await pg.close(); delete process.env.STUDIO_PROVIDER; });
 beforeEach(async () => {
   r2 = new FakeR2(); holder.store = r2; holder.userId = USER;
   process.env.STUDIO_PROVIDER = 'mock'; // generation is off unless a provider is chosen on purpose
+  await reportFakeWorker(pg);          // and batches need a worker that reports the same provider
   // each test starts from an empty Studio (TRUNCATE does not fire the "never delete" row triggers)
   await pg.exec('truncate studio_outputs, studio_jobs, studio_batches, studio_selections, studio_project_packs, studio_asset_metadata, studio_assets, studio_packs, studio_projects restart identity cascade');
 });
@@ -231,7 +232,8 @@ describe('independent jobs: one failure never affects another', () => {
     const exploding: ReplacementProvider = { id: 'mock', submit: async () => { throw Object.assign(new Error('request: Bearer sk-secret-token image=...'), { name: 'FetchError', status: 502 }); }, poll: async () => ({ status: 'processing' }) };
     await drain(depsFor(exploding));
     const jobs = await jobsOf(batch);
-    expect(jobs.every((j) => j.status === 'failed' && j.errorMessage === 'Generation failed (502).' && j.errorRetryable === true)).toBe(true);
+    // an unexplained error from submit does not prove the provider did nothing: the outcome is "unknown", and no request text is kept
+    expect(jobs.every((j) => j.status === 'submit_unknown' && j.errorCode === 'submit_error' && j.errorRetryable === null)).toBe(true);
     expect(JSON.stringify(jobs)).not.toContain('sk-secret');
 
     const w2 = await world(1);
@@ -338,20 +340,25 @@ describe('never submitted twice: provider job ids, restarts and recovery', () =>
     await expect(db.update(schema.studioJobs).set({ providerJobId: null }).where(eq(schema.studioJobs.id, job.id))).rejects.toThrow();
   });
 
-  it('a job found "submitting" after a crash is not sent again: it is failed as interrupted and can be retried deliberately', async () => {
+  it('a job found "submitting" after a crash is not sent again: its outcome is unknown, and a new job needs an explicit confirmation', async () => {
     const w = await world(2);
     const batch = (await batchOf(w)).json.batch.id as number;
     const crashed = await claimQueuedJobs(1, now() - SUBMIT_LEASE_MS - 1000);    // claimed long ago, then the worker died
     expect(crashed).toHaveLength(1);
     expect(await recoverStaleJobs(now())).toEqual({ interrupted: 1, timedOut: 0 });
     const job = (await jobsOf(batch)).find((j) => j.id === crashed[0].id)!;
-    expect(job).toMatchObject({ status: 'failed', errorCode: 'submit_interrupted', errorRetryable: true, providerJobId: null });
+    expect(job).toMatchObject({ status: 'submit_unknown', errorCode: 'submit_interrupted', providerJobId: null });
+    expect(job.ambiguousAt).not.toBeNull();
     expect(job.errorMessage).toContain('was not sent again');
     const provider = new MockReplacementProvider();
     await drain(depsFor(provider));
     expect(provider.submitted.map((s) => s.jobId)).not.toContain(job.id);        // the interrupted job was not resubmitted by the loop
-    const retry = await call(retryPost, { method: 'POST', params: P(job.id) });    // a person decides to retry it
+    const refused = await call(retryPost, { method: 'POST', params: P(job.id) }); // a plain retry could pay twice: refused
+    expect(refused.status).toBe(409);
+    expect(refused.json.code).toBe('submit_unknown');
+    const retry = await call(retryPost, { method: 'POST', params: P(job.id), body: { confirmDuplicate: true } }); // a person accepts that risk
     expect(retry.status).toBe(201);
+    expect((await jobsOf(batch)).find((j) => j.id === job.id)).toMatchObject({ status: 'failed', errorCode: 'submit_unknown_abandoned' });
   });
 
   it('gives up on a job that has run far too long, but leaves recent ones alone', async () => {

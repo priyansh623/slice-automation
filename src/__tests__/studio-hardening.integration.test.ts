@@ -12,7 +12,7 @@ import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as schema from '@/db/schema.pg';
-import { FakeR2, migrate, call } from './helpers/studio-fakes';
+import { FakeR2, migrate, call, reportFakeWorker } from './helpers/studio-fakes';
 
 const USER = '00000000-0000-4000-8000-00000000000a';
 const holder = vi.hoisted(() => ({ db: undefined as unknown, store: undefined as unknown, userId: '00000000-0000-4000-8000-00000000000a' as string | null, create: undefined as unknown }));
@@ -49,7 +49,7 @@ import { analyseProjectScript } from '@/lib/studio/recommend';
 import { claimNextAsset, releaseClaim } from '@/lib/studio/analysis-queue';
 import { prepareForAnalysis, configureSharpForWorker, ANALYSIS_MAX_PIXELS } from '@/lib/studio/analyzer';
 import { STUDIO_MAX_PIXELS } from '@/lib/studio/keys';
-import { AnalysisBudget, analysisConcurrency, analyseClaimed, defaultGenerationDeps, recoverStudioWork, resetStudioWorkerForTests, runAnalysisRound, stopStudioWorker, studioTick, type AnalysisDeps } from '@/worker/studio';
+import { analysisConcurrency, analyseClaimed, defaultGenerationDeps, recoverStudioWork, resetStudioWorkerForTests, runAnalysisRound, stopStudioWorker, studioTick, type AnalysisDeps } from '@/worker/studio';
 
 const ROOT = path.resolve(__dirname, '../..');
 let pg: PGlite;
@@ -61,6 +61,7 @@ afterAll(async () => { await pg.close(); });
 beforeEach(async () => {
   r2 = new FakeR2(); holder.store = r2; holder.userId = USER; holder.create = vi.fn();
   process.env.STUDIO_PROVIDER = 'mock';
+  await reportFakeWorker(pg);
   delete process.env.STUDIO_ANALYSIS_BUDGET_PER_HOUR;
   await pg.exec('truncate studio_outputs, studio_jobs, studio_batches, studio_selections, studio_project_packs, studio_asset_metadata, studio_assets, studio_packs, studio_projects restart identity cascade');
 });
@@ -150,14 +151,21 @@ describe('C1: a registered original is never deleted by an upload request', () =
     expect(await db.select().from(schema.studioAssets).where(eq(schema.studioAssets.packId, packId))).toHaveLength(1);
   });
 
-  it('still removes an unusable upload that nothing references (the cleanup the guard exists to keep)', async () => {
+  it('removes a file that is not an image at all when nothing references it, but never one that is merely described wrongly', async () => {
     const packId = (await db.insert(schema.studioPacks).values({ name: 'P', createdBy: USER, createdAt: now(), updatedAt: now() }).returning())[0].id;
     const buf = await png('#445566');
     const init = await call(assetInit, { method: 'POST', params: P(packId), body: { contentType: 'image/png', fileSize: buf.length } });
     r2.browserPut(init.json.storageKey, buf, 'image/png');
     const bad = await call(assetComplete, { method: 'POST', params: P(packId), body: { storageKey: init.json.storageKey, contentType: 'image/png', fileSize: buf.length + 1 } });
     expect(bad.status).toBe(422);
-    expect(r2.has(init.json.storageKey)).toBe(false);
+    expect(r2.has(init.json.storageKey)).toBe(true);        // only the description was wrong: the (possibly good) file stays
+
+    const junk = Buffer.from('this is not an image at all');
+    const init2 = await call(assetInit, { method: 'POST', params: P(packId), body: { contentType: 'image/png', fileSize: junk.length } });
+    r2.browserPut(init2.json.storageKey, junk, 'image/png');
+    const res = await call(assetComplete, { method: 'POST', params: P(packId), body: { storageKey: init2.json.storageKey, contentType: 'image/png', fileSize: junk.length } });
+    expect(res.status).toBe(422);
+    expect(r2.has(init2.json.storageKey)).toBe(false);      // not an image: removed
   });
 
   it('an earlier character image that a batch used is never removed or replaced by a later complete request', async () => {
@@ -219,7 +227,7 @@ describe('C2: job timeouts and provider submission tracking', () => {
     expect(await recoverStaleJobs(now() + JOB_MAX_AGE_MS + 5_000)).toEqual({ interrupted: 0, timedOut: 1 });
   });
 
-  it('a provider answer that arrives after the job was given up on keeps the provider id but does not bring the job back', async () => {
+  it('a provider answer that arrives after the job was marked unknown is used: the id is kept and the job is polled', async () => {
     const w = await world(1);
     const batch = (await batchOf(w)).json.batch.id as number;
     let release!: () => void;
@@ -229,16 +237,14 @@ describe('C2: job timeouts and provider submission tracking', () => {
     const running = generationRound(depsFor(slow), { submit: 1, poll: 0 });
     await until(() => started);
     expect(await recoverStaleJobs(now() + SUBMIT_LEASE_MS + 1000)).toEqual({ interrupted: 1, timedOut: 0 });
+    expect((await jobsOf(batch))[0]).toMatchObject({ status: 'submit_unknown', errorCode: 'submit_interrupted' });
     release();
     await running;
-    const [job] = await jobsOf(batch);
-    expect(job).toMatchObject({ status: 'failed', errorCode: 'submit_interrupted', providerJobId: 'late-77' });
-    expect(await claimQueuedJobs(5)).toHaveLength(0);      // it is not queued again
-    await drain(depsFor(slow));
-    expect((await jobsOf(batch))[0].status).toBe('failed'); // and it is not polled back to life
+    expect((await jobsOf(batch))[0]).toMatchObject({ status: 'processing', providerJobId: 'late-77', errorCode: null, ambiguousAt: null });
+    expect(await claimQueuedJobs(5)).toHaveLength(0);       // never queued again
   });
 
-  it('a provider that never answers a submit is given up on, once, as a retryable timeout', async () => {
+  it('a provider that never answers a submit leaves the outcome UNKNOWN (not failed), and the job is never sent a second time', async () => {
     const w = await world(1);
     const batch = (await batchOf(w)).json.batch.id as number;
     let calls = 0;
@@ -246,9 +252,11 @@ describe('C2: job timeouts and provider submission tracking', () => {
     const deps = depsFor(hang, { providerTimeoutMs: 40 });
     await generationRound(deps, { submit: 1, poll: 0 });
     const [job] = await jobsOf(batch);
-    expect(job).toMatchObject({ status: 'failed', errorCode: 'submit_timeout', errorRetryable: true });
+    expect(job).toMatchObject({ status: 'submit_unknown', errorCode: 'submit_timeout', errorRetryable: null, providerJobId: null, submitAttempts: 1 });
+    expect(job.ambiguousAt).not.toBeNull();
     expect(job.errorMessage).toMatch(/not sent again/i);
     await generationRound(deps, { submit: 1, poll: 0 });
+    await recoverStaleJobs(now() + 3 * JOB_MAX_AGE_MS);
     expect(calls).toBe(1);                                   // never submitted a second time
   });
 
@@ -301,11 +309,11 @@ describe('C2: job timeouts and provider submission tracking', () => {
     const batch = (await batchOf(w)).json.batch.id as number;
     await db.update(schema.studioJobs).set({ status: 'submitting', claimedAt: now() - SUBMIT_LEASE_MS - 1000, startedAt: now() - SUBMIT_LEASE_MS - 1000 }).where(eq(schema.studioJobs.batchId, batch));
     await db.update(schema.studioAssets).set({ analysisStatus: 'processing', claimedAt: now() - 3_600_000 }).where(eq(schema.studioAssets.id, w.assets[0].id));
-    await recoverStudioWork();
-    expect((await jobsOf(batch))[0]).toMatchObject({ status: 'failed', errorCode: 'submit_interrupted' });
+    await recoverStudioWork(depsFor(new MockReplacementProvider()));
+    expect((await jobsOf(batch))[0]).toMatchObject({ status: 'submit_unknown', errorCode: 'submit_interrupted' });
     expect((await db.select().from(schema.studioAssets).where(eq(schema.studioAssets.id, w.assets[0].id)))[0].analysisStatus).toBe('pending');
     const src = fs.readFileSync(path.join(ROOT, 'src/worker/studio.ts'), 'utf8');
-    expect(src).toMatch(/setInterval\(\(\) => \{ void recoverStudioWork\(\); \}/); // on its own timer, not inside a round
+    expect(src).toMatch(/setInterval\(\(\) => \{ void recoverStudioWork\(genDeps\); \}/); // on its own timer, not inside a round
   });
 
   it('the worker loop never runs recovery inside a round (a stuck round cannot stop recovery)', async () => {
@@ -356,7 +364,7 @@ describe('C3: the mock provider is an explicit opt-in, never the silent default'
     holder.userId = null;
     expect((await call(configGet)).status).toBe(401);
     holder.userId = USER;
-    expect(Object.keys((await call(configGet)).json.generation).sort()).toEqual(['enabled', 'provider', 'reason', 'testMode']);
+    expect(Object.keys((await call(configGet)).json.generation).sort()).toEqual(['code', 'enabled', 'message', 'mode', 'provider', 'ready', 'reason', 'testMode', 'worker']);
   });
 
   it('jobs already queued wait (are not failed or sent) while generation is off, and run when it is back', async () => {
@@ -495,7 +503,7 @@ describe('page size validation', () => {
   });
 });
 
-describe('analysis waits for R2 and respects the hourly budget', () => {
+describe('analysis waits for R2', () => {
   let n = 0;
   async function pending(count: number) {
     const packId = (await db.insert(schema.studioPacks).values({ name: `Q${++n}`, createdBy: USER, createdAt: now(), updatedAt: now() }).returning())[0].id;
@@ -510,7 +518,7 @@ describe('analysis waits for R2 and respects the hourly budget', () => {
   const row = async (id: number) => (await db.select().from(schema.studioAssets).where(eq(schema.studioAssets.id, id)))[0];
   const deps = (over: Partial<AnalysisDeps> = {}): AnalysisDeps => ({
     read: async () => Buffer.from('x'), analyse: async () => ({ metadata: { description: 'A room.', tags: ['room'] }, model: 'm' }),
-    budget: new AnalysisBudget(() => 0), ...over,
+    budgetPerHour: () => 0, ...over,
   });
 
   it('does not claim (or fail) any image while R2 is not configured; it analyses them once R2 is back', async () => {
@@ -521,26 +529,6 @@ describe('analysis waits for R2 and respects the hourly budget', () => {
     expect(await row(id)).toMatchObject({ analysisStatus: 'pending', analysisAttempts: 0, analysisError: null });
     expect(await studioTick(deps({ r2Ready: () => true }), state)).toBe('worked');
     expect((await row(id)).analysisStatus).toBe('completed');
-  });
-
-  it('starts no more images per hour than the budget allows, and 0 means no limit', async () => {
-    const ids = await pending(5);
-    const budget = new AnalysisBudget(() => 2);
-    expect(await runAnalysisRound(4, deps({ budget }))).toBe(2);
-    expect(await runAnalysisRound(4, deps({ budget }))).toBe(0);
-    expect((await Promise.all(ids.map(row))).filter((r) => r.analysisStatus === 'completed')).toHaveLength(2);
-    expect(budget.remaining()).toBe(0);
-    expect(budget.remaining(now() + 3_600_001)).toBe(2);   // the window slides
-    expect(new AnalysisBudget(() => 0).remaining()).toBe(Infinity);
-    expect(await runAnalysisRound(4, deps({ budget: new AnalysisBudget(() => 0) }))).toBe(3);
-  });
-
-  it('while the budget is used up the tick waits instead of working', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test-key';
-    await pending(2);
-    const budget = new AnalysisBudget(() => 1);
-    budget.record(1);
-    expect(await studioTick(deps({ r2Ready: () => true, budget }), { lastRecovery: now(), warnedNoKey: false })).toBe('waiting');
   });
 });
 
@@ -587,7 +575,7 @@ describe('the kill switch is read on every pass', () => {
     const packId = (await db.insert(schema.studioPacks).values({ name: 'K', createdBy: USER, createdAt: now(), updatedAt: now() }).returning())[0].id;
     const [a] = await db.insert(schema.studioAssets).values({ packId, storageKey: `studio/assets/${crypto.randomUUID()}.png`, mime: 'image/png', sizeBytes: 1, sha256: `k${++seq}`, createdBy: USER, createdAt: now(), updatedAt: now() }).returning();
     await db.insert(schema.studioAssetMetadata).values({ assetId: a.id, manual: {}, createdAt: now(), updatedAt: now() });
-    const deps: AnalysisDeps = { read: async () => Buffer.from('x'), analyse: async () => ({ metadata: { description: 'x' }, model: 'm' }), r2Ready: () => true, budget: new AnalysisBudget(() => 0) };
+    const deps: AnalysisDeps = { read: async () => Buffer.from('x'), analyse: async () => ({ metadata: { description: 'x' }, model: 'm' }), r2Ready: () => true, budgetPerHour: () => 0 };
     process.env.STUDIO_WORKER = 'off';
     try {
       expect(await studioTick(deps, { lastRecovery: now(), warnedNoKey: false })).toBe('waiting');

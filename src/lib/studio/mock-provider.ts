@@ -13,6 +13,10 @@ export interface MockOptions {
   failSubmit?: (input: ReplacementInput) => { code: string; message: string; retryable: boolean } | null;
   /** Report a failure when polling this provider job id. */
   failPoll?: (providerJobId: string) => { code: string; message: string; retryable: boolean } | null;
+  /** Declare idempotent submits (resending the same key can never create a second job). Default false: the safe assumption. */
+  idempotent?: boolean;
+  /** Gives the mock a lookup by idempotency key (returns the provider job id, or null for no record). */
+  lookup?: (idempotencyKey: string) => string | null;
 }
 
 export class MockReplacementProvider implements ReplacementProvider {
@@ -20,7 +24,12 @@ export class MockReplacementProvider implements ReplacementProvider {
   /** Every submit this instance received (tests use it to prove what was sent, and how many times). */
   readonly submitted: Array<{ jobId: number; idempotencyKey: string; characterBytes: number; sourceBytes: number; characterBuf: Buffer; sourceBuf: Buffer }> = [];
   private polls = new Map<string, number>();
-  constructor(private readonly opts: MockOptions = {}) {}
+  readonly idempotentSubmit: boolean;
+  readonly findSubmission?: (idempotencyKey: string) => Promise<{ providerJobId: string } | null>;
+  constructor(private readonly opts: MockOptions = {}) {
+    this.idempotentSubmit = opts.idempotent === true;
+    if (opts.lookup) { const lookup = opts.lookup; this.findSubmission = async (key) => { const id = lookup(key); return id ? { providerJobId: id } : null; }; }
+  }
 
   async submit(input: ReplacementInput): Promise<SubmitResult> {
     this.submitted.push({ jobId: input.jobId, idempotencyKey: input.idempotencyKey, characterBytes: input.characterImage.length, sourceBytes: input.sourceImage.length, characterBuf: input.characterImage, sourceBuf: input.sourceImage });
@@ -75,9 +84,13 @@ export function getProvider(id: string): ReplacementProvider {
 /** The provider id new batches use, or null when none is configured (there is no default). */
 export const configuredProvider = (): string | null => (process.env.STUDIO_PROVIDER ?? '').trim().toLowerCase() || null;
 
+export type GenerationMode = 'disabled' | 'mock' | 'real';
+
 export interface GenerationConfig {
-  /** Whether new batches can be created right now. */
+  /** Whether THIS process can use a provider right now. */
   enabled: boolean;
+  /** disabled: no provider; mock: the test provider (fake pictures); real: a real provider (none exists yet). */
+  mode: GenerationMode;
   /** The provider id in use, if any. */
   provider: string | null;
   /** True when pictures are fake test output (the mock provider). Shown clearly in the UI. */
@@ -86,9 +99,12 @@ export interface GenerationConfig {
   reason: string | null;
 }
 
+/** True for the provider whose output is placeholder pictures. Used wherever an output or a job is shown. */
+export const isTestProvider = (id: string | null | undefined): boolean => id === 'mock';
+
 export function generationConfig(): GenerationConfig {
   const id = configuredProvider();
-  if (!id) return { enabled: false, provider: null, testMode: false, reason: 'Image generation is not switched on yet: no provider is configured on the server. Nothing can be generated until one is.' };
-  if (id === 'mock') return { enabled: true, provider: 'mock', testMode: true, reason: null };
-  return { enabled: false, provider: id, testMode: false, reason: `The "${id}" provider is not available yet, so nothing can be generated.` };
+  if (!id) return { enabled: false, mode: 'disabled', provider: null, testMode: false, reason: 'Image generation is not switched on yet: no provider is configured on the server. Nothing can be generated until one is.' };
+  if (id === 'mock') return { enabled: true, mode: 'mock', provider: 'mock', testMode: true, reason: null };
+  return { enabled: false, mode: 'disabled', provider: id, testMode: false, reason: `The "${id}" provider is not available yet, so nothing can be generated.` };
 }

@@ -218,7 +218,10 @@ describe('uploads go to R2 only and are verified', () => {
 
     r2.browserPut(init.json.storageKey, ok, 'image/png');
     expect((await complete({ storageKey: init.json.storageKey, contentType: 'image/png', fileSize: ok.length + 1 })).status).toBe(422);
-    expect(r2.deletes).toContain(init.json.storageKey); // an unusable, unreferenced upload is removed
+    // A request that only DESCRIBES the file wrongly removes nothing (the file may be a good upload another request is completing);
+    // unused uploads are cleaned up later by the sweeper. A file that is not an image at all is removed (below).
+    expect(r2.deletes).not.toContain(init.json.storageKey);
+    expect(r2.has(init.json.storageKey)).toBe(true);
 
     const junk = Buffer.from('this is not an image at all');
     const init2 = await call(assetInit, { method: 'POST', params: p, body: { contentType: 'image/png', fileSize: junk.length } });

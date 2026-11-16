@@ -5,12 +5,15 @@ import { api, isActiveBatch, type BatchListItem, type BatchSummary, type JobRow,
 
 const STATUS: Record<string, { label: string; bg: string; fg: string }> = {
   queued: { label: 'Queued', bg: '#F3F4F6', fg: '#6B7280' }, submitting: { label: 'Sending…', bg: '#EDE9FE', fg: '#6D28D9' },
+  submit_unknown: { label: 'Needs attention', bg: '#FEF3C7', fg: '#92400E' },
   processing: { label: 'Generating…', bg: '#EDE9FE', fg: '#6D28D9' }, succeeded: { label: 'Done', bg: '#DCFCE7', fg: '#16A34A' },
   failed: { label: 'Failed', bg: '#FEE2E2', fg: '#B91C1C' }, canceled: { label: 'Canceled', bg: '#F3F4F6', fg: '#6B7280' },
 };
 const Chip = ({ s }: { s: string }) => { const c = STATUS[s] ?? STATUS.queued; return <span style={{ padding: '1px 8px', borderRadius: 999, background: c.bg, color: c.fg, font: '500 11px/1.6 Satoshi' }}>{c.label}</span>; };
 
-const sumText = (s: BatchSummary) => `${s.succeeded} done · ${s.processing + s.submitting + s.queued} running · ${s.failed} failed`;
+const sumText = (s: BatchSummary) => `${s.succeeded} done · ${s.processing + s.submitting + s.queued} running · ${s.failed} failed${s.submit_unknown ? ` · ${s.submit_unknown} unconfirmed` : ''}`;
+/** Marks an image that came from the test provider. Shown on every generated image, saved or not. */
+const TestBadge = () => <span title="Made by the test provider: a placeholder, not a real result" style={{ padding: '1px 7px', borderRadius: 999, background: '#7C3AED', color: '#fff', font: '700 10px/1.6 Satoshi', letterSpacing: '.04em' }}>TEST · NOT REAL</span>;
 
 interface Props { projectId: number; refreshKey: number; onError: (m: string) => void }
 
@@ -78,7 +81,10 @@ export default function ResultsPanel({ projectId, refreshKey, onError }: Props) 
     try { await fn(); await refresh(); } catch (e) { onError((e as Error).message); } finally { setBusy(null); }
   };
   const review = (o: OutputRow, status: 'saved' | 'rejected' | 'pending') => act(o.id, () => api(`/api/v1/studio/outputs/${o.id}/review`, { method: 'POST', body: { status } }));
-  const again = (jobId: number, kind: 'retry' | 'regenerate') => act(jobId, () => api(`/api/v1/studio/jobs/${jobId}/${kind}`, { method: 'POST' }));
+  const again = (jobId: number, kind: 'retry' | 'regenerate', confirmDuplicate = false) => act(jobId, () => api(`/api/v1/studio/jobs/${jobId}/${kind}`, { method: 'POST', ...(confirmDuplicate ? { body: { confirmDuplicate: true } } : {}) }));
+  const generateAnyway = (jobId: number) => {
+    if (window.confirm('The provider never confirmed this image, so it may already be generating it. Generating it again could be charged twice. Generate it again anyway?')) void again(jobId, 'retry', true);
+  };
 
   if (batches.length === 0 && outputs.length === 0) return null;
   const openBatch = batches.find((b) => b.id === open);
@@ -101,7 +107,8 @@ export default function ResultsPanel({ projectId, refreshKey, onError }: Props) 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {j.source.thumbUrl ? <img src={j.source.thumbUrl} alt="" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 64, height: 48, background: '#F4F4F0', borderRadius: 6 }} />}
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><Chip s={j.status} /><span style={{ font: '400 11px Satoshi', color: '#75757C' }}>Job {j.id}{j.attempt > 1 ? ` · attempt ${j.attempt}` : ''}</span></div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><Chip s={j.status} /><span style={{ font: '400 11px Satoshi', color: '#75757C' }}>Job {j.id}{j.attempt > 1 ? ` · attempt ${j.attempt}` : ''}</span>{j.isTest && <TestBadge />}</div>
+                  {j.status === 'submit_unknown' && <button className="btn btn-secondary" disabled={busy === j.id} onClick={() => generateAnyway(j.id)} style={{ height: 24, padding: '0 8px', fontSize: 11, marginTop: 4 }}>Generate again anyway…</button>}
                   {j.error && <div role="alert" style={{ font: '400 11px/1.4 Satoshi', color: '#B91C1C', marginTop: 3 }}>{j.error.message}</div>}
                   {j.status === 'failed' && j.error?.retryable === false && <div style={{ font: '400 11px/1.4 Satoshi', color: '#75757C', marginTop: 3 }}>Retrying will not help. Change the image or the character and generate again.</div>}
                   {j.status === 'failed' && j.error?.retryable !== false && <button className="btn btn-secondary" disabled={busy === j.id} onClick={() => void again(j.id, 'retry')} style={{ height: 24, padding: '0 8px', fontSize: 11, marginTop: 4 }}>{busy === j.id ? 'Retrying…' : 'Retry this image'}</button>}
@@ -129,6 +136,7 @@ export default function ResultsPanel({ projectId, refreshKey, onError }: Props) 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {o.thumbUrl && <img src={o.thumbUrl} alt="" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />}
               </button>
+              {o.isTest && <div style={{ padding: '5px 9px 0' }}><TestBadge /></div>}
               <div style={{ padding: '7px 9px 9px' }}>
                 <div style={{ font: '500 11px/1.4 Satoshi', color: '#5E5E65' }}>From {o.source.packName} · attempt {o.job.attempt}</div>
                 <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
@@ -149,6 +157,7 @@ export default function ResultsPanel({ projectId, refreshKey, onError }: Props) 
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={zoomFull ?? zoom.imageUrl ?? zoom.thumbUrl ?? ''} alt="" style={{ maxWidth: '60%', maxHeight: '70vh', borderRadius: 10, objectFit: 'contain' }} />
               <div style={{ font: '400 12px/1.6 Satoshi', color: '#3F3F46' }}>
+                {zoom.isTest && <div style={{ marginBottom: 8 }}><TestBadge /></div>}
                 <div style={{ font: '700 14px Satoshi', marginBottom: 6 }}>Where this came from</div>
                 <div>Source image from <strong>{zoom.source.packName}</strong></div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}

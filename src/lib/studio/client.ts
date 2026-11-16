@@ -101,22 +101,29 @@ export interface SelectionRow { assetId: number; packId: number; packName: strin
 export interface JobOutput { id: number; thumbUrl: string | null; imageUrl: string | null; width: number | null; height: number | null; reviewStatus: 'pending' | 'saved' | 'rejected'; createdAt: number }
 export interface JobRow {
   id: number; batchId: number; assetId: number; packId: number; attempt: number; retryOfJobId: number | null;
-  status: 'queued' | 'submitting' | 'processing' | 'succeeded' | 'failed' | 'canceled'; provider: string; providerJobId: string | null;
+  status: 'queued' | 'submitting' | 'submit_unknown' | 'processing' | 'succeeded' | 'failed' | 'canceled'; provider: string; isTest: boolean; providerJobId: string | null;
   error: { code: string | null; message: string | null; retryable: boolean | null } | null;
   createdAt: number; startedAt: number | null; finishedAt: number | null;
   source: { thumbUrl: string | null; originalFilename: string | null; archived: boolean };
   outputs: JobOutput[];
 }
-export interface BatchSummary { total: number; queued: number; submitting: number; processing: number; succeeded: number; failed: number; canceled: number }
+export interface BatchSummary { total: number; queued: number; submitting: number; submit_unknown: number; processing: number; succeeded: number; failed: number; canceled: number }
 export interface BatchListItem { id: number; provider: string; totalJobs: number; createdAt: number; createdBy: string; summary: BatchSummary }
 export interface OutputRow {
   id: number; projectId: number; reviewStatus: 'pending' | 'saved' | 'rejected'; reviewedBy: string | null; reviewedAt: number | null; createdAt: number;
   width: number | null; height: number | null; thumbUrl: string | null; imageUrl: string | null;
+  /** True when the image came from the test (mock) provider: it is a placeholder, never a real result. */
+  isTest: boolean;
   job: { id: number; attempt: number; retryOfJobId: number | null; status: string; providerJobId: string | null; provider: string };
   batch: { id: number; createdAt: number; createdBy: string };
   source: { assetId: number; packId: number; packName: string; originalFilename: string | null; thumbUrl: string | null; archived: boolean };
   character: { thumbUrl: string | null };
 }
-export const isActiveBatch = (s: BatchSummary): boolean => s.queued + s.submitting + s.processing > 0;
+export const isActiveBatch = (s: BatchSummary): boolean => s.queued + s.submitting + s.submit_unknown + s.processing > 0;
 
-export interface GenerationConfig { enabled: boolean; provider: string | null; testMode: boolean; reason: string | null }
+export interface GenerationConfig {
+  enabled: boolean; mode: 'disabled' | 'mock' | 'real'; provider: string | null; testMode: boolean; reason: string | null;
+  /** True only when a provider is set AND a worker that uses the same provider is running and ready. */
+  ready: boolean; code: string | null; message: string | null;
+  worker: { status: 'ok' | 'no_worker' | 'provider_mismatch' | 'not_ready'; providers: Array<string | null> } | null;
+}

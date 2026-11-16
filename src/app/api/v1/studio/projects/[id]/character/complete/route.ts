@@ -9,5 +9,5 @@ export const maxDuration = 60;
 export const POST = studioRoute<{ id: string }>(async ({ req, params }) => {
   const body = await readJson(req);
   const project = await completeCharacterUpload(parseId(params.id), { storageKey: body.storageKey, contentType: body.contentType, fileSize: body.fileSize });
-  return NextResponse.json({ project: await serializeProject(project) });
+  return NextResponse.json({ project: await serializeProject(project, { full: true }) });
 });

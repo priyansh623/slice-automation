@@ -13,5 +13,5 @@ export const GET = studioRoute(async ({ req }) => {
 export const POST = studioRoute(async ({ req, user }) => {
   const body = await readJson(req);
   const project = await createProject({ name: body.name }, user.id);
-  return NextResponse.json({ project: await serializeProject(project) }, { status: 201 });
+  return NextResponse.json({ project: await serializeProject(project, { full: true }) }, { status: 201 });
 });

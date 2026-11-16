@@ -5,15 +5,23 @@
  *
  *   STUDIO_WORKER=off                   turns all Studio background work off (checked on every pass)
  *   STUDIO_ANALYSIS_CONCURRENCY         images analysed at once (default 1, at most 2: the worker has 512 MiB and shares it with video)
- *   STUDIO_ANALYSIS_BUDGET_PER_HOUR     most images this worker will start analysing per hour (default 600, 0 = no limit)
+ *   STUDIO_ANALYSIS_BUDGET_PER_HOUR     most images started for analysis per UTC hour, across ALL workers and restarts, counted in
+ *                                       PostgreSQL (default 600, 0 = no limit; see lib/studio/budget.ts)
+ *   STUDIO_PROVIDER                     must be the same value on the web app and here (this worker reports its value to the database,
+ *                                       and the web app refuses to queue work when they differ or no worker is running)
  *   STUDIO_JOB_CONCURRENCY              generation jobs sent at once (default 2, 1 to 4)
  */
 import { getStorage } from '../lib/object-store';
 import { analyseImage, analysisConfigured, configureSharpForWorker, prepareForAnalysis } from '../lib/studio/analyzer';
 import { claimNextAsset, completeAnalysis, failAnalysis, heartbeat, recoverStaleAnalysis, releaseClaim, type ClaimedAsset } from '../lib/studio/analysis-queue';
 import type { MetadataRecord } from '../lib/studio/metadata';
-import { generationRound, recoverStaleJobs, type GenerationDeps } from '../lib/studio/generation';
+import { generationRound, reconcileAmbiguousJobs, recoverStaleJobs, type GenerationDeps } from '../lib/studio/generation';
 import { generationConfig, getProvider } from '../lib/studio/mock-provider';
+import { ANALYSIS_KIND, budgetStatus, pruneBudgetHistory, recordBudgetOutcome, refundBudget, reserveBudget, type BudgetSlot } from '../lib/studio/budget';
+import { retryPendingRemovals, sweepAbandonedUploads } from '../lib/studio/references';
+import { publishWorkerStatus, pruneStaleWorkers, removeWorkerStatus, WORKER_REPORT_EVERY_MS } from '../lib/studio/worker-status';
+import * as os from 'node:os';
+import * as crypto from 'node:crypto';
 import { ObjectExistsError } from '../lib/object-store';
 
 export const STUDIO_POLL_MS = 3_000;
@@ -33,24 +41,11 @@ export const analysisConcurrency = (): number => {
   return Number.isFinite(n) ? Math.min(Math.max(n, 1), 2) : 1;
 };
 
-/** Limits how many images are started per hour, so a very large (or looping) upload cannot run up unbounded model cost. */
-export class AnalysisBudget {
-  private starts: number[] = [];
-  constructor(private readonly perHour: () => number = analysisBudgetPerHour) {}
-  /** How many more images may be started now (Infinity when there is no limit). */
-  remaining(now = Date.now()): number {
-    const limit = this.perHour();
-    if (limit <= 0) return Infinity;
-    this.starts = this.starts.filter((t) => t > now - 3_600_000);
-    return Math.max(limit - this.starts.length, 0);
-  }
-  record(n: number, now = Date.now()): void { for (let i = 0; i < n; i++) this.starts.push(now); }
-}
+/** Most images started for analysis per UTC hour. The count lives in PostgreSQL (budget.ts), shared by every worker. */
 export const analysisBudgetPerHour = (): number => {
   const n = parseInt(process.env.STUDIO_ANALYSIS_BUDGET_PER_HOUR ?? '600', 10);
   return Number.isFinite(n) && n >= 0 ? n : 600;
 };
-const sharedBudget = new AnalysisBudget();
 
 /** Claims currently being analysed by this process, so a shutdown can hand them back instead of leaving them to a 10-minute lease. */
 const inFlight = new Map<number, ClaimedAsset>();
@@ -64,13 +59,18 @@ export interface AnalysisDeps {
   heartbeatMs?: number;
   /** Whether R2 can be reached right now. Without it, images stay pending instead of being claimed and failed. Defaults to the real check. */
   r2Ready?: () => boolean;
-  budget?: AnalysisBudget;
+  /** The hourly limit (0 = none). Defaults to STUDIO_ANALYSIS_BUDGET_PER_HOUR. */
+  budgetPerHour?: () => number;
 }
 
 export const defaultAnalysisDeps = (): AnalysisDeps => ({
   r2Ready: () => getStorage().r2Configured(),
   read: (key) => getStorage().downloadR2Only('uploads', key),
-  analyse: async (original) => analyseImage(await prepareForAnalysis(original)),
+  analyse: async (original) => {
+    // Failing to make the reduced copy happens BEFORE anything is sent to the model, so it is not charged against the budget.
+    const copy = await prepareForAnalysis(original).catch((err) => { throw Object.assign(err instanceof Error ? err : new Error(String(err)), { notCharged: true }); });
+    return analyseImage(copy);
+  },
 });
 
 /** A short message safe to store and show: provider errors can quote request details, so only the class and status are kept. */
@@ -83,15 +83,24 @@ export function describeFailure(err: unknown): string {
 }
 
 /** Analyses one claimed image. Never throws: a failure is recorded on that image and nothing else is affected. */
-export async function analyseClaimed(asset: ClaimedAsset, deps: AnalysisDeps): Promise<'completed' | 'failed'> {
+export async function analyseClaimed(asset: ClaimedAsset, deps: AnalysisDeps, slot: BudgetSlot | null = null): Promise<'completed' | 'failed'> {
   const beat = setInterval(() => { void heartbeat(asset.id).catch(() => {}); }, deps.heartbeatMs ?? HEARTBEAT_MS);
   inFlight.set(asset.id, asset);
+  let read = false;
   try {
     const original = await deps.read(asset.storageKey);
+    read = true;
     const { metadata, model } = await deps.analyse(original);
     await completeAnalysis(asset, metadata, model);
+    if (slot) await recordBudgetOutcome(slot, 'succeeded').catch(() => {});
     return 'completed';
   } catch (err) {
+    // Budget accounting: nothing was sent to the model if the original could not be read or reduced, so the unit is given back;
+    // a model call that failed may still have been billed, so it stays counted.
+    if (slot) {
+      if (!read || (err as { notCharged?: boolean })?.notCharged === true) await refundBudget(slot).catch(() => {});
+      else await recordBudgetOutcome(slot, 'failed').catch(() => {});
+    }
     console.error(`[studio-worker] analysis of asset ${asset.id} failed:`, (err as { name?: string }).name ?? 'Error', (err as { status?: number }).status ?? '');
     await failAnalysis(asset, describeFailure(err)).catch((e) => console.error('[studio-worker] could not record a failure:', e));
     return 'failed';
@@ -101,19 +110,22 @@ export async function analyseClaimed(asset: ClaimedAsset, deps: AnalysisDeps): P
   }
 }
 
-/** Claims and analyses up to `concurrency` images at the same time. Returns how many it handled. */
+/**
+ * Claims and analyses up to `concurrency` images at the same time. A budget unit is reserved (atomically, in the database) BEFORE
+ * each image is claimed; when none is left the images stay pending and nothing is claimed. Returns how many it handled.
+ */
 export async function runAnalysisRound(concurrency: number, deps: AnalysisDeps): Promise<number> {
-  const budget = deps.budget ?? sharedBudget;
-  const claimed: ClaimedAsset[] = [];
-  const allowed = Math.min(concurrency, budget.remaining());
-  for (let i = 0; i < allowed && !stopping; i++) {
-    const a = await claimNextAsset();
-    if (!a) break;
-    claimed.push(a);
+  const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
+  const work: Array<{ asset: ClaimedAsset; slot: BudgetSlot }> = [];
+  for (let i = 0; i < concurrency && !stopping; i++) {
+    const slot = await reserveBudget(ANALYSIS_KIND, limit);
+    if (!slot.ok) break;
+    const asset = await claimNextAsset();
+    if (!asset) { await refundBudget(slot); break; }   // nothing to analyse: the unit was never used
+    work.push({ asset, slot });
   }
-  budget.record(claimed.length);
-  await Promise.all(claimed.map((a) => analyseClaimed(a, deps)));
-  return claimed.length;
+  await Promise.all(work.map((w) => analyseClaimed(w.asset, deps, w.slot)));
+  return work.length;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -141,8 +153,9 @@ export async function studioTick(deps: AnalysisDeps, state: TickState, now = Dat
     return 'waiting';
   }
   state.warnedNoR2 = false;
-  if ((deps.budget ?? sharedBudget).remaining(now) <= 0) {
-    if (!state.warnedBudget) { console.warn(`[studio-worker] hourly analysis budget (${analysisBudgetPerHour()}) reached: image analysis is waiting`); state.warnedBudget = true; }
+  const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
+  if ((await budgetStatus(ANALYSIS_KIND, limit, now)).exhausted) {
+    if (!state.warnedBudget) { console.warn(`[studio-worker] hourly analysis budget (${limit}) is used up: images stay pending until the next hour`); state.warnedBudget = true; }
     return 'waiting';
   }
   state.warnedBudget = false;
@@ -167,14 +180,21 @@ export async function generationTick(deps: GenerationDeps, state: GenerationTick
   if (!studioWorkerEnabled() || stopping) return 'idle';
   if (!state.noRecovery && now - state.lastRecovery >= RECOVERY_EVERY_MS) {
     const r = await recoverStaleJobs(now);
-    if (r.interrupted || r.timedOut) console.log(`[studio-worker] stale jobs: ${r.interrupted} interrupted, ${r.timedOut} timed out`);
+    if (r.interrupted || r.timedOut) console.log(`[studio-worker] stale jobs: ${r.interrupted} now unknown, ${r.timedOut} timed out`);
     state.lastRecovery = now;
   }
   return (await generationRound(deps, { submit: jobConcurrency(), poll: POLL_LIMIT })) > 0 ? 'worked' : 'idle';
 }
 
-/** Stale analysis and stale jobs are recovered on their own timer, so a slow or stuck round can never stop recovery. */
-export async function recoverStudioWork(): Promise<void> {
+const SWEEP_EVERY_MS = 15 * 60 * 1000;
+let lastSweep = 0;
+
+/**
+ * Housekeeping on its own timer, so a slow or stuck round can never stop it: stale analysis and jobs are recovered, jobs whose
+ * submission outcome is unknown are reconciled (only ever in ways that cannot pay twice), and every 15 minutes abandoned uploads
+ * are cleaned up (only keys this server issued and nothing uses), unfinished removals are retried, and old rows are pruned.
+ */
+export async function recoverStudioWork(genDeps?: GenerationDeps, now = Date.now()): Promise<void> {
   if (!studioWorkerEnabled() || stopping) return;
   try {
     const a = await recoverStaleAnalysis();
@@ -182,8 +202,38 @@ export async function recoverStudioWork(): Promise<void> {
   } catch (err) { console.error('[studio-worker] analysis recovery error:', (err as Error).message); }
   try {
     const r = await recoverStaleJobs();
-    if (r.interrupted || r.timedOut) console.log(`[studio-worker] stale jobs: ${r.interrupted} interrupted, ${r.timedOut} timed out`);
+    if (r.interrupted || r.timedOut) console.log(`[studio-worker] stale jobs: ${r.interrupted} now unknown, ${r.timedOut} timed out`);
   } catch (err) { console.error('[studio-worker] job recovery error:', (err as Error).message); }
+  try {
+    const r = await reconcileAmbiguousJobs(genDeps ?? defaultGenerationDeps());
+    if (r.adopted || r.requeued) console.log(`[studio-worker] unknown submissions: ${r.adopted} found at the provider, ${r.requeued} safely re-sent (idempotent)`);
+  } catch (err) { console.error('[studio-worker] reconcile error:', (err as Error).message); }
+  if (now - lastSweep >= SWEEP_EVERY_MS) {
+    lastSweep = now;
+    try {
+      const sw = await sweepAbandonedUploads(now);
+      const again = await retryPendingRemovals();
+      await pruneBudgetHistory(now); await pruneStaleWorkers(now);
+      if (sw.removed || again) console.log(`[studio-worker] cleaned up ${sw.removed} abandoned upload(s), finished ${again} pending removal(s)`);
+    } catch (err) { console.error('[studio-worker] clean-up error:', (err as Error).message); }
+  }
+}
+
+const workerId = `${os.hostname()}-${process.pid}-${crypto.randomBytes(3).toString('hex')}`;
+const workerStartedAt = Date.now();
+
+/** What this worker can do right now, as the web app will see it. */
+export async function reportWorkerStatus(now = Date.now()): Promise<void> {
+  if (stopping) return; // a worker that is shutting down is not reported again after it removed itself
+  const cfg = generationConfig();
+  const enabled = studioWorkerEnabled();
+  const r2Ready = (() => { try { return getStorage().r2Configured(); } catch { return false; } })();
+  const budget = await budgetStatus(ANALYSIS_KIND, analysisBudgetPerHour(), now).catch(() => null);
+  await publishWorkerStatus({
+    workerId, provider: cfg.provider, mode: cfg.mode, generationReady: enabled && cfg.enabled && r2Ready, r2Ready, workerEnabled: enabled,
+    analysisReady: enabled && analysisConfigured() && r2Ready, startedAt: workerStartedAt,
+    details: { analysisConcurrency: analysisConcurrency(), analysisBudget: budget, stopping },
+  }, now);
 }
 
 /**
@@ -198,9 +248,14 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
   stopping = false;
   const analysisState: TickState = { lastRecovery: 0, warnedNoKey: false, noRecovery: true };
   const genState: GenerationTickState = { lastRecovery: 0, noRecovery: true };
-  const recovery = setInterval(() => { void recoverStudioWork(); }, RECOVERY_EVERY_MS);
+  const recovery = setInterval(() => { void recoverStudioWork(genDeps); }, RECOVERY_EVERY_MS);
   recovery.unref?.();
-  void recoverStudioWork();
+  void recoverStudioWork(genDeps);
+  // Tell the database what this worker can do (provider, R2, switches) so the web app can refuse work nobody would process.
+  const report = () => reportWorkerStatus().catch((err) => console.error('[studio-worker] could not report status:', (err as Error).message));
+  void report();
+  const reporter = setInterval(() => { void report(); }, WORKER_REPORT_EVERY_MS);
+  reporter.unref?.();
   void (async () => {
     while (!stopping) {
       try {
@@ -232,6 +287,7 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
  */
 export async function stopStudioWorker(): Promise<number> {
   stopping = true;
+  await removeWorkerStatus(workerId).catch(() => {}); // stop being counted as a worker that can process new work
   let released = 0;
   for (const id of [...inFlight.keys()]) {
     try { if (await releaseClaim(id)) released++; } catch (err) { console.error('[studio-worker] could not release a claim on shutdown:', (err as Error).message); }
