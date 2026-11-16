@@ -82,6 +82,10 @@ export interface StudioProject {
   analysis: { status: 'idle' | 'processing' | 'completed' | 'failed'; error: string | null; at: number | null; current: boolean };
   recommendations: StudioRecommendation[];
   approvedPackCount?: number;
+  /** The signed-in user's email when they own the project (list only). */
+  ownerEmail?: string | null;
+  /** What the Projects table needs (list only). */
+  selectionCount?: number; jobCount?: number; jobsSucceeded?: number; jobsActive?: number; outputCount?: number; outputsSaved?: number;
 }
 export interface ApprovedPack { packId: number; name: string; description: string | null; packArchived: boolean; source: string; approvedAt: number; activeAssetCount: number; newSinceApproval: number; selectedCount: number }
 
@@ -101,14 +105,14 @@ export async function uploadCharacter(projectId: number, file: File): Promise<St
 
 // ── Selection, batches, outputs ──────────────────────────────────────────────
 
-export interface SelectionRow { assetId: number; packId: number; packName: string; archived: boolean; addedAt: number; image: { id: number; thumbUrl: string | null; imageUrl: string | null; originalFilename: string | null; width: number | null; height: number | null } }
+export interface SelectionRow { assetId: number; packId: number; packName: string; archived: boolean; addedAt: number; image: { id: number; importKey?: string | null; thumbUrl: string | null; imageUrl: string | null; originalFilename: string | null; width: number | null; height: number | null } }
 export interface JobOutput { id: number; thumbUrl: string | null; imageUrl: string | null; width: number | null; height: number | null; reviewStatus: 'pending' | 'saved' | 'rejected'; createdAt: number }
 export interface JobRow {
   id: number; batchId: number; assetId: number; packId: number; attempt: number; retryOfJobId: number | null;
   status: 'queued' | 'submitting' | 'submit_unknown' | 'processing' | 'succeeded' | 'failed' | 'canceled'; provider: string; isTest: boolean; providerJobId: string | null;
   error: { code: string | null; message: string | null; retryable: boolean | null } | null;
   createdAt: number; startedAt: number | null; finishedAt: number | null;
-  source: { thumbUrl: string | null; originalFilename: string | null; archived: boolean };
+  source: { thumbUrl: string | null; originalFilename: string | null; importKey?: string | null; archived: boolean };
   outputs: JobOutput[];
 }
 export interface BatchSummary { total: number; queued: number; submitting: number; submit_unknown: number; processing: number; succeeded: number; failed: number; canceled: number }
@@ -120,7 +124,7 @@ export interface OutputRow {
   isTest: boolean;
   job: { id: number; attempt: number; retryOfJobId: number | null; status: string; providerJobId: string | null; provider: string };
   batch: { id: number; createdAt: number; createdBy: string };
-  source: { assetId: number; packId: number; packName: string; originalFilename: string | null; thumbUrl: string | null; archived: boolean };
+  source: { assetId: number; packId: number; packName: string; originalFilename: string | null; importKey?: string | null; thumbUrl: string | null; archived: boolean };
   character: { thumbUrl: string | null };
 }
 export const isActiveBatch = (s: BatchSummary): boolean => s.queued + s.submitting + s.submit_unknown + s.processing > 0;

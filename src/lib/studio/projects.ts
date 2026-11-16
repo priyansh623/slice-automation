@@ -2,7 +2,7 @@
 import * as crypto from 'node:crypto';
 import { desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { studioProjectPacks, studioProjects } from '@/db/schema.pg';
+import { studioProjectPacks, studioProjects, studioSelections } from '@/db/schema.pg';
 import { StudioError } from './repository';
 
 export const MAX_PROJECT_NAME = 120;
@@ -31,12 +31,26 @@ export async function getProject(id: number): Promise<ProjectRow> {
   return row;
 }
 
-export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<Array<ProjectRow & { approvedPackCount: number }>> {
+/** What the Projects table needs to show each project's progress: how far it has got, counted from the project's own rows. */
+export interface ProjectProgress { approvedPackCount: number; selectionCount: number; jobCount: number; jobsSucceeded: number; jobsActive: number; outputCount: number; outputsSaved: number }
+
+export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<Array<ProjectRow & ProjectProgress>> {
   const rows = await db.select().from(studioProjects).where(opts.includeArchived ? undefined : isNull(studioProjects.archivedAt)).orderBy(desc(studioProjects.createdAt));
   if (rows.length === 0) return [];
   const counts = await db.select({ projectId: studioProjectPacks.projectId, n: sql<number>`count(*)`.mapWith(Number) }).from(studioProjectPacks).groupBy(studioProjectPacks.projectId);
+  const sel = await db.select({ projectId: studioSelections.projectId, n: sql<number>`count(*)`.mapWith(Number) }).from(studioSelections).groupBy(studioSelections.projectId);
+  const jobs = await db.execute(sql`select b.project_id as project_id, count(*)::int as total, count(*) filter (where j.status = 'succeeded')::int as succeeded, count(*) filter (where j.status in ('queued','submitting','submit_unknown','processing'))::int as active from studio_jobs j join studio_batches b on b.id = j.batch_id group by b.project_id`);
+  const outs = await db.execute(sql`select project_id, count(*)::int as total, count(*) filter (where review_status = 'saved')::int as saved from studio_outputs group by project_id`);
+  const rowsOf = <T,>(r: unknown): T[] => (Array.isArray(r) ? r : ((r as { rows?: T[] }).rows ?? [])) as T[];
   const byProject = new Map(counts.map((c) => [c.projectId, c.n]));
-  return rows.map((r) => ({ ...r, approvedPackCount: byProject.get(r.id) ?? 0 }));
+  const bySel = new Map(sel.map((c) => [c.projectId, c.n]));
+  const byJobs = new Map(rowsOf<{ project_id: number; total: number; succeeded: number; active: number }>(jobs).map((r) => [Number(r.project_id), r]));
+  const byOuts = new Map(rowsOf<{ project_id: number; total: number; saved: number }>(outs).map((r) => [Number(r.project_id), r]));
+  return rows.map((r) => ({
+    ...r, approvedPackCount: byProject.get(r.id) ?? 0, selectionCount: bySel.get(r.id) ?? 0,
+    jobCount: byJobs.get(r.id)?.total ?? 0, jobsSucceeded: byJobs.get(r.id)?.succeeded ?? 0, jobsActive: byJobs.get(r.id)?.active ?? 0,
+    outputCount: byOuts.get(r.id)?.total ?? 0, outputsSaved: byOuts.get(r.id)?.saved ?? 0,
+  }));
 }
 
 /** Renames and/or replaces the script. Recommendations made for an older script stay on record but are marked out of date by their hash. */

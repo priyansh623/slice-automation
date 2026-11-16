@@ -90,7 +90,7 @@ export async function serializeAssets(views: AssetView[], opts: { full?: boolean
 /** The selection as the API returns it: each image with the pack it came from (kept from selection time) and archived state. */
 export async function serializeSelection(items: import('./selection').SelectionItem[]) {
   const views = await serializeAssets(items.map((i) => ({ asset: i.asset, ai: null, manual: {}, imported: {}, metadata: effectiveMetadata(null, null), aiAnalyzedAt: null })));
-  return items.map((i, n) => ({ assetId: i.assetId, packId: i.packId, packName: i.packName, addedAt: i.addedAt, archived: i.archived, image: { id: views[n].id, thumbUrl: views[n].thumbUrl, imageUrl: views[n].imageUrl, originalFilename: views[n].originalFilename, width: views[n].width, height: views[n].height } }));
+  return items.map((i, n) => ({ assetId: i.assetId, packId: i.packId, packName: i.packName, addedAt: i.addedAt, archived: i.archived, image: { id: views[n].id, importKey: views[n].importKey ?? null, thumbUrl: views[n].thumbUrl, imageUrl: views[n].imageUrl, originalFilename: views[n].originalFilename, width: views[n].width, height: views[n].height } }));
 }
 
 /** A job as the API returns it, with its image and its outputs (signed URLs). */
@@ -103,7 +103,7 @@ export async function serializeJobs(views: import('./batches').JobView[]) {
     status: v.job.status, provider: v.job.provider, isTest: isTestProvider(v.job.provider), providerJobId: v.job.providerJobId,
     error: v.job.status === 'failed' || v.job.status === 'submit_unknown' ? { code: v.job.errorCode, message: v.job.errorMessage, retryable: v.job.errorRetryable } : null,
     createdAt: v.job.createdAt, startedAt: v.job.startedAt, finishedAt: v.job.finishedAt,
-    source: { thumbUrl: urls.get(v.asset.thumbKey ?? v.asset.storageKey) ?? null, originalFilename: v.asset.originalFilename, archived: v.asset.archivedAt !== null },
+    source: { thumbUrl: urls.get(v.asset.thumbKey ?? v.asset.storageKey) ?? null, originalFilename: v.asset.originalFilename, importKey: v.asset.importKey ?? null, archived: v.asset.archivedAt !== null },
     outputs: v.outputs.map((o) => ({ id: o.id, thumbUrl: urls.get(o.thumbKey ?? o.storageKey) ?? null, imageUrl: null, width: o.width, height: o.height, reviewStatus: o.reviewStatus, createdAt: o.createdAt })),
   }));
 }
@@ -119,7 +119,7 @@ export async function serializeOutputs(views: import('./outputs').OutputView[], 
     thumbUrl: urls.get(v.output.thumbKey ?? v.output.storageKey) ?? null, imageUrl: opts.full ? (urls.get(v.output.storageKey) ?? null) : null,
     job: { id: v.job.id, attempt: v.job.attempt, retryOfJobId: v.job.retryOfJobId, status: v.job.status, providerJobId: v.job.providerJobId, provider: v.job.provider },
     batch: { id: v.batch.id, createdAt: v.batch.createdAt, createdBy: v.batch.createdBy },
-    source: { assetId: v.asset.id, packId: v.asset.packId, packName: v.packName, originalFilename: v.asset.originalFilename, thumbUrl: urls.get(v.asset.thumbKey ?? v.asset.storageKey) ?? null, archived: v.asset.archivedAt !== null },
+    source: { assetId: v.asset.id, packId: v.asset.packId, packName: v.packName, originalFilename: v.asset.originalFilename, importKey: v.asset.importKey ?? null, thumbUrl: urls.get(v.asset.thumbKey ?? v.asset.storageKey) ?? null, archived: v.asset.archivedAt !== null },
     character: { thumbUrl: urls.get(characterThumbKey(v.batch.characterKey) ?? '') ?? null },
   }));
 }

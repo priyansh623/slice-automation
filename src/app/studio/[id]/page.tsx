@@ -1,10 +1,6 @@
-'use client';
+import ProjectFlow from '@/components/studio/ProjectFlow';
 
-import { useParams } from 'next/navigation';
-import AppShell from '@/components/AppShell';
-import ProjectView from '@/components/studio/ProjectView';
-
-export default function StudioProjectPage() {
-  const { id } = useParams<{ id: string }>();
-  return <AppShell fullscreen><ProjectView projectId={Number(id)} /></AppShell>;
+export default async function StudioProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <ProjectFlow projectId={Number(id)} />;
 }

@@ -507,8 +507,8 @@ describe('C2: a submission whose outcome is unknown is never treated as a failur
   });
 
   it('the UI offers no automatic retry for an unknown job: only a confirmed "Generate again anyway"', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'src/components/studio/ResultsPanel.tsx'), 'utf8');
-    expect(src).toMatch(/submit_unknown: \{ label: 'Needs attention'/);
+    const src = fs.readFileSync(path.join(ROOT, 'src/components/studio/ProjectFlow.tsx'), 'utf8');
+    expect(src).toMatch(/attention: \['Needs attention'/);
     expect(src).toMatch(/window\.confirm\([^)]*charged twice/);
     expect(src).toMatch(/Generate again anyway/);
     expect(src).toMatch(/confirmDuplicate: true/);
@@ -659,16 +659,14 @@ describe('C3: the web app and the worker must agree before anything is queued', 
   });
 
   it('the UI marks test output on every card, in the zoomed view and on its job; and the selection panel says TEST MODE', () => {
-    const results = fs.readFileSync(path.join(ROOT, 'src/components/studio/ResultsPanel.tsx'), 'utf8');
-    expect(results).toMatch(/TEST · NOT REAL/);
-    expect(results.match(/<TestBadge \/>/g)!.length).toBeGreaterThanOrEqual(3);              // job chip, output card, zoomed view
-    expect(results).toMatch(/\{o\.isTest &&/);
-    expect(results).toMatch(/\{zoom\.isTest &&/);
-    expect(results).toMatch(/\{j\.isTest &&/);
-    const panel = fs.readFileSync(path.join(ROOT, 'src/components/studio/SelectionPanel.tsx'), 'utf8');
-    expect(panel).toMatch(/TEST MODE/);
-    expect(panel).toMatch(/Provider mismatch/);
-    expect(panel).toMatch(/!generation\.ready/);
+    const flow = fs.readFileSync(path.join(ROOT, 'src/components/studio/ProjectFlow.tsx'), 'utf8');
+    expect(flow).toMatch(/TEST · NOT REAL/);
+    expect(flow.match(/<TestBadge \/>/g)!.length).toBeGreaterThanOrEqual(2);                // job row, output card
+    expect(flow).toMatch(/o!\.isTest &&/);
+    expect(flow).toMatch(/\{j\.isTest &&/);
+    expect(flow).toMatch(/TEST MODE/);
+    expect(flow).toMatch(/Provider mismatch/);
+    expect(flow).toMatch(/generation\.ready/);
   });
 
   it('mock mode is never on unless it is switched on: no default, and the worker reports "disabled"', async () => {

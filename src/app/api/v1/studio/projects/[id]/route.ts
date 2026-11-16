@@ -3,8 +3,9 @@ import { studioRoute, readJson, parseId } from '@/lib/studio/api';
 import { getProject, setProjectArchived, updateProject } from '@/lib/studio/projects';
 import { serializeProject } from '@/lib/studio/project-api';
 
-export const GET = studioRoute<{ id: string }>(async ({ params }) => {
-  return NextResponse.json({ project: await serializeProject(await getProject(parseId(params.id)), { full: true }) });
+export const GET = studioRoute<{ id: string }>(async ({ params, user }) => {
+  const project = await getProject(parseId(params.id));
+  return NextResponse.json({ project: { ...(await serializeProject(project, { full: true })), ownerEmail: project.createdBy === user.id ? (user.email ?? null) : null } });
 });
 
 // Renames the project and/or saves the complete script, and/or archives or restores it ({ archived: true | false }). Everything

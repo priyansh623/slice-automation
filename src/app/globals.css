@@ -886,3 +886,28 @@ input, textarea, select { font-family: var(--font); }
   .screen-workspace { grid-template-columns: 1fr; }
   .screen-context-panel { position: static; }
 }
+
+/* ── Character B-roll Studio (supplied design): hover, focus and animation rules the inline styles cannot express ─────────── */
+@keyframes stu-pulse-dot { 0%, 80%, 100% { opacity: .3; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+@keyframes stu-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.stu-pd { width: 7px; height: 7px; border-radius: 50%; background: #6C47FF; animation: stu-pulse-dot 1.4s ease-in-out infinite; }
+.stu-pd:nth-child(2) { animation-delay: .2s; }
+.stu-pd:nth-child(3) { animation-delay: .4s; }
+.stu-sk { background: linear-gradient(90deg, #F4F4F5 25%, #E4E4E7 50%, #F4F4F5 75%); background-size: 200% 100%; animation: stu-shimmer 1.5s infinite; }
+.stu-primary:hover { background: #5A36E8 !important; }
+.stu-ghost:hover { background: #F6F6F4 !important; }
+.stu-dash:hover { background: #EFEBFF !important; }
+.stu-focus:focus { border-color: #6C47FF !important; box-shadow: 0 0 0 3px rgba(108, 71, 255, 0.1); }
+.stu-focus-b:focus { border-color: #6C47FF !important; }
+.stu-row:hover { background: #FAFAF8; }
+.stu-trash:hover { background: #FEF2F2 !important; border-color: #FECACA !important; color: #DC2626 !important; }
+.stu-tile:hover { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
+.stu-pack:hover { border-color: #6C47FF !important; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important; }
+.stu-navbtn:hover { background: #F6F6F4; color: #111113; }
+
+/* The supplied design's elements are sized with the browser default (content-box); the app's reset is border-box. Studio screens follow the design. */
+.stu-scope, .stu-scope *, .stu-scope *::before, .stu-scope *::after { box-sizing: content-box; }
+.stu-scope button { padding: 1px 6px; } /* the browser defaults the prototype relies on where it sets no padding */
+.stu-scope input { padding: 1px 2px; }
+.stu-scope textarea { padding: 2px; }
+.stu-scope button, .stu-scope select { box-sizing: border-box; } /* the browser default for these two, as in the prototype */

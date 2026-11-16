@@ -37,7 +37,7 @@ export default function ImportPanel({ asset }: { asset: StudioAsset }) {
       {attention.length > 0 && (
         <div style={{ ...box, borderColor: '#FDE68A', background: '#FFFBEB' }} role="note" aria-label="Needs review">
           <div style={{ ...h, color: '#92400E' }}>Needs review</div>
-          {attention.map((r, i) => <div key={i} style={{ font: '400 12px/1.45 Satoshi', color: '#78350F', marginBottom: 3 }}>{KIND_TEXT[r.kind] ?? r.kind}{r.note ? ` ${r.note}` : ''}</div>)}
+          {attention.map((r, i) => <div key={i} style={{ font: '400 12px/1.45 Satoshi', color: '#78350F', marginBottom: 3 }}>{r.note?.startsWith('The pack is a judgement call') ? r.note : `${KIND_TEXT[r.kind] ?? r.kind}${r.note ? ` ${r.note}` : ''}`}</div>)}
         </div>
       )}
       {(info.brand.slice || info.brand.thirdParty || info.flags.length > 0) && (
