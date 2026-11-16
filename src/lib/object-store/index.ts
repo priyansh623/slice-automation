@@ -161,6 +161,30 @@ export class Storage {
     return r2.signedSizedUpload(bucket, key, contentType, size, expiresInSeconds);
   }
 
+  /** True when R2 is configured. */
+  r2Configured(): boolean {
+    return this.d.r2 !== null;
+  }
+
+  /**
+   * Stores a new file in R2 and nowhere else. Unlike put(), this never falls back to Supabase and ignores
+   * STORAGE_WRITE_PROVIDER and STORAGE_FAILOVER: if R2 is not configured or the write fails, it throws. Used for Character
+   * B-roll Studio files, which must live in R2. The write is create-only (an existing key throws ObjectExistsError), and the
+   * file is recorded in the registry so readers look in R2.
+   */
+  async putR2Only(bucket: BucketName, key: string, body: Buffer, opts: PutOptions): Promise<{ provider: 'r2' }> {
+    if (!this.d.r2) throw new Error('R2 is not configured, so this file cannot be stored (it is never stored in Supabase instead).');
+    await this.d.r2.put(bucket, key, body, opts);
+    await this.d.register({ bucket, key, provider: 'r2', sizeBytes: body.length, contentType: opts.contentType });
+    return { provider: 'r2' };
+  }
+
+  /** Reads a file from R2 only (no Supabase fallback). Throws ObjectNotFoundError if R2 does not have it. */
+  async downloadR2Only(bucket: BucketName, key: string): Promise<Buffer> {
+    if (!this.d.r2) throw new Error('R2 is not configured.');
+    return this.d.r2.download(bucket, key);
+  }
+
   /** What R2 itself holds for a key (no Supabase fallback). null if R2 does not have it or is not configured. */
   async headR2(bucket: BucketName, key: string): Promise<ObjectInfo | null> {
     return this.d.r2 ? this.d.r2.head(bucket, key) : null;

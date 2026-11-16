@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, Settings2, MessageSquare, LayoutDashboard, LibraryBig } from 'lucide-react';
+import { FolderOpen, Settings2, MessageSquare, LayoutDashboard, LibraryBig, Images, Clapperboard } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   const projectsActive = pathname.startsWith('/video-projects');
   const brollActive = pathname.startsWith('/broll');
+  const packsActive = pathname.startsWith('/studio/repository');
+  const studioActive = pathname.startsWith('/studio') && !packsActive;
   const settingsActive = pathname.startsWith('/admin/settings');
   const dashboardActive = pathname.startsWith('/admin/dashboard');
 
@@ -82,6 +84,48 @@ export default function Sidebar() {
         }}>
           <LibraryBig size={19} />
           B-roll
+        </button>
+      </Link>
+
+      {/* Character B-roll Studio */}
+      <Link href="/studio" style={{ textDecoration: 'none' }}>
+        <button style={{
+          width: 60,
+          padding: '9px 0 8px',
+          border: 'none',
+          borderRadius: 10,
+          background: navBg(studioActive),
+          color: navFg(studioActive),
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          cursor: 'pointer',
+          font: '500 11px/1 Satoshi',
+        }}>
+          <Clapperboard size={19} />
+          Studio
+        </button>
+      </Link>
+
+      {/* Scene Pack Repository (Character B-roll Studio) */}
+      <Link href="/studio/repository" style={{ textDecoration: 'none' }}>
+        <button style={{
+          width: 60,
+          padding: '9px 0 8px',
+          border: 'none',
+          borderRadius: 10,
+          background: navBg(packsActive),
+          color: navFg(packsActive),
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          cursor: 'pointer',
+          font: '500 11px/1 Satoshi',
+        }}>
+          <Images size={19} />
+          Packs
         </button>
       </Link>
 
