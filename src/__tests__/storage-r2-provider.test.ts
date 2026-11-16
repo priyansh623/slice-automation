@@ -108,6 +108,18 @@ describe('R2Provider.signedSizedUpload (browser-direct uploads)', () => {
     expect(up.url).not.toContain('super-secret-value');
   });
 
+  it('puts no checksum in the presigned URL (R2 would enforce the empty-body CRC32 against the real upload and the browser would report a CORS-style failure)', async () => {
+    const r2 = new R2Provider(config);
+    for (const url of [
+      (await r2.signedSizedUpload('uploads', 'k.png', 'image/png', 1000, 900)).url,
+      (await r2.signedUpload('uploads', 'k.png', 'image/png', 900)).url,
+    ]) {
+      const q = new URL(url).searchParams;
+      expect(q.has('x-amz-checksum-crc32')).toBe(false);
+      expect(q.has('x-amz-sdk-checksum-algorithm')).toBe(false);
+    }
+  });
+
   it('a different size gives a different signature, so a larger file cannot reuse the URL', async () => {
     const r2 = new R2Provider(config);
     const a = new URL((await r2.signedSizedUpload('uploads', 'k.mp4', 'video/mp4', 1000, 900)).url).searchParams.get('X-Amz-Signature');

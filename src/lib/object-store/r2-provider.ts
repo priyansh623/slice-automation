@@ -34,6 +34,12 @@ const isMissing = (e: unknown): boolean => statusOf(e) === 404 || (e as { name?:
 export class R2Provider implements StorageProvider {
   readonly name = 'r2' as const;
   private readonly client: S3Client;
+  /**
+   * Used only to presign browser uploads. Newer AWS SDKs put the CRC32 of the (empty) body into a presigned PUT URL, which R2 then
+   * enforces against the real upload: it fails the checksum and the browser reports a CORS-style network error. WHEN_REQUIRED keeps
+   * the checksum out of the URL. Server-side requests keep using `client`, unchanged.
+   */
+  private readonly presignClient: S3Client;
 
   constructor(private readonly config: R2Config, client?: S3Client) {
     const clientConfig: S3ClientConfig = {
@@ -42,6 +48,7 @@ export class R2Provider implements StorageProvider {
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
     };
     this.client = client ?? new S3Client(clientConfig);
+    this.presignClient = client ?? new S3Client({ ...clientConfig, requestChecksumCalculation: 'WHEN_REQUIRED', responseChecksumValidation: 'WHEN_REQUIRED' });
   }
 
   private bucketOf(bucket: BucketName): string {
@@ -123,7 +130,7 @@ export class R2Provider implements StorageProvider {
 
   async signedUpload(bucket: BucketName, key: string, contentType: string, expiresInSeconds: number): Promise<SignedUpload> {
     const url = await getSignedUrl(
-      this.client,
+      this.presignClient,
       new PutObjectCommand({ Bucket: this.bucketOf(bucket), Key: key, ContentType: contentType }),
       { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type']) },
     );
@@ -137,7 +144,7 @@ export class R2Provider implements StorageProvider {
    */
   async signedSizedUpload(bucket: BucketName, key: string, contentType: string, contentLength: number, expiresInSeconds: number): Promise<SignedUpload> {
     const url = await getSignedUrl(
-      this.client,
+      this.presignClient,
       new PutObjectCommand({ Bucket: this.bucketOf(bucket), Key: key, ContentType: contentType, ContentLength: contentLength }),
       { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type', 'content-length']) },
     );
