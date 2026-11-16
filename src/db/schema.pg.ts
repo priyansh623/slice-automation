@@ -346,6 +346,7 @@ export const studioPacks = pgTable('studio_packs', {
   description: text('description'),
   profile: jsonb('profile'),                               // AI-derived summary used for recommendations
   profileStale: boolean('profile_stale').notNull().default(true),
+  importKey: text('import_key'),                           // permanent external identity (migration 0027); set once, unique
   archivedAt: bigint('archived_at', { mode: 'number' }),
   createdBy: uuid('created_by').notNull(),
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
@@ -365,6 +366,8 @@ export const studioAssets = pgTable('studio_assets', {
   height: integer('height'),
   sha256: text('sha256').notNull(),
   ingestGroup: text('ingest_group'),
+  // Permanent identity of the SOURCE IMAGE (IMG-001...). A row is one version of it in one pack; archived older versions keep the key, one ACTIVE row may carry it.
+  importKey: text('import_key'),
   analysisStatus: text('analysis_status').notNull().default('pending'), // pending | processing | completed | failed | skipped
   analysisError: text('analysis_error'),
   analysisAttempts: integer('analysis_attempts').notNull().default(0),
@@ -376,13 +379,15 @@ export const studioAssets = pgTable('studio_assets', {
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
 
-// AI output and manual edits are separate columns. The value of a field is the manual one if its key is present in
-// `manual` (even a deliberate null), otherwise the AI one. Re-analysis writes `ai` only. search_tsv (generated, in the
-// migration) is not declared here: it is queried with raw SQL.
+// Three metadata layers, kept apart. The value of a field is decided per field: the manual one if its key is present in `manual`
+// (even a deliberate null = cleared on purpose), else the imported one (`imported.fields`), else the AI one. Re-analysis writes `ai`
+// only; a person's edit writes `manual` only; an import writes `imported` only. search_tsv (generated, in the migration) is not
+// declared here: it is queried with raw SQL.
 export const studioAssetMetadata = pgTable('studio_asset_metadata', {
   assetId: integer('asset_id').primaryKey().references(() => studioAssets.id),
   ai: jsonb('ai'),
   manual: jsonb('manual').notNull().default({}),
+  imported: jsonb('imported').notNull().default({}),       // migration 0027: { fields, composition, operational, technical, source, status, version, lineage }
   aiModel: text('ai_model'),
   aiVersion: integer('ai_version'),
   aiAnalyzedAt: bigint('ai_analyzed_at', { mode: 'number' }),

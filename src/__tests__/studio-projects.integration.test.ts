@@ -214,7 +214,7 @@ describe('script analysis and recommendations', () => {
     const k = await pack('Kitchens');
     const id = await newProject();
     await call(projectPut, { method: 'PUT', params: P(id), body: { script: 'Breakfast.' } });
-    holder.create = vi.fn(async () => toolReply([{ pack_id: k, score: 0.8, reasons: ['r'], moments: ['m'] }]));
+    holder.create = vi.fn(async () => toolReply([{ pack_id: k, score: 0.8, reasons: ['Breakfast in the kitchen'], moments: ['m'] }]));
     await call(analyze, { method: 'POST', params: P(id) });
     await call(analyze, { method: 'POST', params: P(id) });
     expect(holder.create).toHaveBeenCalledTimes(1);

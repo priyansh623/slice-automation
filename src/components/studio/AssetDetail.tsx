@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api, FIELD_LABELS, FIELD_ORDER, type MetaKey, type StudioAsset } from '@/lib/studio/client';
+import ImportPanel from './ImportPanel';
 
 interface Props {
   asset: StudioAsset;
@@ -12,7 +13,7 @@ interface Props {
 }
 
 const asText = (v: string | string[] | null | undefined): string => (Array.isArray(v) ? v.join(', ') : (v ?? ''));
-const chip = (p: string) => (p === 'manual' ? { t: 'Edited by you', bg: '#FEF3C7', fg: '#92400E' } : p === 'ai' ? { t: 'AI', bg: '#EDE9FE', fg: '#6D28D9' } : { t: 'Empty', bg: '#F3F4F6', fg: '#6B7280' });
+const chip = (p: string) => (p === 'manual' ? { t: 'Edited by you', bg: '#FEF3C7', fg: '#92400E' } : p === 'imported' ? { t: 'Imported', bg: '#DBEAFE', fg: '#1D4ED8' } : p === 'ai' ? { t: 'AI', bg: '#EDE9FE', fg: '#6D28D9' } : { t: 'Empty', bg: '#F3F4F6', fg: '#6B7280' });
 
 /** The image, its analysis state, and every metadata field with where its value came from. Edits are saved as manual values. */
 export default function AssetDetail({ asset, onChange, onClose, readOnly }: Props) {
@@ -69,8 +70,9 @@ export default function AssetDetail({ asset, onChange, onClose, readOnly }: Prop
             {!readOnly && !asset.archived && <button onClick={reanalyse} disabled={busy || asset.analysisStatus === 'processing'} className="btn btn-secondary" style={{ height: 28, padding: '0 10px', fontSize: 12 }}>{asset.analysisStatus === 'failed' ? 'Retry analysis' : 'Re-analyse'}</button>}
           </div>
           {asset.analysisError && <div role="alert" style={{ font: '400 12px/1.4 Satoshi', color: '#B91C1C', marginTop: 4 }}>{asset.analysisError}</div>}
-          <div style={{ font: '400 11px/1.4 Satoshi', color: '#75757C', marginTop: 4 }}>Re-analysis replaces the AI values only. Anything you edited is kept.</div>
+          <div style={{ font: '400 11px/1.4 Satoshi', color: '#75757C', marginTop: 4 }}>Re-analysis replaces the AI values only. Imported values and anything you edited are kept.</div>
         </div>
+        <ImportPanel asset={asset} />
 
         {FIELD_ORDER.map((k) => {
           const c = chip(asset.provenance[k]);
@@ -81,7 +83,7 @@ export default function AssetDetail({ asset, onChange, onClose, readOnly }: Prop
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
                 <label style={{ font: '600 12px Satoshi' }}>{FIELD_LABELS[k]}</label>
                 <span style={{ padding: '0 6px', borderRadius: 999, background: c.bg, color: c.fg, font: '500 10px/1.6 Satoshi' }}>{c.t}</span>
-                {!readOnly && asset.provenance[k] === 'manual' && <button onClick={() => revert(k)} disabled={busy} style={{ border: 'none', background: 'none', color: '#6C47FF', font: '500 11px Satoshi', cursor: 'pointer' }}>Use AI value</button>}
+                {!readOnly && asset.provenance[k] === 'manual' && <button onClick={() => revert(k)} disabled={busy} style={{ border: 'none', background: 'none', color: '#6C47FF', font: '500 11px Satoshi', cursor: 'pointer' }}>{asset.importInfo ? 'Use imported or AI value' : 'Use AI value'}</button>}
               </div>
               {multiline ? <textarea rows={3} {...common} /> : <input type="text" {...common} />}
               {k === 'tags' && <div style={{ font: '400 11px Satoshi', color: '#75757C', marginTop: 2 }}>Separate tags with commas.</div>}

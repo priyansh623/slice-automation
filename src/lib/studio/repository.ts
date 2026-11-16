@@ -10,7 +10,7 @@
 import { and, asc, count, eq, gt, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { studioAssetMetadata, studioAssets, studioPacks } from '@/db/schema.pg';
-import { applyManualPatch, effectiveMetadata, type ManualPatch, type MetadataRecord } from './metadata';
+import { applyManualPatch, effectiveMetadata, type ImportedLayer, type ManualPatch, type MetadataRecord } from './metadata';
 
 export class StudioError extends Error {
   constructor(message: string, public readonly status: number, public readonly code: string) {
@@ -108,6 +108,8 @@ export interface AssetView {
   asset: AssetRow;
   ai: MetadataRecord | null;
   manual: MetadataRecord;
+  /** What an import supplied (scene fields, composition, provenance, review flags). {} when nothing was imported. */
+  imported: ImportedLayer;
   metadata: ReturnType<typeof effectiveMetadata>;
   aiAnalyzedAt: number | null;
 }
@@ -115,7 +117,8 @@ export interface AssetView {
 function toView(asset: AssetRow, meta: MetaRow | null): AssetView {
   const ai = (meta?.ai as MetadataRecord | null) ?? null;
   const manual = (meta?.manual as MetadataRecord | null) ?? {};
-  return { asset, ai, manual, metadata: effectiveMetadata(ai, manual), aiAnalyzedAt: meta?.aiAnalyzedAt ?? null };
+  const imported = (meta?.imported as ImportedLayer | null) ?? {};
+  return { asset, ai, manual, imported, metadata: effectiveMetadata(ai, manual, imported), aiAnalyzedAt: meta?.aiAnalyzedAt ?? null };
 }
 
 export interface ListAssetsOptions {
@@ -262,4 +265,92 @@ export async function setAssetArchived(assetId: number, archived: boolean, userI
   }
   await db.update(studioPacks).set({ profileStale: true, updatedAt: now }).where(eq(studioPacks.id, view.asset.packId));
   return getAssetView(assetId);
+}
+
+
+// ── Import support (migration 0027) ─────────────────────────────────────────
+
+/** A pack by its permanent import key (archived ones included). */
+export async function findPackByImportKey(importKey: string): Promise<PackRow | null> {
+  return (await db.select().from(studioPacks).where(eq(studioPacks.importKey, importKey)).limit(1))[0] ?? null;
+}
+
+/** Creates a pack with a permanent key, or returns the one that already has it. A pack's name and description are never overwritten here. */
+export async function createImportedPack(input: { importKey: string; name: string; description: string }, userId: string): Promise<{ pack: PackRow; created: boolean }> {
+  const existing = await findPackByImportKey(input.importKey);
+  if (existing) return { pack: existing, created: false };
+  const now = Date.now();
+  try {
+    const [row] = await db.insert(studioPacks).values({ name: cleanName(input.name), description: cleanDescription(input.description), importKey: input.importKey, createdBy: userId, createdAt: now, updatedAt: now }).returning();
+    return { pack: row, created: true };
+  } catch (err) {
+    if (isUniqueViolation(err)) { const again = await findPackByImportKey(input.importKey); if (again) return { pack: again, created: false }; }
+    throw err;
+  }
+}
+
+/** Every database row (version) of a source image, oldest first. At most one is active. */
+export async function listAssetVersions(importKey: string): Promise<AssetRow[]> {
+  return db.select().from(studioAssets).where(eq(studioAssets.importKey, importKey)).orderBy(asc(studioAssets.id));
+}
+
+export interface NewImportedAsset extends NewAsset {
+  importKey: string;
+  imported: ImportedLayer;
+  /** 'skipped' keeps the AI worker off an image whose metadata was imported. */
+  analysisStatus: 'pending' | 'skipped';
+  /** The active row this one replaces (changed content or a new pack): it is archived in the SAME transaction. Never deleted. */
+  supersedesAssetId?: number | null;
+}
+
+/**
+ * Registers one VERSION of a source image. In one transaction it archives the row it supersedes (if any), inserts the new asset
+ * with the permanent import_key, and stores the imported layer. Calling it again for the same file returns the existing row.
+ * The old row, its R2 object and its history are untouched.
+ */
+export async function registerImportedAsset(input: NewImportedAsset, userId: string): Promise<{ asset: AssetRow; created: boolean }> {
+  const now = Date.now();
+  const same = (await db.select().from(studioAssets).where(eq(studioAssets.storageKey, input.storageKey)).limit(1))[0];
+  if (same) return { asset: same, created: false };
+  return db.transaction(async (tx) => {
+    const pack = (await tx.select().from(studioPacks).where(eq(studioPacks.id, input.packId)).limit(1))[0];
+    if (!pack) throw new StudioError('Scene Pack not found.', 404, 'pack_not_found');
+    if (pack.archivedAt) throw new StudioError('This Scene Pack is archived. Restore it before adding images.', 409, 'pack_archived');
+    if (input.supersedesAssetId) {
+      const old = (await tx.select().from(studioAssets).where(eq(studioAssets.id, input.supersedesAssetId)).limit(1))[0];
+      if (!old || old.importKey !== input.importKey) throw new StudioError('The version being replaced does not belong to this image.', 409, 'version_mismatch');
+      if (!old.archivedAt) {
+        await tx.update(studioAssets).set({ archivedAt: now, archivedBy: userId, updatedAt: now }).where(eq(studioAssets.id, old.id));
+        await tx.update(studioPacks).set({ profileStale: true, updatedAt: now }).where(eq(studioPacks.id, old.packId));
+      }
+    }
+    const [asset] = await tx.insert(studioAssets).values({
+      packId: input.packId, storageKey: input.storageKey, thumbKey: input.thumbKey, originalFilename: input.originalFilename,
+      mime: input.mime, sizeBytes: input.sizeBytes, sha256: input.sha256, width: input.width, height: input.height,
+      ingestGroup: input.ingestGroup, importKey: input.importKey, analysisStatus: input.analysisStatus, createdBy: userId, createdAt: now, updatedAt: now,
+    }).returning();
+    await tx.insert(studioAssetMetadata).values({ assetId: asset.id, ai: null, manual: {}, imported: input.imported, createdAt: now, updatedAt: now });
+    await tx.update(studioPacks).set({ profileStale: true, updatedAt: now }).where(eq(studioPacks.id, input.packId));
+    return { asset, created: true };
+  });
+}
+
+/** Replaces ONLY the imported layer of an asset (a re-import). The manual and AI layers are not touched. */
+export async function replaceImportedLayer(assetId: number, imported: ImportedLayer): Promise<void> {
+  const now = Date.now();
+  const [row] = await db.update(studioAssetMetadata).set({ imported, updatedAt: now }).where(eq(studioAssetMetadata.assetId, assetId)).returning({ id: studioAssetMetadata.assetId });
+  if (!row) throw new StudioError('Image not found.', 404, 'asset_not_found');
+  const a = (await db.select({ packId: studioAssets.packId }).from(studioAssets).where(eq(studioAssets.id, assetId)).limit(1))[0];
+  if (a) await db.update(studioPacks).set({ profileStale: true, updatedAt: now }).where(eq(studioPacks.id, a.packId));
+}
+
+/** Follows a renamed source file: only the display file name changes (the identity, the key and the content do not). */
+export async function setAssetOriginalFilename(assetId: number, originalFilename: string): Promise<void> {
+  await db.update(studioAssets).set({ originalFilename, updatedAt: Date.now() }).where(eq(studioAssets.id, assetId));
+}
+
+/** Records a thumbnail made after the asset was registered (a repair). Only fills in a missing key; an existing key is never replaced. */
+export async function setAssetThumbKey(assetId: number, thumbKey: string): Promise<boolean> {
+  const rows = await db.update(studioAssets).set({ thumbKey, updatedAt: Date.now() }).where(and(eq(studioAssets.id, assetId), isNull(studioAssets.thumbKey))).returning({ id: studioAssets.id });
+  return rows.length > 0;
 }

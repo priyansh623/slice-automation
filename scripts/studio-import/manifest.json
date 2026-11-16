@@ -1,0 +1,5069 @@
+{
+  "manifestVersion": 1,
+  "sourceDirectory": "Scene Packs ",
+  "packs": [
+    {
+      "key": "cafes-restaurants-eating-out",
+      "letter": "A",
+      "name": "Cafés, Restaurants & Eating Out",
+      "description": "Cafés, restaurants, pizza outlets, a dessert parlour, a street tea stall and a tea-shop counter: meals, drinks, desserts, takeaway and paying."
+    },
+    {
+      "key": "home-life",
+      "letter": "B",
+      "name": "Home Life",
+      "description": "Home kitchen, living-room sofa, bedroom and a decorated party room: cooking, relaxing, using a phone or laptop at home."
+    },
+    {
+      "key": "workspace-laptop",
+      "letter": "C",
+      "name": "Workspace & Laptop",
+      "description": "Home or office desks and tables: laptop work, notebooks and phone use at a desk."
+    },
+    {
+      "key": "gym-fitness",
+      "letter": "D",
+      "name": "Gym & Fitness",
+      "description": "Gym floor and machines: barbell row, barbell curl and lat pulldown."
+    },
+    {
+      "key": "travel-outdoors",
+      "letter": "E",
+      "name": "Travel & Outdoors",
+      "description": "A roadside motorbike, a waterfall and a misty hill trail."
+    },
+    {
+      "key": "lounge-relaxed-spaces",
+      "letter": "F",
+      "name": "Lounge & Relaxed Spaces",
+      "description": "Two lounges: a sunlit window lounge and a hotel-style lounge."
+    },
+    {
+      "key": "plain-backdrop-portraits-talking-head",
+      "letter": "G",
+      "name": "Plain Backdrop: Portraits & Talking Head",
+      "description": "Neutral standing, selfie and microphone shots on plain walls."
+    },
+    {
+      "key": "plain-backdrop-phone-payment-moments",
+      "letter": "H",
+      "name": "Plain Backdrop: Phone & Payment Moments",
+      "description": "Phone use, a card or app screen shown to camera, and a receipt moment."
+    }
+  ],
+  "images": [
+    {
+      "importKey": "IMG-001",
+      "source": {
+        "folder": "1",
+        "file": "main_image.png",
+        "relativePath": "1/main_image.png"
+      },
+      "sha256": "6ae95d5e08b7a5f97768ca725d4e112aeb61e9b54b38850064b20e839c418a76",
+      "sha1": "a127c3814f726541a194b8546988754836c8ebaf",
+      "sizeBytes": 5808814,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "portrait",
+        "laptop",
+        "phone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "posing portrait",
+          "objects_props": "laptop (Apple logo visible), smartphone on table",
+          "camera_angle": "eye level",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "natural soft window - Soft warm daylight from the left, creamy wall, low contrast",
+          "description": "Warm cream wall behind a round wooden table with a laptop and phone. Chin resting on fist, looking at camera beside an open laptop.",
+          "tags": [
+            "laptop",
+            "cafe or home table",
+            "warm tones",
+            "portrait",
+            "work from anywhere",
+            "freelancer",
+            "thinking about money",
+            "intro shot",
+            "talking head",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning on table",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand on chin; other arm on table"
+        },
+        "operational": {
+          "flags": [
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "notes": [
+              "Apple logo on laptop lid"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-005"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5808814,
+          "sha1": "a127c3814f726541a194b8546988754836c8ebaf",
+          "sha256": "6ae95d5e08b7a5f97768ca725d4e112aeb61e9b54b38850064b20e839c418a76",
+          "texture_score": 50.8
+        }
+      }
+    },
+    {
+      "importKey": "IMG-002",
+      "source": {
+        "folder": "1",
+        "file": "cooking_at_home.png",
+        "relativePath": "1/cooking_at_home.png"
+      },
+      "sha256": "4f553bf509e8a8a0db32f76f37e24e5a9b70a1a5975b7404affc220d7642bef7",
+      "sha1": "84d62983937e7460ab439c9a4f0aa3a2c8368a17",
+      "sizeBytes": 5577280,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "kitchen",
+        "cooking",
+        "burgers"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home kitchen",
+          "activity": "cooking",
+          "objects_props": "frying pan with patties, kettle, red appliance, orange oven glove, paper towels, extractor hood, induction hob",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "right, medium",
+          "lighting": "indoor mixed - Bright overhead kitchen light, mixed warm and white, some reflection on black stone",
+          "description": "Home kitchen with white cabinets, black backsplash, extractor hood, induction hob. Standing at the stove flipping burgers or patties in a frying pan, smiling at camera.",
+          "tags": [
+            "cooking",
+            "kitchen",
+            "home",
+            "standing",
+            "casual",
+            "food",
+            "cooking at home",
+            "saving money",
+            "homemade meal",
+            "weekend",
+            "eating out alternative",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing leaning toward stove",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "right",
+          "subject_scale": "medium",
+          "hand_interaction": "one hand on pan handle; other on counter"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {
+            "notes": [
+              "Small sticker on hood; appliance label text"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5577280,
+          "sha1": "84d62983937e7460ab439c9a4f0aa3a2c8368a17",
+          "sha256": "4f553bf509e8a8a0db32f76f37e24e5a9b70a1a5975b7404affc220d7642bef7",
+          "texture_score": 127.4
+        }
+      }
+    },
+    {
+      "importKey": "IMG-003",
+      "source": {
+        "folder": "1",
+        "file": "drinking_coffee.png",
+        "relativePath": "1/drinking_coffee.png"
+      },
+      "sha256": "c7865eacb1c15bba0696e9b15064ce6e427713c9254e7f05143e45c9a4562977",
+      "sha1": "b7c64bcf2a229a888b249210596ae53d26b40cf6",
+      "sizeBytes": 5891710,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "coffee",
+        "cafe table"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe",
+          "activity": "drinking coffee",
+          "objects_props": "latte glass with straw, plate with cutlery, empty tumbler, napkins, menu boards",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm pendant and spot lights, wood and rattan tones, soft contrast",
+          "description": "Wooden table in a cafe with rattan ceiling pendant, display shelves and pastry counter. Sitting with chin on hand and thumbs up beside an iced latte and a plate.",
+          "tags": [
+            "cafe",
+            "coffee",
+            "wood table",
+            "warm light",
+            "lifestyle",
+            "coffee break",
+            "treat yourself",
+            "recommend",
+            "cafe spending",
+            "daily expenses",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand on cheek; other hand thumbs up"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {
+            "notes": [
+              "Menu boards and cafe branding in background (not legible)"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5891710,
+          "sha1": "b7c64bcf2a229a888b249210596ae53d26b40cf6",
+          "sha256": "c7865eacb1c15bba0696e9b15064ce6e427713c9254e7f05143e45c9a4562977",
+          "texture_score": 110.7
+        }
+      }
+    },
+    {
+      "importKey": "IMG-004",
+      "source": {
+        "folder": "1",
+        "file": "eating_food.png",
+        "relativePath": "1/eating_food.png"
+      },
+      "sha256": "35ee4b5f455c66487312e7acbcaa728a4ca7d6495fd825017e1d18e6737ba458",
+      "sha1": "3a7c21f681d664386df3d7f6522b89357196d16e",
+      "sizeBytes": 5818361,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "soup",
+        "dessert",
+        "dining"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe",
+          "activity": "eating dessert",
+          "objects_props": "soup bowl, tiramisu slice, plate, tall glass with straw, napkin",
+          "camera_angle": "slightly high",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm pendant lamps and daylight from the back, higher contrast",
+          "description": "Cafe dining area with dark wood table, slate floor, hanging lamps and other diners. Holding a spoon over soup, with a tiramisu slice and drinks on the table.",
+          "tags": [
+            "cafe",
+            "eating",
+            "dessert",
+            "soup",
+            "dark wood",
+            "lifestyle",
+            "eating out",
+            "foodie",
+            "treat yourself",
+            "splitting bill",
+            "cafe spending",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning forward",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand with spoon; other hand on table"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {
+            "notes": [
+              "Plate and bowl have small printed logos"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5818361,
+          "sha1": "3a7c21f681d664386df3d7f6522b89357196d16e",
+          "sha256": "35ee4b5f455c66487312e7acbcaa728a4ca7d6495fd825017e1d18e6737ba458",
+          "texture_score": 101
+        }
+      }
+    },
+    {
+      "importKey": "IMG-005",
+      "source": {
+        "folder": "1",
+        "file": "looking_at_phone.png",
+        "relativePath": "1/looking_at_phone.png"
+      },
+      "sha256": "13930f4e0895f73894c61bfc15c213861d22bd112f2fa77cb01d18fff72135a5",
+      "sha1": "e19062137f857753c1cd2be497d176fffbe03ed1",
+      "sizeBytes": 5977717,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "phone",
+        "desk"
+      ],
+      "confidence": "medium",
+      "alternatePack": "plain-backdrop-phone-payment-moments",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Phone use at a desk; the desk is the identifiable setting.",
+          "alt_pack": "plain-backdrop-phone-payment-moments"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "looking at phone",
+          "objects_props": "phone (dark case), laptop",
+          "camera_angle": "eye level",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "natural soft window - Same soft warm daylight as main_image",
+          "description": "Same cream wall and round table as main_image. Chin on fist, right hand holds phone, eyes down on screen.",
+          "tags": [
+            "phone",
+            "checking balance",
+            "laptop",
+            "warm tones",
+            "checking app",
+            "notification",
+            "payment reminder",
+            "scrolling",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning on table",
+          "gaze": "down at phone",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "phone in right hand held low at left; other hand on chin"
+        },
+        "operational": {
+          "flags": [
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "notes": [
+              "Apple logo on laptop lid"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-001"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Phone use at a desk; the desk is the identifiable setting.",
+              "alt_pack": "plain-backdrop-phone-payment-moments"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5977717,
+          "sha1": "e19062137f857753c1cd2be497d176fffbe03ed1",
+          "sha256": "13930f4e0895f73894c61bfc15c213861d22bd112f2fa77cb01d18fff72135a5",
+          "texture_score": 53
+        }
+      }
+    },
+    {
+      "importKey": "IMG-006",
+      "source": {
+        "folder": "1",
+        "file": "showing_phone.png",
+        "relativePath": "1/showing_phone.png"
+      },
+      "sha256": "1d980eed910395a8d16c1279e92ddac24b3d7b465d3ecf9222a84c789bdb726e",
+      "sha1": "e5b29d8a478c791dda4afa510ff54a1b481817b9",
+      "sizeBytes": 5996178,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "card app",
+        "phone demo"
+      ],
+      "confidence": "medium",
+      "alternatePack": "plain-backdrop-phone-payment-moments",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "App screen shown at a desk; the desk is the identifiable setting.",
+          "alt_pack": "plain-backdrop-phone-payment-moments"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "showing phone to camera",
+          "objects_props": "smartphone showing a purple credit card app screen, laptop",
+          "camera_angle": "eye level",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "natural soft window - Same soft warm daylight as main_image",
+          "description": "Same cream wall and round table as main_image. Holds phone up beside face with app screen facing camera.",
+          "tags": [
+            "phone screen",
+            "fintech app",
+            "product demo",
+            "credit card app",
+            "app demo",
+            "product reveal",
+            "recommend app",
+            "credit card offer",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand raises phone next to head; other hand on table"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Phone screen shows a 'UPI credit card' app UI (Credit tab, purple/pink cards)"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "App screen shown at a desk; the desk is the identifiable setting.",
+              "alt_pack": "plain-backdrop-phone-payment-moments"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5996178,
+          "sha1": "e5b29d8a478c791dda4afa510ff54a1b481817b9",
+          "sha256": "1d980eed910395a8d16c1279e92ddac24b3d7b465d3ecf9222a84c789bdb726e",
+          "texture_score": 87.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-007",
+      "source": {
+        "folder": "1",
+        "file": "working.png",
+        "relativePath": "1/working.png"
+      },
+      "sha256": "60435e8579c2f1726ee33092ac6d878d4b924ef43599b98d4652cf8c9e4bc19e",
+      "sha1": "3578918c76356e7027ccf8c18ee6682eca179ea2",
+      "sizeBytes": 5904827,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "laptop",
+        "typing"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "working on laptop",
+          "objects_props": "laptop",
+          "camera_angle": "eye level",
+          "framing": "medium close up",
+          "character_position": "center right, large",
+          "lighting": "natural soft window - Same soft warm daylight as main_image",
+          "description": "Same cream wall and round table as main_image. Typing on an open laptop, looking down at the keyboard.",
+          "tags": [
+            "laptop",
+            "working",
+            "typing",
+            "working late",
+            "deadline pressure",
+            "side hustle",
+            "freelancer",
+            "study",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning forward",
+          "gaze": "down at laptop",
+          "face_visibility": "partial looking down",
+          "subject_position": "center right",
+          "subject_scale": "large",
+          "hand_interaction": "right hand on keyboard"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL"
+          ],
+          "brand": {
+            "notes": [
+              "Apple logo on laptop lid"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5904827,
+          "sha1": "3578918c76356e7027ccf8c18ee6682eca179ea2",
+          "sha256": "60435e8579c2f1726ee33092ac6d878d4b924ef43599b98d4652cf8c9e4bc19e",
+          "texture_score": 54.3
+        }
+      }
+    },
+    {
+      "importKey": "IMG-008",
+      "source": {
+        "folder": "2",
+        "file": "main_image.png",
+        "relativePath": "2/main_image.png"
+      },
+      "sha256": "4bc03dac9902cd96dbe30df70288c52b2ac1c659006f6133ae23f5c36a43c8d9",
+      "sha1": "1fb4633eab116dcf400d3a429fdd8091ee5d1513",
+      "sizeBytes": 6546438,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "selfie",
+        "phone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Mirror selfie against a lit tiled wall; no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "selfie pose",
+          "objects_props": "smartphone in dark case",
+          "camera_angle": "eye level",
+          "framing": "close up",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm accent light along the wall, soft face light",
+          "description": "Beige tiled wall with a lit vertical column and wood trim. Holds a phone up in frame right as if taking a mirror or selfie shot, smiling.",
+          "tags": [
+            "portrait",
+            "selfie",
+            "phone",
+            "warm light",
+            "intro shot",
+            "talking head",
+            "selfie style",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds phone at right edge"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Mirror selfie against a lit tiled wall; no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6546438,
+          "sha1": "1fb4633eab116dcf400d3a429fdd8091ee5d1513",
+          "sha256": "4bc03dac9902cd96dbe30df70288c52b2ac1c659006f6133ae23f5c36a43c8d9",
+          "texture_score": 37.4
+        }
+      }
+    },
+    {
+      "importKey": "IMG-009",
+      "source": {
+        "folder": "2",
+        "file": "eating_icecream.png",
+        "relativePath": "2/eating_icecream.png"
+      },
+      "sha256": "1daef392ce8fbde90003948d62474f8559acbe8bc67011e083714e6e12613173",
+      "sha1": "41372d700c5cfd103fcf183302fa16d498fa19c6",
+      "sizeBytes": 5857505,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "dessert",
+        "night"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe",
+          "activity": "eating dessert",
+          "objects_props": "ice cream cup, wooden spoon, wooden table",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "night mixed artificial - Night with glass reflections, bright lens flare at top right, mixed warm and cool lights",
+          "description": "Dessert parlour at night seen through a glass window with reflections. Sitting on a table edge eating ice cream from a cup with a wooden spoon.",
+          "tags": [
+            "night",
+            "ice cream",
+            "dessert",
+            "glass reflection",
+            "street view",
+            "lens flare",
+            "late night treat",
+            "date night",
+            "night out",
+            "small indulgence",
+            "indoor"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand holds cup; other hand holds spoon"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "REFLECTION",
+            "NIGHT_LOW_LIGHT",
+            "LENS_FLARE",
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {
+            "notes": [
+              "Menu screens and shop signs reflected in glass"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5857505,
+          "sha1": "41372d700c5cfd103fcf183302fa16d498fa19c6",
+          "sha256": "1daef392ce8fbde90003948d62474f8559acbe8bc67011e083714e6e12613173",
+          "texture_score": 79.7
+        }
+      }
+    },
+    {
+      "importKey": "IMG-010",
+      "source": {
+        "folder": "2",
+        "file": "eating_pizza.png",
+        "relativePath": "2/eating_pizza.png"
+      },
+      "sha256": "d2bea0f9f8b7207804254a1189e6d3cc8628ad9a76f21dc420c38e9339ceefe2",
+      "sha1": "011137ad6ed3fa56b6748270e50c484ad53df110",
+      "sizeBytes": 7059598,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "pizza",
+        "frappe"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "fast food outlet",
+          "activity": "eating pizza",
+          "objects_props": "pepperoni pizza slice, iced caramel frappe with straw and cream, round wood table",
+          "camera_angle": "eye level",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "indoor mixed - Mixed warm bulbs and white spots, slightly bright, bokeh lights",
+          "description": "Colourful pizza outlet with painted mural, track lights, ducting and tables. Biting a pepperoni pizza slice held in one hand, other hand cupped below.",
+          "tags": [
+            "pizza",
+            "fast food",
+            "frappe",
+            "mural",
+            "restaurant",
+            "eating",
+            "eating out",
+            "cravings",
+            "student life",
+            "splurge",
+            "food delivery",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "partial mouth on pizza",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand holds slice; other hand cups below"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_BG"
+          ],
+          "brand": {
+            "notes": [
+              "Wall mural graphics; none legible"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7059598,
+          "sha1": "011137ad6ed3fa56b6748270e50c484ad53df110",
+          "sha256": "d2bea0f9f8b7207804254a1189e6d3cc8628ad9a76f21dc420c38e9339ceefe2",
+          "texture_score": 72
+        }
+      }
+    },
+    {
+      "importKey": "IMG-011",
+      "source": {
+        "folder": "2",
+        "file": "holding_pizzas.png",
+        "relativePath": "2/holding_pizzas.png"
+      },
+      "sha256": "ff152a96271f2e0c4d89170983fc5335cec9b354bc713775d57a70a7307a39d6",
+      "sha1": "deecda1ee3d8d4074d07263192356f7125458f29",
+      "sizeBytes": 4840856,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "takeaway",
+        "food delivery",
+        "party"
+      ],
+      "confidence": "medium",
+      "alternatePack": "cafes-restaurants-eating-out",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "The pack is a judgement call; the setting note below explains why.",
+          "alt_pack": "cafes-restaurants-eating-out"
+        },
+        {
+          "kind": "setting_discrepancy",
+          "note": "Setting discrepancy: the inventory names a different setting, but the image looks like a decorated home or party room (garlands, balloons, a wall clock). Placed in Home Life; the setting is not confirmed, so it needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "decorated room (home or party setting, to be confirmed)",
+          "activity": "carrying food boxes",
+          "objects_props": "stack of Domino's pizza boxes, wall clock, garlands, balloon, shelf with items",
+          "camera_angle": "slightly low",
+          "framing": "medium long",
+          "character_position": "right, medium",
+          "lighting": "indoor warm artificial - Warm lights, stone textured wall, slightly yellow cast",
+          "description": "A decorated room with marigold garlands, balloons and a wall clock, with a stack of pizza boxes being carried.",
+          "tags": [
+            "pizza",
+            "delivery",
+            "party",
+            "stack of boxes",
+            "celebration",
+            "domino's",
+            "party order",
+            "group order",
+            "food delivery",
+            "splitting bill",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing leaning back",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "right",
+          "subject_scale": "medium",
+          "hand_interaction": "both arms wrap the boxes"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "BRAND_TEXT",
+            "MULTI_PERSON_BG",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {
+            "third_party": true,
+            "notes": [
+              "Domino's logos on boxes; wall clock"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "The pack is a judgement call; the setting note below explains why.",
+              "alt_pack": "cafes-restaurants-eating-out"
+            },
+            {
+              "kind": "setting_discrepancy",
+              "note": "Setting discrepancy: the inventory names a different setting, but the image looks like a decorated home or party room (garlands, balloons, a wall clock). Placed in Home Life; the setting is not confirmed, so it needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 4840856,
+          "sha1": "deecda1ee3d8d4074d07263192356f7125458f29",
+          "sha256": "ff152a96271f2e0c4d89170983fc5335cec9b354bc713775d57a70a7307a39d6",
+          "texture_score": 49.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-012",
+      "source": {
+        "folder": "2",
+        "file": "looking_at_empty_pocket.png",
+        "relativePath": "2/looking_at_empty_pocket.png"
+      },
+      "sha256": "b8b66ea76274247f735b6980e7666b6de101fc5d2753034e2b69f44561e94140",
+      "sha1": "fb7d303e6165d1a5e10b6f355df71eb85f31a3a1",
+      "sizeBytes": 6987814,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "empty wallet",
+        "overspending"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "fast food outlet",
+          "activity": "checking empty wallet",
+          "objects_props": "open brown leather wallet, iced caramel frappe, cafe tables, backpacks",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "indoor mixed - Same mixed warm lighting",
+          "description": "Same pizza outlet with mural, tables and diners in the back. Opens an empty brown wallet with a disappointed face.",
+          "tags": [
+            "wallet",
+            "empty pocket",
+            "broke",
+            "pizza outlet",
+            "out of money",
+            "payday wait",
+            "cant pay",
+            "month end",
+            "pain point",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "down at wallet",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold the open wallet"
+        },
+        "operational": {
+          "flags": [
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6987814,
+          "sha1": "fb7d303e6165d1a5e10b6f355df71eb85f31a3a1",
+          "sha256": "b8b66ea76274247f735b6980e7666b6de101fc5d2753034e2b69f44561e94140",
+          "texture_score": 82.2
+        }
+      }
+    },
+    {
+      "importKey": "IMG-013",
+      "source": {
+        "folder": "2",
+        "file": "looking_at_phone.png",
+        "relativePath": "2/looking_at_phone.png"
+      },
+      "sha256": "2448f437fdbc16ca3ff95a8fc80eb1b956dc000fc26afc58ca7365dfd49f57cf",
+      "sha1": "67fb4e77cd7e6484e2f6d72d826f72d35b49f438",
+      "sizeBytes": 6552855,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "phone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Plain wall, no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "looking at phone",
+          "objects_props": "smartphone in dark case",
+          "camera_angle": "slightly high",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Same warm accent light as main_image",
+          "description": "Same beige tiled wall with lit column and wood trim as main_image. Smiling down at phone held with both hands.",
+          "tags": [
+            "phone",
+            "texting",
+            "warm light",
+            "good news",
+            "payment received",
+            "cashback",
+            "checking app",
+            "chatting",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at phone",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone at chest"
+        },
+        "operational": {
+          "flags": [],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Plain wall, no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6552855,
+          "sha1": "67fb4e77cd7e6484e2f6d72d826f72d35b49f438",
+          "sha256": "2448f437fdbc16ca3ff95a8fc80eb1b956dc000fc26afc58ca7365dfd49f57cf",
+          "texture_score": 53.1
+        }
+      }
+    },
+    {
+      "importKey": "IMG-014",
+      "source": {
+        "folder": "2",
+        "file": "paying_at_counter.png",
+        "relativePath": "2/paying_at_counter.png"
+      },
+      "sha256": "a2d9f97113f993a62fe62b191738d6e761c60f8a4b4301206f13b5ea12a10430",
+      "sha1": "fce6b5eb92e33e943a3f9ac3354ed1aaae43a427",
+      "sizeBytes": 5798687,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "qr payment",
+        "cashless",
+        "tea shop"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "The pack is a judgement call; the setting note below explains why."
+        },
+        {
+          "kind": "setting_discrepancy",
+          "note": "Setting discrepancy: the inventory says retail counter; the image shows a cafe or tea-shop counter (cake fridge, tea menu)."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "retail counter pos",
+          "activity": "paying with phone",
+          "objects_props": "smartphone, QR POS machine, drinks fridge, menu card, glass door",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "left, large",
+          "lighting": "indoor mixed - Cool fridge light at right, warm bokeh through glass, mixed",
+          "description": "Shop counter with a handheld QR card machine, drinks fridge and glass door at night. Standing at a counter tapping or scanning a phone at the POS, looking down to the side.",
+          "tags": [
+            "payment",
+            "upi",
+            "qr code",
+            "pos",
+            "counter",
+            "profile",
+            "cashless",
+            "pay with upi",
+            "scan and pay",
+            "checkout",
+            "cashless payment",
+            "card payment",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing side profile",
+          "gaze": "down at phone",
+          "face_visibility": "profile",
+          "subject_position": "left",
+          "subject_scale": "large",
+          "hand_interaction": "one hand holds phone to POS"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "FACE_PARTIAL",
+            "CROPPED_SUBJECT",
+            "BRAND_TEXT",
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {
+            "third_party": true,
+            "notes": [
+              "'CASHLESS ONLY' sign; menu card text; QR code on machine"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "The pack is a judgement call; the setting note below explains why."
+            },
+            {
+              "kind": "setting_discrepancy",
+              "note": "Setting discrepancy: the inventory says retail counter; the image shows a cafe or tea-shop counter (cake fridge, tea menu)."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5798687,
+          "sha1": "fce6b5eb92e33e943a3f9ac3354ed1aaae43a427",
+          "sha256": "a2d9f97113f993a62fe62b191738d6e761c60f8a4b4301206f13b5ea12a10430",
+          "texture_score": 126.8
+        }
+      }
+    },
+    {
+      "importKey": "IMG-015",
+      "source": {
+        "folder": "2",
+        "file": "posing_for_food.png",
+        "relativePath": "2/posing_for_food.png"
+      },
+      "sha256": "837723fa15038c97e7eb05edf2024dcb1f29107421538a609ea8b7ce2885492a",
+      "sha1": "719d7494d23f6abf714f909cf49f82e02848a9aa",
+      "sizeBytes": 5750990,
+      "width": 1520,
+      "height": 2688,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "restaurant meal",
+        "phone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "restaurant",
+          "activity": "posing with food",
+          "objects_props": "plate with curry bowl and flatbread, salad, cutlery, phone on table, plants, wine glasses",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm overhead light with greenery, even exposure",
+          "description": "Restaurant with plants, lattice ceiling, pendant globe light and a blue wall. Seated at a table with a plate of curry and salad, one hand on a phone at lower left.",
+          "tags": [
+            "restaurant",
+            "dining",
+            "plated food",
+            "plants",
+            "table setting",
+            "dining out",
+            "date night",
+            "restaurant bill",
+            "treat",
+            "eating out",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "one hand rests on phone at table edge"
+        },
+        "operational": {
+          "flags": [
+            "ALT_DIMENSION",
+            "NEAR_DUP_BG"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGB",
+          "has_alpha_channel": false,
+          "width": 1520,
+          "height": 2688,
+          "aspect_ratio": 0.5655,
+          "orientation": "portrait",
+          "file_size_bytes": 5750990,
+          "sha1": "719d7494d23f6abf714f909cf49f82e02848a9aa",
+          "sha256": "837723fa15038c97e7eb05edf2024dcb1f29107421538a609ea8b7ce2885492a",
+          "texture_score": 99.6
+        }
+      }
+    },
+    {
+      "importKey": "IMG-016",
+      "source": {
+        "folder": "2",
+        "file": "showing_phone_to_screen.png",
+        "relativePath": "2/showing_phone_to_screen.png"
+      },
+      "sha256": "c72de7480915de2b085d2ddb89f69a6fdd6c72d3776e7a1d81d017dc037e5fcc",
+      "sha1": "5255bfba8e5b68fab1e3ac39f13ca9190894b8ba",
+      "sizeBytes": 6989706,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "card app",
+        "restaurant"
+      ],
+      "confidence": "medium",
+      "alternatePack": "plain-backdrop-phone-payment-moments",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "App screen shown in a restaurant booth; the restaurant is the identifiable setting.",
+          "alt_pack": "plain-backdrop-phone-payment-moments"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "restaurant",
+          "activity": "showing phone to camera",
+          "objects_props": "phone with purple credit card app, plate with curry bowl, cutlery",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "left, medium",
+          "lighting": "indoor warm artificial - Same warm overhead light",
+          "description": "Same restaurant with plants, lattice ceiling and blue wall as posing_for_food. Holding a phone toward camera showing a credit card app, plate of food in the foreground.",
+          "tags": [
+            "restaurant",
+            "phone screen",
+            "fintech app",
+            "credit card app",
+            "product demo",
+            "app demo",
+            "pay at restaurant",
+            "credit card offer",
+            "dining out",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "left",
+          "subject_scale": "medium",
+          "hand_interaction": "both hands hold phone at chest"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_BG"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Phone screen shows a 'UPI credit card' app UI"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "App screen shown in a restaurant booth; the restaurant is the identifiable setting.",
+              "alt_pack": "plain-backdrop-phone-payment-moments"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6989706,
+          "sha1": "5255bfba8e5b68fab1e3ac39f13ca9190894b8ba",
+          "sha256": "c72de7480915de2b085d2ddb89f69a6fdd6c72d3776e7a1d81d017dc037e5fcc",
+          "texture_score": 94.8
+        }
+      }
+    },
+    {
+      "importKey": "IMG-017",
+      "source": {
+        "folder": "3",
+        "file": "main_image.png",
+        "relativePath": "3/main_image.png"
+      },
+      "sha256": "dd38c9bed05d9acea02d12fa51b227ead5bfa843688e59605cd6128a53c6abce",
+      "sha1": "06a830bf85d28d69cfa593cd8dd10b30f9ca46a9",
+      "sizeBytes": 6489233,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "neutral portrait"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home balcony wall",
+          "activity": "posing portrait",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center left, large",
+          "lighting": "natural bright window - Soft bright daylight, cool white wall, red brick accent",
+          "description": "White wall beside a red brick wall with a metal window grille. Standing straight with hands at sides, calm smile.",
+          "tags": [
+            "portrait",
+            "standing",
+            "brick wall",
+            "daylight",
+            "intro shot",
+            "talking head",
+            "relatable",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center left",
+          "subject_scale": "large",
+          "hand_interaction": "arms at sides"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-021"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6489233,
+          "sha1": "06a830bf85d28d69cfa593cd8dd10b30f9ca46a9",
+          "sha256": "dd38c9bed05d9acea02d12fa51b227ead5bfa843688e59605cd6128a53c6abce",
+          "texture_score": 91
+        }
+      }
+    },
+    {
+      "importKey": "IMG-018",
+      "source": {
+        "folder": "3",
+        "file": "cooking.png",
+        "relativePath": "3/cooking.png"
+      },
+      "sha256": "b3fd23d740b3794535be20b62966c3831198556a83bb3846bf74712c60454a2b",
+      "sha1": "079d7f05fa3910546350af5a1cfdebfd4eecf1a1",
+      "sizeBytes": 6945375,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "kitchen",
+        "noodles",
+        "steam"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home kitchen",
+          "activity": "cooking",
+          "objects_props": "steel pan of noodles, white bowls, tongs, wooden trivets, kettle, phone on counter, lunch box",
+          "camera_angle": "slightly high",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "indoor mixed - Overhead spotlights, cool white and warm wood, steam visible",
+          "description": "Modern kitchen with black marble counter, wooden cabinets, air conditioner and glass cabinet. Tossing noodles with tongs into a bowl, steam rising.",
+          "tags": [
+            "cooking",
+            "kitchen",
+            "noodles",
+            "steam",
+            "home",
+            "marble",
+            "cooking at home",
+            "saving money",
+            "homemade meal",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing leaning forward",
+          "gaze": "down at food",
+          "face_visibility": "partial looking down",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold tongs"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6945375,
+          "sha1": "079d7f05fa3910546350af5a1cfdebfd4eecf1a1",
+          "sha256": "b3fd23d740b3794535be20b62966c3831198556a83bb3846bf74712c60454a2b",
+          "texture_score": 121.3
+        }
+      }
+    },
+    {
+      "importKey": "IMG-019",
+      "source": {
+        "folder": "3",
+        "file": "looking_at_phone.png",
+        "relativePath": "3/looking_at_phone.png"
+      },
+      "sha256": "e24e5eaa4c7c590ec8a066ad4b2e42a08b1c177c92eecb594558771d50dd6a59",
+      "sha1": "51fac3efb42a4f5546cd30234c2f1c9fe78499bd",
+      "sizeBytes": 6609768,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "phone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Plain wall, no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home balcony wall",
+          "activity": "looking at phone",
+          "objects_props": "smartphone with grey case",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "natural bright window - Same bright daylight",
+          "description": "Same white wall with brick and grille as main_image. Standing and scrolling a phone with both hands.",
+          "tags": [
+            "phone",
+            "texting",
+            "daylight",
+            "standing",
+            "checking app",
+            "notification",
+            "bill reminder",
+            "online shopping",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at phone",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone"
+        },
+        "operational": {
+          "flags": [],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Plain wall, no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6609768,
+          "sha1": "51fac3efb42a4f5546cd30234c2f1c9fe78499bd",
+          "sha256": "e24e5eaa4c7c590ec8a066ad4b2e42a08b1c177c92eecb594558771d50dd6a59",
+          "texture_score": 99.7
+        }
+      }
+    },
+    {
+      "importKey": "IMG-020",
+      "source": {
+        "folder": "3",
+        "file": "scrolling_on_bed.png",
+        "relativePath": "3/scrolling_on_bed.png"
+      },
+      "sha256": "1ccaf51bdd5d61be41a32ee63d3668c6a18f220953b4b1cf9134ff85c3d4bc1f",
+      "sha1": "24b0a790408ffced0b826a20eeb5ddc8f72151d3",
+      "sizeBytes": 6989955,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "bedroom",
+        "phone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home bedroom",
+          "activity": "scrolling phone",
+          "objects_props": "smartphone with grey case, tufted headboard, pillow, striped bedsheet",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "center left, large",
+          "lighting": "natural soft window - Soft diffuse daylight, cream tones",
+          "description": "Bed with tufted ivory headboard, pillow and striped sheet. Reclining on bed against pillows scrolling the phone.",
+          "tags": [
+            "bed",
+            "bedroom",
+            "scrolling",
+            "relaxing",
+            "phone",
+            "online shopping",
+            "late night scrolling",
+            "checking offers",
+            "weekend lazy",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "reclined seated",
+          "gaze": "down at phone",
+          "face_visibility": "full",
+          "subject_position": "center left",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6989955,
+          "sha1": "24b0a790408ffced0b826a20eeb5ddc8f72151d3",
+          "sha256": "1ccaf51bdd5d61be41a32ee63d3668c6a18f220953b4b1cf9134ff85c3d4bc1f",
+          "texture_score": 110.6
+        }
+      }
+    },
+    {
+      "importKey": "IMG-021",
+      "source": {
+        "folder": "3",
+        "file": "showing_card.png",
+        "relativePath": "3/showing_card.png"
+      },
+      "sha256": "b63d411a1753c9c81c50f5711f49f128300d3aba78b950b08eb191f06256a042",
+      "sha1": "bebe13db6bdcb2ae917868a28d5d23bbe530f4c6",
+      "sizeBytes": 6542820,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "card",
+        "brand card"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home balcony wall",
+          "activity": "showing card to camera",
+          "objects_props": "red 'super slicer' card",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center, large",
+          "lighting": "natural bright window - Same bright daylight",
+          "description": "Same white wall with brick and grille as main_image. Holding a red metal card toward the camera with one hand.",
+          "tags": [
+            "credit card",
+            "product demo",
+            "fintech",
+            "red card",
+            "standing",
+            "card reveal",
+            "credit card offer",
+            "recommend card",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds card at chest"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "'super slicer' text printed on card"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-017"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6542820,
+          "sha1": "bebe13db6bdcb2ae917868a28d5d23bbe530f4c6",
+          "sha256": "b63d411a1753c9c81c50f5711f49f128300d3aba78b950b08eb191f06256a042",
+          "texture_score": 93.4
+        }
+      }
+    },
+    {
+      "importKey": "IMG-022",
+      "source": {
+        "folder": "4",
+        "file": "main_image.png",
+        "relativePath": "4/main_image.png"
+      },
+      "sha256": "c026d6cb7c83312bbfb94bec1d6f57ce00ba992752af5d534765fa25f4a56ce6",
+      "sha1": "ad4c540ea0cf3796e56917892149509caec31050",
+      "sizeBytes": 6063210,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "neutral portrait"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "posing portrait",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Even soft daylight, slight shadow on right",
+          "description": "Flat sage green painted wall with tiled floor at the bottom. Standing straight facing the camera with arms at sides.",
+          "tags": [
+            "portrait",
+            "standing",
+            "green wall",
+            "plain background",
+            "full front",
+            "intro shot",
+            "talking head",
+            "relatable",
+            "before after",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "arms at sides"
+        },
+        "operational": {
+          "flags": [],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6063210,
+          "sha1": "ad4c540ea0cf3796e56917892149509caec31050",
+          "sha256": "c026d6cb7c83312bbfb94bec1d6f57ce00ba992752af5d534765fa25f4a56ce6",
+          "texture_score": 26.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-023",
+      "source": {
+        "folder": "4",
+        "file": "looking_at_bill.png",
+        "relativePath": "4/looking_at_bill.png"
+      },
+      "sha256": "86cedd145e54082f7e66ad4160d5e994958cf541d6c55f3006847f3918c55587",
+      "sha1": "d48ffc1e9bb19030574ea042d835733021c0f231",
+      "sizeBytes": 6434664,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "receipt",
+        "bill shock"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "looking at bill",
+          "objects_props": "long thermal receipt (bill)",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Same even soft daylight",
+          "description": "Same sage green wall as main_image. Holding a very long printed receipt and looking at it in shock.",
+          "tags": [
+            "receipt",
+            "bill shock",
+            "expense",
+            "long receipt",
+            "overspending",
+            "credit card bill",
+            "hidden charges",
+            "pain point",
+            "monthly expenses",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at receipt",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "left hand holds receipt hanging down; right hand holds lower end"
+        },
+        "operational": {
+          "flags": [
+            "HAND_OBJECT_INTERACTION",
+            "FACE_PARTIAL"
+          ],
+          "brand": {
+            "notes": [
+              "Receipt printed text; small unreadable"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6434664,
+          "sha1": "d48ffc1e9bb19030574ea042d835733021c0f231",
+          "sha256": "86cedd145e54082f7e66ad4160d5e994958cf541d6c55f3006847f3918c55587",
+          "texture_score": 43.1
+        }
+      }
+    },
+    {
+      "importKey": "IMG-024",
+      "source": {
+        "folder": "4",
+        "file": "showing_slice_card.png",
+        "relativePath": "4/showing_slice_card.png"
+      },
+      "sha256": "e9eff9a6ad77921070e75548c6602ee22301c8c656836ce0635efe300eb93360",
+      "sha1": "b2dbd1f0c7e63fdf01b4717e29e79cf85f39176e",
+      "sizeBytes": 6322746,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "card",
+        "brand card"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "showing card to camera",
+          "objects_props": "red 'super slicer' card",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Same even soft daylight",
+          "description": "Same sage green wall as main_image. Holding up a red 'super slicer' card to the camera with right hand.",
+          "tags": [
+            "credit card",
+            "product demo",
+            "fintech",
+            "red card",
+            "green wall",
+            "card reveal",
+            "credit card offer",
+            "recommend card",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds card at shoulder height"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "'super slicer' text printed on card"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6322746,
+          "sha1": "b2dbd1f0c7e63fdf01b4717e29e79cf85f39176e",
+          "sha256": "e9eff9a6ad77921070e75548c6602ee22301c8c656836ce0635efe300eb93360",
+          "texture_score": 33.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-025",
+      "source": {
+        "folder": "4",
+        "file": "using_phone.png",
+        "relativePath": "4/using_phone.png"
+      },
+      "sha256": "719e0dbf9d2778eba438e1221c109cae97dea179296ceebc6ae562b09fc4ba1e",
+      "sha1": "dd472ca1ff24830d4f32766a9aa41868bc3f6177",
+      "sizeBytes": 5990494,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "app screen",
+        "from behind"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Seen from behind, no identifiable setting; face not visible."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "using phone",
+          "objects_props": "smartphone with ring chart app screen",
+          "camera_angle": "over shoulder",
+          "framing": "medium",
+          "character_position": "right, large",
+          "lighting": "flat diffuse indoor - Even soft daylight",
+          "description": "Sage green wall meeting a beige tile floor, shot from behind the shoulder. Seen from behind and above reading an app screen with a ring chart on the phone.",
+          "tags": [
+            "over the shoulder",
+            "phone screen",
+            "app ui",
+            "rear view",
+            "green wall",
+            "checking app",
+            "credit limit",
+            "bill tracking",
+            "app demo",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing leaning forward",
+          "gaze": "down at phone",
+          "face_visibility": "not visible",
+          "subject_position": "right",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone"
+        },
+        "operational": {
+          "flags": [
+            "FACE_NOT_VISIBLE",
+            "CROPPED_SUBJECT",
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Phone screen shows a ring chart style app UI"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Seen from behind, no identifiable setting; face not visible."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5990494,
+          "sha1": "dd472ca1ff24830d4f32766a9aa41868bc3f6177",
+          "sha256": "719e0dbf9d2778eba438e1221c109cae97dea179296ceebc6ae562b09fc4ba1e",
+          "texture_score": 30.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-026",
+      "source": {
+        "folder": "5",
+        "file": "main_image.png",
+        "relativePath": "5/main_image.png"
+      },
+      "sha256": "47e33ec7bf30156a1c5b2ec169cc36b5c8656a9fecbdeff88de8767ea581146f",
+      "sha1": "0a5857fe7384a8d20f415d106de64142dff9ecec",
+      "sizeBytes": 5757912,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "neutral portrait"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "posing portrait",
+          "objects_props": "coffee machine, wine glass",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Cool blue LED glow in the niche against dark matte doors, soft even front light",
+          "description": "Black wardrobe doors with a blue LED shelf niche holding glass and a coffee machine. Standing with hands in cargo pockets facing the camera.",
+          "tags": [
+            "portrait",
+            "standing",
+            "blue led",
+            "dark background",
+            "intro shot",
+            "talking head",
+            "fitness creator",
+            "urban",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "hands in pockets"
+        },
+        "operational": {
+          "flags": [
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "notes": [
+              "Graphic print on tee"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-028",
+            "IMG-033"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5757912,
+          "sha1": "0a5857fe7384a8d20f415d106de64142dff9ecec",
+          "sha256": "47e33ec7bf30156a1c5b2ec169cc36b5c8656a9fecbdeff88de8767ea581146f",
+          "texture_score": 55.2
+        }
+      }
+    },
+    {
+      "importKey": "IMG-027",
+      "source": {
+        "folder": "5",
+        "file": "bench_pressing.png",
+        "relativePath": "5/bench_pressing.png"
+      },
+      "sha256": "7103f82756344707fd04756ca762d6abcc537d9c8f9bce3a657a29cb4fed960f",
+      "sha1": "d4cd44a0c6a72d089d28a5ca8595494dd0152894",
+      "sizeBytes": 5891125,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "gym-fitness",
+      "secondaryConcepts": [
+        "barbell row",
+        "from behind"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "filename_mismatch",
+          "note": "Filename does not match the content (a bent-over barbell row)."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "gym",
+          "activity": "weightlifting",
+          "objects_props": "loaded barbell with red plates, red dumbbell rack, air conditioner unit, plants, windows",
+          "camera_angle": "rear 3 4",
+          "framing": "medium long",
+          "character_position": "center left, large",
+          "lighting": "natural bright window - Bright daylight from windows plus cool teal walls, high contrast",
+          "description": "Gym with teal wall, windows, red dumbbell rack, plants and an air conditioner unit. Bent over a loaded barbell with hands gripping the bar, seen from behind.",
+          "tags": [
+            "gym",
+            "barbell",
+            "weightlifting",
+            "rear view",
+            "fitness",
+            "workout",
+            "gym membership",
+            "fitness goals",
+            "new year",
+            "health",
+            "lifestyle",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "bent over",
+          "gaze": "away from camera",
+          "face_visibility": "not visible",
+          "subject_position": "center left",
+          "subject_scale": "large",
+          "hand_interaction": "both hands grip barbell"
+        },
+        "operational": {
+          "flags": [
+            "FACE_NOT_VISIBLE",
+            "FILENAME_MISMATCH",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {
+            "notes": [
+              "Plate numbers; none legible"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "filename_mismatch",
+              "note": "Filename does not match the content (a bent-over barbell row)."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5891125,
+          "sha1": "d4cd44a0c6a72d089d28a5ca8595494dd0152894",
+          "sha256": "7103f82756344707fd04756ca762d6abcc537d9c8f9bce3a657a29cb4fed960f",
+          "texture_score": 25.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-028",
+      "source": {
+        "folder": "5",
+        "file": "holding_a_mic.png",
+        "relativePath": "5/holding_a_mic.png"
+      },
+      "sha256": "d5e5f7ba1146fdac7309c6052e718480e544f62449c9b6126797553512bc33c4",
+      "sha1": "5b69bb1de1879fd8e65502349cf6659b8975738b",
+      "sizeBytes": 6049154,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "talking to camera",
+        "microphone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "talking to camera",
+          "objects_props": "small clip on microphone",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Same cool blue LED glow",
+          "description": "Same black wardrobe doors with blue LED niche as main_image. Speaking while holding a small clip on microphone at chest.",
+          "tags": [
+            "microphone",
+            "talking head",
+            "creator",
+            "podcast",
+            "testimonial",
+            "creator voiceover",
+            "review",
+            "ugc talking head",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand raises small mic near chest"
+        },
+        "operational": {
+          "flags": [
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "notes": [
+              "Graphic print on tee"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-026"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6049154,
+          "sha1": "5b69bb1de1879fd8e65502349cf6659b8975738b",
+          "sha256": "d5e5f7ba1146fdac7309c6052e718480e544f62449c9b6126797553512bc33c4",
+          "texture_score": 62.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-029",
+      "source": {
+        "folder": "5",
+        "file": "lifting_dumbell.png",
+        "relativePath": "5/lifting_dumbell.png"
+      },
+      "sha256": "b697dc6499c1f43f4625dabca974e7250bd72a143419463a32ed684c4dbf8976",
+      "sha1": "b424b32816b9408ed0639215975277e2fac6c7a1",
+      "sizeBytes": 5982681,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "gym-fitness",
+      "secondaryConcepts": [
+        "barbell curl"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "filename_mismatch",
+          "note": "Filename does not match the content (a barbell curl)."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "gym",
+          "activity": "weightlifting",
+          "objects_props": "barbell with red plates, squat rack, plates",
+          "camera_angle": "slightly low",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "natural bright window - Bright daylight from windows, teal walls, high contrast",
+          "description": "Same teal walled gym with windows, squat rack and plate storage. Standing with a barbell in both hands doing a curl, squinting to the side.",
+          "tags": [
+            "gym",
+            "barbell",
+            "curl",
+            "fitness",
+            "workout",
+            "sportswear",
+            "gym membership",
+            "fitness goals",
+            "health",
+            "lifestyle",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "away to side",
+          "face_visibility": "partial turned",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands grip barbell at thigh"
+        },
+        "operational": {
+          "flags": [
+            "FILENAME_MISMATCH",
+            "BRAND_TEXT",
+            "FACE_PARTIAL"
+          ],
+          "brand": {
+            "third_party": true,
+            "notes": [
+              "Under Armour style logo on top chest"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "filename_mismatch",
+              "note": "Filename does not match the content (a barbell curl)."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5982681,
+          "sha1": "b424b32816b9408ed0639215975277e2fac6c7a1",
+          "sha256": "b697dc6499c1f43f4625dabca974e7250bd72a143419463a32ed684c4dbf8976",
+          "texture_score": 35.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-030",
+      "source": {
+        "folder": "5",
+        "file": "rod_pulling.png",
+        "relativePath": "5/rod_pulling.png"
+      },
+      "sha256": "9d5764b9cc91762f81634d37c6811c4ae5aeb3cbcdf3df9ac37582091545f4c2",
+      "sha1": "cab38ebc4544256c0ae26ec7e85bf62cb1685d1f",
+      "sizeBytes": 6034306,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "gym-fitness",
+      "secondaryConcepts": [
+        "lat pulldown",
+        "cable machine"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "gym",
+          "activity": "weightlifting",
+          "objects_props": "lat pulldown machine, cable, bar, seat pad, LED light panels",
+          "camera_angle": "rear",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Cool white LED strips, dark surroundings, high contrast",
+          "description": "Dark modern gym with a cable lat pulldown machine and ceiling LED strips. Seated at a lat pulldown machine pulling the bar overhead, seen from behind.",
+          "tags": [
+            "gym",
+            "lat pulldown",
+            "rear view",
+            "fitness",
+            "workout",
+            "machine",
+            "gym membership",
+            "fitness goals",
+            "health",
+            "lifestyle",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "away from camera",
+          "face_visibility": "not visible",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands grip overhead bar"
+        },
+        "operational": {
+          "flags": [
+            "FACE_NOT_VISIBLE"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6034306,
+          "sha1": "cab38ebc4544256c0ae26ec7e85bf62cb1685d1f",
+          "sha256": "9d5764b9cc91762f81634d37c6811c4ae5aeb3cbcdf3df9ac37582091545f4c2",
+          "texture_score": 54.2
+        }
+      }
+    },
+    {
+      "importKey": "IMG-031",
+      "source": {
+        "folder": "5",
+        "file": "showing_card.png",
+        "relativePath": "5/showing_card.png"
+      },
+      "sha256": "8156e844d6f412fdc22db9dc0ff7ee296dc32d2c8053925880b21a6becb49c32",
+      "sha1": "cc6e1ca87f5feec247a17cbd144afe72a18fa3a5",
+      "sizeBytes": 5946552,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "card",
+        "brand card"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "showing card to camera",
+          "objects_props": "red card",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Same cool blue LED glow",
+          "description": "Same black wardrobe doors with blue LED niche. Holding a red card in front of the chest with one hand.",
+          "tags": [
+            "credit card",
+            "product demo",
+            "red card",
+            "card reveal",
+            "credit card offer",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds card; other hand in pocket"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Card text too small to read"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5946552,
+          "sha1": "cc6e1ca87f5feec247a17cbd144afe72a18fa3a5",
+          "sha256": "8156e844d6f412fdc22db9dc0ff7ee296dc32d2c8053925880b21a6becb49c32",
+          "texture_score": 62.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-032",
+      "source": {
+        "folder": "5",
+        "file": "showing_phone.png",
+        "relativePath": "5/showing_phone.png"
+      },
+      "sha256": "08a45db646a723c4521e113c2d70f0af1a9c89a72699e981521013d4dff97eb9",
+      "sha1": "0d176af050abf823c1b1a0087229f551460fd4b3",
+      "sizeBytes": 6089178,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "app screen",
+        "brand ui"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "showing phone to camera",
+          "objects_props": "phone with ring chart app screen",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Same cool blue LED glow",
+          "description": "Same black wardrobe doors with blue LED niche. Holding a phone up beside the shoulder showing a ring chart app.",
+          "tags": [
+            "phone screen",
+            "app ui",
+            "product demo",
+            "app demo",
+            "credit limit",
+            "spend tracking",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone near shoulder"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Phone screen shows a ring chart style app UI"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6089178,
+          "sha1": "0d176af050abf823c1b1a0087229f551460fd4b3",
+          "sha256": "08a45db646a723c4521e113c2d70f0af1a9c89a72699e981521013d4dff97eb9",
+          "texture_score": 57.4
+        }
+      }
+    },
+    {
+      "importKey": "IMG-033",
+      "source": {
+        "folder": "5",
+        "file": "using_phone.png",
+        "relativePath": "5/using_phone.png"
+      },
+      "sha256": "974d3fa70f015677431a774ebc3c593d514e5b4519cdef92b9f7c9c9b793d981",
+      "sha1": "07669a15e0083b8b238f0728270a5dcf57e9deca",
+      "sizeBytes": 5883683,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "phone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Plain wall, no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "using phone",
+          "objects_props": "phone with grey case",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor cool led - Same cool blue LED glow",
+          "description": "Same black wardrobe doors with blue LED niche. Looking down at a phone held with both hands.",
+          "tags": [
+            "phone",
+            "texting",
+            "dark background",
+            "checking app",
+            "notification",
+            "payment reminder",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at phone",
+          "face_visibility": "partial looking down",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone at waist"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-026"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Plain wall, no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 5883683,
+          "sha1": "07669a15e0083b8b238f0728270a5dcf57e9deca",
+          "sha256": "974d3fa70f015677431a774ebc3c593d514e5b4519cdef92b9f7c9c9b793d981",
+          "texture_score": 52.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-034",
+      "source": {
+        "folder": "6",
+        "file": "main_image.png",
+        "relativePath": "6/main_image.png"
+      },
+      "sha256": "7bc67cca83d72802669c47341f70899254a5cde13732dd11198351120830f390",
+      "sha1": "e0602ff09538dcbbd108528788c48253a125f448",
+      "sizeBytes": 6134004,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "talking to camera",
+        "explainer"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "talking to camera",
+          "objects_props": "potted plant",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Soft even white daylight, low contrast",
+          "description": "White room corner with a potted plant at lower left and window trim at the top. Standing with arms open, mid sentence.",
+          "tags": [
+            "talking head",
+            "standing",
+            "white room",
+            "plant",
+            "explainer",
+            "rant",
+            "problem statement",
+            "intro shot",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both arms open with hands cut at both edges"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6134004,
+          "sha1": "e0602ff09538dcbbd108528788c48253a125f448",
+          "sha256": "7bc67cca83d72802669c47341f70899254a5cde13732dd11198351120830f390",
+          "texture_score": 14.7
+        }
+      }
+    },
+    {
+      "importKey": "IMG-035",
+      "source": {
+        "folder": "6",
+        "file": "drinking_coffee.png",
+        "relativePath": "6/drinking_coffee.png"
+      },
+      "sha256": "3b6f2915ab9d23ded0255b37484eb5e576ecd74b7f4126780e44b324f100dd91",
+      "sha1": "b92d98abf60289feb1c566ebb244968e7ba73610",
+      "sizeBytes": 6475180,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "sofa",
+        "laptop",
+        "coffee"
+      ],
+      "confidence": "medium",
+      "alternatePack": "workspace-laptop",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "A living-room sofa is the identifiable setting; laptop work is the activity.",
+          "alt_pack": "workspace-laptop"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home living room",
+          "activity": "drinking coffee",
+          "objects_props": "ceramic mug, laptop, smartphone, tan leather sofa",
+          "camera_angle": "high",
+          "framing": "medium long",
+          "character_position": "left, medium",
+          "lighting": "natural soft window - Soft bright daylight, warm leather tones",
+          "description": "Tan leather sofa with a cream wall behind. Sipping coffee from a mug with a laptop on the lap.",
+          "tags": [
+            "sofa",
+            "laptop",
+            "coffee",
+            "work from home",
+            "relaxed",
+            "leather",
+            "coffee break",
+            "freelancer",
+            "morning routine",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated reclined",
+          "gaze": "down at mug",
+          "face_visibility": "partial mug covers mouth",
+          "subject_position": "left",
+          "subject_scale": "medium",
+          "hand_interaction": "one hand on laptop; other hand holds mug"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "CROPPED_SUBJECT",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "notes": [
+              "Apple logo on laptop"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "A living-room sofa is the identifiable setting; laptop work is the activity.",
+              "alt_pack": "workspace-laptop"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6475180,
+          "sha1": "b92d98abf60289feb1c566ebb244968e7ba73610",
+          "sha256": "3b6f2915ab9d23ded0255b37484eb5e576ecd74b7f4126780e44b324f100dd91",
+          "texture_score": 65.1
+        }
+      }
+    },
+    {
+      "importKey": "IMG-036",
+      "source": {
+        "folder": "6",
+        "file": "on_a_bike.png",
+        "relativePath": "6/on_a_bike.png"
+      },
+      "sha256": "87f295822242d613f686e3dc3f427010ef701cbfb8d7c86603dea7071e14de6a",
+      "sha1": "f3cb1bdc422254d0057a385730df78910b58980e",
+      "sizeBytes": 7433019,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "travel-outdoors",
+      "secondaryConcepts": [
+        "motorbike",
+        "road trip"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "The inventory says riding; the motorbike is parked."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "outdoor road",
+          "activity": "riding motorbike",
+          "objects_props": "Royal Enfield motorcycle, handlebar, mirror",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center right, medium",
+          "lighting": "outdoor golden hour - Low warm sun from the side, soft shadow, clear sky",
+          "description": "Dry scrub trees and a striped pole at a roadside with a clear sky. Sitting on a Royal Enfield motorcycle with hands on the handlebars facing camera.",
+          "tags": [
+            "outdoor",
+            "motorcycle",
+            "golden hour",
+            "road",
+            "travel",
+            "royal enfield",
+            "road trip",
+            "fuel expense",
+            "emi",
+            "vehicle loan",
+            "adventure"
+          ]
+        },
+        "composition": {
+          "pose": "seated on bike",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center right",
+          "subject_scale": "medium",
+          "hand_interaction": "both hands on handlebars"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_TEXT",
+            "CROPPED_SUBJECT",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "third_party": true,
+            "notes": [
+              "Royal Enfield logo on the fuel tank; striped pole"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "The inventory says riding; the motorbike is parked."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7433019,
+          "sha1": "f3cb1bdc422254d0057a385730df78910b58980e",
+          "sha256": "87f295822242d613f686e3dc3f427010ef701cbfb8d7c86603dea7071e14de6a",
+          "texture_score": 170.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-037",
+      "source": {
+        "folder": "6",
+        "file": "talking_on_a_phone.png",
+        "relativePath": "6/talking_on_a_phone.png"
+      },
+      "sha256": "170d54bdef81d8d5c9fe7ebced659c7cf54c55d1b16364d11db7a1deed35341a",
+      "sha1": "c67fe363d4e1dbb9e6fd467c9039af39b060f3f8",
+      "sizeBytes": 6215529,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "phone call"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Plain room, no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home interior other",
+          "activity": "phone call",
+          "objects_props": "phone at ear, potted plant",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Same soft even white daylight",
+          "description": "Same white room with plant at lower left. Holding a phone to the ear mid conversation.",
+          "tags": [
+            "phone call",
+            "talking",
+            "standing",
+            "white room",
+            "customer support call",
+            "urgent call",
+            "payment failed",
+            "dispute",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "partial phone near cheek",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds phone to ear"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Plain room, no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6215529,
+          "sha1": "c67fe363d4e1dbb9e6fd467c9039af39b060f3f8",
+          "sha256": "170d54bdef81d8d5c9fe7ebced659c7cf54c55d1b16364d11db7a1deed35341a",
+          "texture_score": 27.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-038",
+      "source": {
+        "folder": "7",
+        "file": "main_image.png",
+        "relativePath": "7/main_image.png"
+      },
+      "sha256": "6e5b1590f75b844ba3aad0dee6812a1c3132925dd159091544205af092fe208b",
+      "sha1": "b73751c0147317ca55e12fea50602206b141129c",
+      "sizeBytes": 7183663,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "relaxing",
+        "window view"
+      ],
+      "confidence": "medium",
+      "alternatePack": "travel-outdoors",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Sunlit lounge with a view of pine trees.",
+          "alt_pack": "travel-outdoors"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "posing portrait",
+          "objects_props": "tan leather cushion, rust leather sofa, plant",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "center left, medium",
+          "lighting": "natural bright window - Bright window daylight with sky glare, warm leather tones, high dynamic range",
+          "description": "Sunlit lounge with floor to ceiling windows showing pine trees, rust leather sofa and cushion. Reclining on a sofa, one hand adjusting sunglasses.",
+          "tags": [
+            "lounge",
+            "windows",
+            "sofa",
+            "travel vibe",
+            "pine trees",
+            "casual",
+            "travel",
+            "holiday",
+            "weekend",
+            "lifestyle",
+            "intro shot",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated reclined",
+          "gaze": "to camera behind sunglasses",
+          "face_visibility": "partial sunglasses",
+          "subject_position": "center left",
+          "subject_scale": "medium",
+          "hand_interaction": "one hand on sunglasses; other on knee"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-040",
+            "IMG-042"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Sunlit lounge with a view of pine trees.",
+              "alt_pack": "travel-outdoors"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7183663,
+          "sha1": "b73751c0147317ca55e12fea50602206b141129c",
+          "sha256": "6e5b1590f75b844ba3aad0dee6812a1c3132925dd159091544205af092fe208b",
+          "texture_score": 182.3
+        }
+      }
+    },
+    {
+      "importKey": "IMG-039",
+      "source": {
+        "folder": "7",
+        "file": "at_a_tapri.png",
+        "relativePath": "7/at_a_tapri.png"
+      },
+      "sha256": "80bc92d31e728cef152eafd9992fcc4d803ea91e912527e5d10dd851c1c8f623",
+      "sha1": "9584e8eb8df0c6c0b24428e3f244a2549c9e15b1",
+      "sizeBytes": 7697609,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "street food",
+        "tea stall",
+        "regional signage"
+      ],
+      "confidence": "medium",
+      "alternatePack": "travel-outdoors",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Street tea stall with non-English signage.",
+          "alt_pack": "travel-outdoors"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "street stall",
+          "activity": "using phone",
+          "objects_props": "phone, water jug, glass jars of biscuits, bananas, red cooler, wooden bench",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "right, large",
+          "lighting": "indoor mixed - Mixed shaded daylight from the street, strong contrast, cluttered",
+          "description": "Street tea stall with tarpaulin roof, water jug, biscuit jars, bananas and a red cooler. Standing at a tea stall counter reading the phone.",
+          "tags": [
+            "street",
+            "tea stall",
+            "tapri",
+            "phone",
+            "local",
+            "cluttered",
+            "india vibe",
+            "chai break",
+            "street payment",
+            "upi",
+            "small merchant",
+            "everyday spend",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at phone",
+          "face_visibility": "partial looking down",
+          "subject_position": "right",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone at chest"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "MULTI_PERSON_BG",
+            "BRAND_TEXT",
+            "REGIONAL_SIGNAGE",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {
+            "third_party": true,
+            "notes": [
+              "Green flag with red disc; Bengali script and 'star ship' text on cooler"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Street tea stall with non-English signage.",
+              "alt_pack": "travel-outdoors"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7697609,
+          "sha1": "9584e8eb8df0c6c0b24428e3f244a2549c9e15b1",
+          "sha256": "80bc92d31e728cef152eafd9992fcc4d803ea91e912527e5d10dd851c1c8f623",
+          "texture_score": 66.8
+        }
+      }
+    },
+    {
+      "importKey": "IMG-040",
+      "source": {
+        "folder": "7",
+        "file": "holding_mic.png",
+        "relativePath": "7/holding_mic.png"
+      },
+      "sha256": "adf08cfe138df74abf9973aad05694317d21d89ddfa80dc0cc90243530df99aa",
+      "sha1": "1ebdde0e5c3e0a4c793e0245265cfb211da32eb0",
+      "sizeBytes": 7002038,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "talking to camera",
+        "microphone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "talking to camera",
+          "objects_props": "small clip on mic, leather sofa",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "center, medium",
+          "lighting": "natural bright window - Same bright window daylight",
+          "description": "Same sunlit lounge as main_image. Speaking while holding a small clip on mic near the chin.",
+          "tags": [
+            "microphone",
+            "talking head",
+            "lounge",
+            "windows",
+            "creator",
+            "testimonial",
+            "travel vlog",
+            "review",
+            "creator voiceover",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated reclined",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "medium",
+          "hand_interaction": "right hand holds small mic near chin"
+        },
+        "operational": {
+          "flags": [
+            "HAND_OBJECT_INTERACTION",
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-038",
+            "IMG-042"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7002038,
+          "sha1": "1ebdde0e5c3e0a4c793e0245265cfb211da32eb0",
+          "sha256": "adf08cfe138df74abf9973aad05694317d21d89ddfa80dc0cc90243530df99aa",
+          "texture_score": 163.6
+        }
+      }
+    },
+    {
+      "importKey": "IMG-041",
+      "source": {
+        "folder": "7",
+        "file": "near_a_waterfall.png",
+        "relativePath": "7/near_a_waterfall.png"
+      },
+      "sha256": "2e51bc57831b163f2884c455ec958b5664dcfbb00ea313e128fa21c50a537a95",
+      "sha1": "99d3663e67de368429ab46603f4024f7a1d47ae0",
+      "sizeBytes": 7952032,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "travel-outdoors",
+      "secondaryConcepts": [
+        "waterfall",
+        "trekking pole",
+        "nature"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "outdoor waterfall",
+          "activity": "posing outdoors",
+          "objects_props": "trekking pole, boulder, waterfall",
+          "camera_angle": "slightly low",
+          "framing": "long full body",
+          "character_position": "bottom center, medium",
+          "lighting": "outdoor overcast - Soft bright daylight with white water highlights, dappled greens",
+          "description": "Rocky stream with a waterfall and moss covered boulder. Sitting on a boulder with a trekking pole and one arm raised.",
+          "tags": [
+            "waterfall",
+            "trekking",
+            "nature",
+            "rock",
+            "travel",
+            "adventure",
+            "holiday",
+            "trip expense",
+            "weekend trek",
+            "outdoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated on rock",
+          "gaze": "to camera behind sunglasses",
+          "face_visibility": "partial sunglasses",
+          "subject_position": "bottom center",
+          "subject_scale": "medium",
+          "hand_interaction": "one arm raised; other hand on trekking pole"
+        },
+        "operational": {
+          "flags": [
+            "HAND_OBJECT_INTERACTION",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7952032,
+          "sha1": "99d3663e67de368429ab46603f4024f7a1d47ae0",
+          "sha256": "2e51bc57831b163f2884c455ec958b5664dcfbb00ea313e128fa21c50a537a95",
+          "texture_score": 322
+        }
+      }
+    },
+    {
+      "importKey": "IMG-042",
+      "source": {
+        "folder": "7",
+        "file": "showing_credit_card.png",
+        "relativePath": "7/showing_credit_card.png"
+      },
+      "sha256": "115e2c3f7a5721f2c89a30dda538247ba2f504e6bc33c9d298238bb2bd183b66",
+      "sha1": "68ddea14bf615a4f2b43a802be1db49eedde2896",
+      "sizeBytes": 6808388,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "card",
+        "brand card"
+      ],
+      "confidence": "medium",
+      "alternatePack": "plain-backdrop-phone-payment-moments",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Card shown in a lounge; the lounge is the identifiable setting.",
+          "alt_pack": "plain-backdrop-phone-payment-moments"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "showing card to camera",
+          "objects_props": "red credit card, leather sofa, windows",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "center, medium",
+          "lighting": "natural bright window - Same bright window daylight",
+          "description": "Same sunlit lounge as main_image. Raising a red card in front of the chest with one hand.",
+          "tags": [
+            "credit card",
+            "product demo",
+            "lounge",
+            "red card",
+            "card reveal",
+            "credit card offer",
+            "travel rewards",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated reclined",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "medium",
+          "hand_interaction": "right hand raises card at chin level"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION",
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Card text too small to read"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-038",
+            "IMG-040"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Card shown in a lounge; the lounge is the identifiable setting.",
+              "alt_pack": "plain-backdrop-phone-payment-moments"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6808388,
+          "sha1": "68ddea14bf615a4f2b43a802be1db49eedde2896",
+          "sha256": "115e2c3f7a5721f2c89a30dda538247ba2f504e6bc33c9d298238bb2bd183b66",
+          "texture_score": 177.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-043",
+      "source": {
+        "folder": "7",
+        "file": "trekking.png",
+        "relativePath": "7/trekking.png"
+      },
+      "sha256": "29bc404e14820be0f1e9e8ec1077c113f17fca1549534657ed6f7b5b52cbc9e3",
+      "sha1": "70c95ab5f6e30c264a3a0cd3139fcaed1d5b94c7",
+      "sizeBytes": 7272747,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "travel-outdoors",
+      "secondaryConcepts": [
+        "hill trail",
+        "fog"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "outdoor trail",
+          "activity": "standing outdoors",
+          "objects_props": "rocks, shrubs",
+          "camera_angle": "slightly low",
+          "framing": "wide",
+          "character_position": "center right, small",
+          "lighting": "outdoor overcast - Flat grey fog light, low contrast, muted greens",
+          "description": "Misty hilltop trail with rocks, shrubs and heavy fog. Standing on a hill trail with hands in pockets, far from camera.",
+          "tags": [
+            "trekking",
+            "hill",
+            "mist",
+            "fog",
+            "nature",
+            "wide shot",
+            "travel",
+            "adventure",
+            "holiday",
+            "trip expense",
+            "solo trip",
+            "outdoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "small face visible",
+          "subject_position": "center right",
+          "subject_scale": "small",
+          "hand_interaction": "hands in pockets"
+        },
+        "operational": {
+          "flags": [
+            "SMALL_SUBJECT",
+            "NEAR_DUP_BG"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7272747,
+          "sha1": "70c95ab5f6e30c264a3a0cd3139fcaed1d5b94c7",
+          "sha256": "29bc404e14820be0f1e9e8ec1077c113f17fca1549534657ed6f7b5b52cbc9e3",
+          "texture_score": 240.3
+        }
+      }
+    },
+    {
+      "importKey": "IMG-044",
+      "source": {
+        "folder": "8",
+        "file": "main_image.png",
+        "relativePath": "8/main_image.png"
+      },
+      "sha256": "b5c0bea32a1e09fa6664fe77cadfe487e3ce0ac448e19936649014308e3ded55",
+      "sha1": "7d82e6af9268e62890906fcaefd08a95e26c8daf",
+      "sizeBytes": 6932701,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "phone",
+        "lounge"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "using phone",
+          "objects_props": "phone, armchair, side table",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm soft light from the left, wood and beige tones",
+          "description": "Lounge seating with wooden slat wall, heavy beige curtain and dark side table. Seated deep in an armchair holding a phone at the waist.",
+          "tags": [
+            "lounge",
+            "armchair",
+            "wood wall",
+            "relaxed",
+            "phone",
+            "intro shot",
+            "talking head",
+            "lifestyle",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds phone; left arm on armrest"
+        },
+        "operational": {
+          "flags": [
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-045",
+            "IMG-048"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6932701,
+          "sha1": "7d82e6af9268e62890906fcaefd08a95e26c8daf",
+          "sha256": "b5c0bea32a1e09fa6664fe77cadfe487e3ce0ac448e19936649014308e3ded55",
+          "texture_score": 153.8
+        }
+      }
+    },
+    {
+      "importKey": "IMG-045",
+      "source": {
+        "folder": "8",
+        "file": "holding_a_mic.png",
+        "relativePath": "8/holding_a_mic.png"
+      },
+      "sha256": "6fe9fac3af22670a8cae434bfc71396f8b37f666918dde859770c7b65f1b170f",
+      "sha1": "510370787c376b9ee45a3a2d80772cc046afbecb",
+      "sizeBytes": 7022885,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "talking to camera",
+        "microphone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "talking to camera",
+          "objects_props": "small clip on mic with fluffy windscreen",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Same warm soft light",
+          "description": "Same wood slat wall, curtain and armchair as main_image. Holding a small fluffy lav mic at the chest while speaking.",
+          "tags": [
+            "microphone",
+            "talking head",
+            "lounge",
+            "creator",
+            "testimonial",
+            "creator voiceover",
+            "review",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand holds mic near chest"
+        },
+        "operational": {
+          "flags": [
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {},
+          "near_duplicates": [
+            "IMG-044",
+            "IMG-048"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7022885,
+          "sha1": "510370787c376b9ee45a3a2d80772cc046afbecb",
+          "sha256": "6fe9fac3af22670a8cae434bfc71396f8b37f666918dde859770c7b65f1b170f",
+          "texture_score": 156.5
+        }
+      }
+    },
+    {
+      "importKey": "IMG-046",
+      "source": {
+        "folder": "8",
+        "file": "scrolling_on_phone.png",
+        "relativePath": "8/scrolling_on_phone.png"
+      },
+      "sha256": "b2743c8e37f61c63374fb3d96225e99f08ea95505c135f2d95611bbf99fbbeb9",
+      "sha1": "0fce7be9ad6ef2afa2280673f434b1712a8ad9b1",
+      "sizeBytes": 6709487,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "cafe",
+        "pastry display",
+        "phone"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe",
+          "activity": "scrolling phone",
+          "objects_props": "phone in light case, wooden bench",
+          "camera_angle": "high",
+          "framing": "medium close up",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Warm pendant light and window light, orange wall accent",
+          "description": "Cafe seating at a wooden bench with a pastry display counter and chalkboard menu behind. Seated scrolling a phone with a tan overshirt over a white tee.",
+          "tags": [
+            "cafe",
+            "phone",
+            "scrolling",
+            "pastry counter",
+            "cafe spending",
+            "online shopping",
+            "checking offers",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "down at phone",
+          "face_visibility": "partial looking down",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "MULTI_PERSON_BG"
+          ],
+          "brand": {
+            "notes": [
+              "Chalkboard menu in background (not legible)"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6709487,
+          "sha1": "0fce7be9ad6ef2afa2280673f434b1712a8ad9b1",
+          "sha256": "b2743c8e37f61c63374fb3d96225e99f08ea95505c135f2d95611bbf99fbbeb9",
+          "texture_score": 83.9
+        }
+      }
+    },
+    {
+      "importKey": "IMG-047",
+      "source": {
+        "folder": "8",
+        "file": "showing_credit_card.png",
+        "relativePath": "8/showing_credit_card.png"
+      },
+      "sha256": "8f8f5d5b57ba20fce0bdd259abc33d4f44979f13fc04ae5d70928f7ce529f90b",
+      "sha1": "f51649531d04648b7166bdfd855c9d44b02428ee",
+      "sizeBytes": 7156475,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "cafes-restaurants-eating-out",
+      "secondaryConcepts": [
+        "cafe",
+        "coworking",
+        "card"
+      ],
+      "confidence": "medium",
+      "alternatePack": "workspace-laptop",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Same venue as IMG-015 (lattice ceiling, marble counter).",
+          "alt_pack": "workspace-laptop"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe",
+          "activity": "showing card to camera",
+          "objects_props": "red credit card, leather chair, marble counter, plant",
+          "camera_angle": "eye level",
+          "framing": "medium",
+          "character_position": "center left, large",
+          "lighting": "indoor mixed - Mixed overhead and window light, grey and warm tones",
+          "description": "Modern cafe or coworking interior with a lattice ceiling, pillars and a leather chair. Holding a red card up at shoulder height while seated.",
+          "tags": [
+            "credit card",
+            "cafe",
+            "product demo",
+            "leather chair",
+            "card reveal",
+            "credit card offer",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center left",
+          "subject_scale": "large",
+          "hand_interaction": "left hand holds card at shoulder"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "CROPPED_SUBJECT",
+            "NEAR_DUP_BG"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Card text too small to read"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Same venue as IMG-015 (lattice ceiling, marble counter).",
+              "alt_pack": "workspace-laptop"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7156475,
+          "sha1": "f51649531d04648b7166bdfd855c9d44b02428ee",
+          "sha256": "8f8f5d5b57ba20fce0bdd259abc33d4f44979f13fc04ae5d70928f7ce529f90b",
+          "texture_score": 98.2
+        }
+      }
+    },
+    {
+      "importKey": "IMG-048",
+      "source": {
+        "folder": "8",
+        "file": "showing_phone.png",
+        "relativePath": "8/showing_phone.png"
+      },
+      "sha256": "787e63ac2f345546f271b870691098fa7cae8a4d6a8c9e795fd10c01df0a2938",
+      "sha1": "4b86620162ded1ba122781a17d1a1434a4062f34",
+      "sizeBytes": 7708290,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "lounge-relaxed-spaces",
+      "secondaryConcepts": [
+        "card app",
+        "lounge"
+      ],
+      "confidence": "medium",
+      "alternatePack": "plain-backdrop-phone-payment-moments",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "App screen shown in a lounge; the lounge is the identifiable setting.",
+          "alt_pack": "plain-backdrop-phone-payment-moments"
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "cafe lounge",
+          "activity": "showing phone to camera",
+          "objects_props": "phone with purple credit card app",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "indoor warm artificial - Same warm soft light",
+          "description": "Same wood slat wall, curtain and armchair as main_image. Raising a phone beside the head showing a credit card app.",
+          "tags": [
+            "phone screen",
+            "fintech app",
+            "product demo",
+            "credit card app",
+            "lounge",
+            "app demo",
+            "product reveal",
+            "recommend app",
+            "credit card offer",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand raises phone beside head"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION",
+            "NEAR_DUP_COMPOSITION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "Phone screen shows a 'UPI credit card' app UI"
+            ]
+          },
+          "near_duplicates": [
+            "IMG-044",
+            "IMG-045"
+          ],
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "App screen shown in a lounge; the lounge is the identifiable setting.",
+              "alt_pack": "plain-backdrop-phone-payment-moments"
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7708290,
+          "sha1": "4b86620162ded1ba122781a17d1a1434a4062f34",
+          "sha256": "787e63ac2f345546f271b870691098fa7cae8a4d6a8c9e795fd10c01df0a2938",
+          "texture_score": 176.6
+        }
+      }
+    },
+    {
+      "importKey": "IMG-049",
+      "source": {
+        "folder": "8",
+        "file": "working_on_laptop.png",
+        "relativePath": "8/working_on_laptop.png"
+      },
+      "sha256": "a65632217701d7c7275dc686277dbf358a3ae41e9a84eba0f56856ef85e7e202",
+      "sha1": "a0f905bbe5d423a311454cde69272769d111b74e",
+      "sizeBytes": 6155170,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "laptop",
+        "notebooks",
+        "office"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "setting_discrepancy",
+          "note": "Setting discrepancy: the inventory says home desk; the image shows an office-style desk."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "working on laptop",
+          "objects_props": "laptop (Apple logo), mesh office chair, notebooks, magnifier, papers, wall socket",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "center right, large",
+          "lighting": "natural soft window - Soft daylight from the left, warm cream wall",
+          "description": "Cream wall with a wall socket, mesh office chair and a wooden desk with notebooks. Typing on a laptop at a desk beside open notebooks.",
+          "tags": [
+            "office",
+            "desk",
+            "laptop",
+            "working",
+            "notebooks",
+            "home office",
+            "working late",
+            "work from home",
+            "side hustle",
+            "study",
+            "deadline",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning forward",
+          "gaze": "down at laptop",
+          "face_visibility": "partial three quarter",
+          "subject_position": "center right",
+          "subject_scale": "large",
+          "hand_interaction": "both hands on keyboard"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "CROPPED_SUBJECT"
+          ],
+          "brand": {
+            "notes": [
+              "Apple logo on laptop lid"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "setting_discrepancy",
+              "note": "Setting discrepancy: the inventory says home desk; the image shows an office-style desk."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6155170,
+          "sha1": "a0f905bbe5d423a311454cde69272769d111b74e",
+          "sha256": "a65632217701d7c7275dc686277dbf358a3ae41e9a84eba0f56856ef85e7e202",
+          "texture_score": 117.1
+        }
+      }
+    },
+    {
+      "importKey": "IMG-050",
+      "source": {
+        "folder": "9",
+        "file": "main_image.png",
+        "relativePath": "9/main_image.png"
+      },
+      "sha256": "4bdaae8b34b6b2e8d1b9d452911b7712a69e4bdc5c6353d364f7545d80b50e6d",
+      "sha1": "8168c9d8e4c78b74ac7cede9e190d033f743a986",
+      "sizeBytes": 8094796,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-portraits-talking-head",
+      "secondaryConcepts": [
+        "neutral portrait"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "posing portrait",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Soft even daylight, wall texture visible",
+          "description": "Textured cream plaster wall beside a wooden door with mesh panel. Standing straight facing the camera with arms at sides.",
+          "tags": [
+            "portrait",
+            "standing",
+            "plaster wall",
+            "full front",
+            "intro shot",
+            "talking head",
+            "relatable",
+            "everyday",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "arms at sides"
+        },
+        "operational": {
+          "flags": [],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 8094796,
+          "sha1": "8168c9d8e4c78b74ac7cede9e190d033f743a986",
+          "sha256": "4bdaae8b34b6b2e8d1b9d452911b7712a69e4bdc5c6353d364f7545d80b50e6d",
+          "texture_score": 556.7
+        }
+      }
+    },
+    {
+      "importKey": "IMG-051",
+      "source": {
+        "folder": "9",
+        "file": "relaxing_on_sofa.png",
+        "relativePath": "9/relaxing_on_sofa.png"
+      },
+      "sha256": "6455f55190f46263823c65d883ccf35b5b58f24b4476bbfd9219125db6b8b91b",
+      "sha1": "a2d16c86f97591165b83b49307bdc8f4370b5f0c",
+      "sizeBytes": 6350908,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "home-life",
+      "secondaryConcepts": [
+        "sofa",
+        "phone",
+        "relaxing"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home living room",
+          "activity": "scrolling phone",
+          "objects_props": "phone, beige sofa",
+          "camera_angle": "eye level",
+          "framing": "long full body",
+          "character_position": "center, medium",
+          "lighting": "flat diffuse indoor - Soft even daylight, low contrast, neutral tones",
+          "description": "Beige sofa against a plain cream wall with a patterned tile floor. Sitting cross legged on a sofa looking at the phone.",
+          "tags": [
+            "sofa",
+            "living room",
+            "relaxing",
+            "phone",
+            "scrolling",
+            "full body",
+            "weekend",
+            "online shopping",
+            "checking offers",
+            "lazy day",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated legs crossed",
+          "gaze": "down at phone",
+          "face_visibility": "partial looking down",
+          "subject_position": "center",
+          "subject_scale": "medium",
+          "hand_interaction": "both hands hold phone"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 6350908,
+          "sha1": "a2d16c86f97591165b83b49307bdc8f4370b5f0c",
+          "sha256": "6455f55190f46263823c65d883ccf35b5b58f24b4476bbfd9219125db6b8b91b",
+          "texture_score": 115
+        }
+      }
+    },
+    {
+      "importKey": "IMG-052",
+      "source": {
+        "folder": "9",
+        "file": "showing_card.png",
+        "relativePath": "9/showing_card.png"
+      },
+      "sha256": "e8e593d13a741306ac6dc6683de18ac7f880669a027b1cd31c61c302426cf4e4",
+      "sha1": "6373ed23bb3fe9373826737219e234fc668dcef3",
+      "sizeBytes": 8210407,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "card",
+        "brand card"
+      ],
+      "confidence": "high",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "showing card to camera",
+          "objects_props": "red 'super slicer' card",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center, large",
+          "lighting": "flat diffuse indoor - Same soft even daylight",
+          "description": "Same plaster wall and mesh door as main_image. Holding up a red card at shoulder height with right hand.",
+          "tags": [
+            "credit card",
+            "product demo",
+            "red card",
+            "plaster wall",
+            "card reveal",
+            "credit card offer",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "to camera",
+          "face_visibility": "full",
+          "subject_position": "center",
+          "subject_scale": "large",
+          "hand_interaction": "right hand raises card to shoulder level"
+        },
+        "operational": {
+          "flags": [
+            "BRAND_UI",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {
+            "slice": true,
+            "notes": [
+              "'super slicer' text printed on card"
+            ]
+          },
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 8210407,
+          "sha1": "6373ed23bb3fe9373826737219e234fc668dcef3",
+          "sha256": "e8e593d13a741306ac6dc6683de18ac7f880669a027b1cd31c61c302426cf4e4",
+          "texture_score": 688.4
+        }
+      }
+    },
+    {
+      "importKey": "IMG-053",
+      "source": {
+        "folder": "9",
+        "file": "watching_phone.png",
+        "relativePath": "9/watching_phone.png"
+      },
+      "sha256": "b18e8cff2d99dad6dbeb8f6d86425d73c4f7d759f3500f3de9c186e0afd4f6d2",
+      "sha1": "39da1c7fa2782c0d6ca3657a8b5f5d622aefbed1",
+      "sizeBytes": 8090360,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "plain-backdrop-phone-payment-moments",
+      "secondaryConcepts": [
+        "phone"
+      ],
+      "confidence": "medium",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "Plain wall, no identifiable setting."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "plain wall backdrop",
+          "activity": "looking at phone",
+          "objects_props": "phone with grey case",
+          "camera_angle": "eye level",
+          "framing": "medium long",
+          "character_position": "center left, large",
+          "lighting": "flat diffuse indoor - Same soft even daylight",
+          "description": "Same plaster wall and mesh door as main_image. Standing and looking down at a phone held with both hands.",
+          "tags": [
+            "phone",
+            "texting",
+            "standing",
+            "plaster wall",
+            "checking app",
+            "notification",
+            "payment reminder",
+            "scrolling",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "standing",
+          "gaze": "down at phone",
+          "face_visibility": "partial looking down",
+          "subject_position": "center left",
+          "subject_scale": "large",
+          "hand_interaction": "both hands hold phone at chest"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "Plain wall, no identifiable setting."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 8090360,
+          "sha1": "39da1c7fa2782c0d6ca3657a8b5f5d622aefbed1",
+          "sha256": "b18e8cff2d99dad6dbeb8f6d86425d73c4f7d759f3500f3de9c186e0afd4f6d2",
+          "texture_score": 577.1
+        }
+      }
+    },
+    {
+      "importKey": "IMG-054",
+      "source": {
+        "folder": "9",
+        "file": "working_on_laptop.png",
+        "relativePath": "9/working_on_laptop.png"
+      },
+      "sha256": "2e87d3520091e8b171fa2cd2669aedeac2367dc57840409632be1d702fefd141",
+      "sha1": "848bd31ef42b2a66753a7d17bcd740d1f07bb427",
+      "sizeBytes": 7567668,
+      "width": 1536,
+      "height": 2752,
+      "format": "png",
+      "pack": "workspace-laptop",
+      "secondaryConcepts": [
+        "laptop",
+        "cafe table"
+      ],
+      "confidence": "medium",
+      "alternatePack": "cafes-restaurants-eating-out",
+      "review": [
+        {
+          "kind": "metadata_draft",
+          "note": "The inventory marks all of its metadata as a draft that needs a human check."
+        },
+        {
+          "kind": "classification_uncertain",
+          "note": "The pack is a judgement call; the setting note below explains why.",
+          "alt_pack": "cafes-restaurants-eating-out"
+        },
+        {
+          "kind": "setting_discrepancy",
+          "note": "Setting discrepancy: the inventory says home desk; the image shows a polished table by a leather banquette (cafe-like)."
+        }
+      ],
+      "imported": {
+        "fields": {
+          "environment": "home desk workspace",
+          "activity": "working on laptop",
+          "objects_props": "laptop, wooden desk, black power adapter and cables, leather chair",
+          "camera_angle": "slightly high",
+          "framing": "medium long",
+          "character_position": "right, large",
+          "lighting": "natural soft window - Soft daylight from the left, warm wood tone",
+          "description": "Wooden desk beside a textured plaster wall with a dark leather chair back. Typing on a laptop at a wooden desk, side view.",
+          "tags": [
+            "laptop",
+            "working",
+            "desk",
+            "home office",
+            "wood desk",
+            "side view",
+            "working late",
+            "work from home",
+            "side hustle",
+            "study",
+            "indoor",
+            "day"
+          ]
+        },
+        "composition": {
+          "pose": "seated leaning forward",
+          "gaze": "down at laptop",
+          "face_visibility": "partial profile",
+          "subject_position": "right",
+          "subject_scale": "large",
+          "hand_interaction": "both hands on keyboard"
+        },
+        "operational": {
+          "flags": [
+            "FACE_PARTIAL",
+            "CROPPED_SUBJECT",
+            "HAND_OBJECT_INTERACTION"
+          ],
+          "brand": {},
+          "review": [
+            {
+              "kind": "metadata_draft",
+              "note": "The inventory marks all of its metadata as a draft that needs a human check."
+            },
+            {
+              "kind": "classification_uncertain",
+              "note": "The pack is a judgement call; the setting note below explains why.",
+              "alt_pack": "cafes-restaurants-eating-out"
+            },
+            {
+              "kind": "setting_discrepancy",
+              "note": "Setting discrepancy: the inventory says home desk; the image shows a polished table by a leather banquette (cafe-like)."
+            }
+          ]
+        },
+        "technical": {
+          "format": "PNG",
+          "color_mode": "RGBA",
+          "has_alpha_channel": true,
+          "width": 1536,
+          "height": 2752,
+          "aspect_ratio": 0.5581,
+          "orientation": "portrait",
+          "file_size_bytes": 7567668,
+          "sha1": "848bd31ef42b2a66753a7d17bcd740d1f07bb427",
+          "sha256": "2e87d3520091e8b171fa2cd2669aedeac2367dc57840409632be1d702fefd141",
+          "texture_score": 138
+        }
+      }
+    }
+  ]
+}

@@ -12,3 +12,7 @@ broll-import/
 next-env.d.ts
 .vercel
 .env*
+
+# Scene Pack import run state (written by scripts/studio-import/run.ts)
+scripts/studio-import/import-state.json
+scripts/studio-import/import-state.json.tmp

@@ -1,12 +1,14 @@
 /**
- * Image metadata with provenance. The model's answer (`ai`) and a person's edits (`manual`) are stored apart, and the
- * value a field has is decided here and in SQL (studio_effective in migration 0025) by one rule:
+ * Image metadata with provenance. Three layers are stored apart, and the value a field has is decided PER FIELD, here and in SQL
+ * (studio_effective, migration 0027), by one rule:
  *
- *   manual has the key  -> the manual value wins (a null means "cleared on purpose", so the field shows as empty)
- *   manual lacks the key -> the AI value
+ *   manual has the key            -> the manual value wins (a null means "cleared on purpose": the field shows as empty and does NOT
+ *                                    fall back to imported or AI)
+ *   else imported has a value     -> the imported value (a null or missing imported value means "none supplied")
+ *   else                          -> the AI value
  *
- * Re-analysis only ever replaces `ai`, so it cannot overwrite an edit. Metadata is used for search and recommendations,
- * never to hide an image.
+ * Re-analysis only replaces `ai`; a person's edit only writes `manual`; an import only replaces `imported`. So none of them can
+ * overwrite another. Metadata is used for search and recommendations, never to hide an image.
  */
 
 export const METADATA_TEXT_FIELDS = [
@@ -23,7 +25,25 @@ export const MAX_TAG_CHARS = 40;
 
 export type FieldValue = string | string[] | null;
 export type MetadataRecord = Partial<Record<MetadataField, FieldValue>>;
-export type Provenance = 'manual' | 'ai' | 'none';
+export type Provenance = 'manual' | 'imported' | 'ai' | 'none';
+
+/**
+ * What an import stores. Only `fields` (the scene metadata) takes part in the effective value. The rest is provenance and
+ * composition detail for people to read; none of it is searched, ranked or used to filter. No description of the person
+ * (gender, age, appearance, clothing) is ever stored here.
+ */
+export interface ImportedLayer {
+  fields?: MetadataRecord;
+  /** How the person is framed, for character replacement. Never a filter. */
+  composition?: Partial<Record<'pose' | 'gaze' | 'face_visibility' | 'subject_position' | 'subject_scale' | 'hand_interaction', string>>;
+  operational?: { flags?: string[]; review?: Array<{ kind: string; note?: string; alt_pack?: string }>; brand?: { slice?: boolean; third_party?: boolean; notes?: string[] }; near_duplicates?: string[] };
+  technical?: Record<string, string | number | boolean | null>;
+  source?: { import_key?: string; source_folder?: string; source_file?: string; manifest_version?: number; imported_at?: number };
+  status?: string;
+  version?: number;
+  lineage?: { version: number; supersedes_asset_id?: number | null };
+  [k: string]: unknown;
+}
 
 export interface EffectiveMetadata {
   values: { [K in MetadataTextField]: string | null } & { tags: string[] };
@@ -122,21 +142,24 @@ export function applyManualPatch(manual: MetadataRecord | null | undefined, patc
 }
 
 /** The value each field has, and where it came from. */
-export function effectiveMetadata(ai: MetadataRecord | null | undefined, manual: MetadataRecord | null | undefined): EffectiveMetadata {
+export function effectiveMetadata(ai: MetadataRecord | null | undefined, manual: MetadataRecord | null | undefined, imported?: ImportedLayer | null): EffectiveMetadata {
   const a = ai ?? {};
   const m = manual ?? {};
+  const i: MetadataRecord = imported?.fields ?? {};
   const values = { tags: [] as string[] } as EffectiveMetadata['values'];
   const provenance = {} as Record<MetadataField, Provenance>;
   for (const f of METADATA_FIELDS) {
     const hasManual = Object.prototype.hasOwnProperty.call(m, f);
-    const raw: FieldValue | undefined = hasManual ? m[f] : a[f];
+    const impVal = i[f];
+    const hasImported = !hasManual && impVal !== undefined && impVal !== null && !(Array.isArray(impVal) ? impVal.length === 0 : impVal === '');
+    const raw: FieldValue | undefined = hasManual ? m[f] : hasImported ? impVal : a[f];
     if (f === 'tags') {
       values.tags = Array.isArray(raw) ? raw : [];
     } else {
       values[f] = typeof raw === 'string' && raw ? raw : null;
     }
     const has = f === 'tags' ? values.tags.length > 0 : values[f] !== null;
-    provenance[f] = hasManual ? 'manual' : has ? 'ai' : 'none';
+    provenance[f] = hasManual ? 'manual' : has ? (hasImported ? 'imported' : 'ai') : 'none';
   }
   return { values, provenance, hasManualEdits: Object.keys(m).length > 0 };
 }

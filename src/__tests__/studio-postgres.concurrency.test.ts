@@ -553,7 +553,7 @@ suite('Studio concurrency on a real PostgreSQL (separate connections)', () => {
       const probe = postgres(probeUrl.toString(), { max: 2, onnotice: () => {} });
       try {
         await probe.unsafe(`create schema auth; create function auth.uid() returns uuid language sql as 'select null::uuid'; create function auth.jwt() returns jsonb language sql as $$select '{}'::jsonb$$;`);
-        const files = migrationFiles().filter((m) => !m.startsWith('0025_') && !m.startsWith('0026_'));
+        const files = migrationFiles().filter((m) => !m.startsWith('0025_') && !m.startsWith('0026_') && !m.startsWith('0027_'));
         for (const f of files.filter((m) => m < '0022_')) await probe.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
         await probe.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/0009_broll_categories.sql'), 'utf8'));
         for (const f of files.filter((m) => m >= '0022_')) await probe.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));

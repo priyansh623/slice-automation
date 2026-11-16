@@ -1,6 +1,7 @@
 'use client';
 
 import type { StudioAsset } from '@/lib/studio/client';
+import { needsReview } from '@/lib/studio/import-info';
 
 const STATUS: Record<string, { label: string; bg: string; fg: string }> = {
   pending: { label: 'Waiting for analysis', bg: '#EDE9FE', fg: '#6D28D9' },
@@ -38,6 +39,8 @@ export default function AssetGrid({ assets, selectedId, onSelect, renderExtra }:
               <div style={{ font: '500 12px/1.3 Satoshi', color: '#111113', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.metadata.environment ? String(a.metadata.environment) : (a.originalFilename ?? `Image ${a.id}`)}</div>
               <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
                 <span style={{ padding: '1px 7px', borderRadius: 999, background: st.bg, color: st.fg, font: '500 10px/1.5 Satoshi' }}>{st.label}</span>
+                {a.importInfo?.brand.slice && <span title="Shows a Slice card or app screen. Informational: the image stays visible and selectable." style={{ padding: '1px 7px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', font: '500 10px/1.5 Satoshi' }}>Branded</span>}
+                {needsReview(a.importInfo ?? null) && <span title="A person should check this image's pack or imported details." style={{ padding: '1px 7px', borderRadius: 999, background: '#FEF3C7', color: '#92400E', font: '500 10px/1.5 Satoshi' }}>Needs review</span>}
                 {a.hasManualEdits && <span style={{ padding: '1px 7px', borderRadius: 999, background: '#FEF3C7', color: '#92400E', font: '500 10px/1.5 Satoshi' }}>Edited</span>}
                 {a.archived && <span style={{ padding: '1px 7px', borderRadius: 999, background: '#F3F4F6', color: '#6B7280', font: '500 10px/1.5 Satoshi' }}>Archived</span>}
               </div>

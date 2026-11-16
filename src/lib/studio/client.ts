@@ -6,7 +6,8 @@ export interface StudioPack {
 }
 
 export type MetaKey = 'environment' | 'activity' | 'objects_props' | 'camera_angle' | 'framing' | 'character_position' | 'lighting' | 'composition' | 'description' | 'tags';
-export type Provenance = 'manual' | 'ai' | 'none';
+export type Provenance = 'manual' | 'imported' | 'ai' | 'none';
+export type { ImportInfo } from './import-info';
 
 export interface StudioAsset {
   id: number; packId: number; originalFilename: string | null; mime: string; sizeBytes: number; width: number | null; height: number | null;
@@ -18,6 +19,9 @@ export interface StudioAsset {
   metadata: Record<string, string | string[] | null>;
   provenance: Record<MetaKey, Provenance>;
   hasManualEdits: boolean;
+  /** The permanent identity of a source image imported by the Scene Pack importer (null for an image uploaded by hand). */
+  importKey?: string | null;
+  importInfo?: import('./import-info').ImportInfo | null;
 }
 
 export class ApiError extends Error {

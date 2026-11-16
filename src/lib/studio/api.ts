@@ -3,6 +3,7 @@ import { requireUser, type AuthUser } from '@/lib/api-auth';
 import { StudioError, type AssetView } from './repository';
 import { signKeys } from './image-store';
 import { effectiveMetadata } from './metadata';
+import { importInfoOf } from './import-info';
 import { characterThumbKey } from './keys';
 import { isTestProvider } from './mock-provider';
 
@@ -81,12 +82,14 @@ export async function serializeAssets(views: AssetView[], opts: { full?: boolean
     metadata: v.metadata.values,
     provenance: v.metadata.provenance,
     hasManualEdits: v.metadata.hasManualEdits,
+    importKey: v.asset.importKey,
+    importInfo: importInfoOf(v.imported),
   }));
 }
 
 /** The selection as the API returns it: each image with the pack it came from (kept from selection time) and archived state. */
 export async function serializeSelection(items: import('./selection').SelectionItem[]) {
-  const views = await serializeAssets(items.map((i) => ({ asset: i.asset, ai: null, manual: {}, metadata: effectiveMetadata(null, null), aiAnalyzedAt: null })));
+  const views = await serializeAssets(items.map((i) => ({ asset: i.asset, ai: null, manual: {}, imported: {}, metadata: effectiveMetadata(null, null), aiAnalyzedAt: null })));
   return items.map((i, n) => ({ assetId: i.assetId, packId: i.packId, packName: i.packName, addedAt: i.addedAt, archived: i.archived, image: { id: views[n].id, thumbUrl: views[n].thumbUrl, imageUrl: views[n].imageUrl, originalFilename: views[n].originalFilename, width: views[n].width, height: views[n].height } }));
 }
 
