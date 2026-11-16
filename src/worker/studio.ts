@@ -118,9 +118,9 @@ export async function runAnalysisRound(concurrency: number, deps: AnalysisDeps):
   const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
   const work: Array<{ asset: ClaimedAsset; slot: BudgetSlot }> = [];
   for (let i = 0; i < concurrency && !stopping; i++) {
-    const slot = await reserveBudget(ANALYSIS_KIND, limit);
+    const slot = await withTimeout(reserveBudget(ANALYSIS_KIND, limit), 'reserving an analysis slot');
     if (!slot.ok) break;
-    const asset = await claimNextAsset();
+    const asset = await withTimeout(claimNextAsset(), 'claiming an image');
     if (!asset) { await refundBudget(slot); break; }   // nothing to analyse: the unit was never used
     work.push({ asset, slot });
   }
@@ -129,6 +129,18 @@ export async function runAnalysisRound(concurrency: number, deps: AnalysisDeps):
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+export const DB_STEP_TIMEOUT_MS = 15_000;
+/**
+ * A short database step that never answers (seen in production: the first read of a pass never returned, so the loop never ran
+ * again) is turned into an error after a while, so the loop logs it and tries again instead of waiting forever. Only used for
+ * quick reads/claims, never for the model call, which legitimately takes longer.
+ */
+export function withTimeout<T>(p: Promise<T>, what: string, ms = DB_STEP_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms / 1000} s`)), ms); });
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+}
 
 export interface TickState { lastRecovery: number; warnedNoKey: boolean; warnedNoR2?: boolean; warnedBudget?: boolean; /** Recovery runs on its own timer, not inside the loop. */ noRecovery?: boolean; /** Why the last pass did or did not analyse anything (for the periodic log line). */ lastReason?: string; /** The step the pass is on, so a pass that does not finish can be named. */ step?: string }
 
@@ -160,7 +172,7 @@ export async function studioTick(deps: AnalysisDeps, state: TickState, now = Dat
   state.warnedNoR2 = false;
   const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
   state.step = 'reading the hourly budget';
-  if ((await budgetStatus(ANALYSIS_KIND, limit, now)).exhausted) {
+  if ((await withTimeout(budgetStatus(ANALYSIS_KIND, limit, now), 'reading the hourly budget')).exhausted) {
     if (!state.warnedBudget) { console.warn(`[studio-worker] hourly analysis budget (${limit}) is used up: images stay pending until the next hour`); state.warnedBudget = true; }
     state.lastReason = `hourly budget used up (${limit})`;
     return 'waiting';
