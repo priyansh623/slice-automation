@@ -130,14 +130,14 @@ export async function runAnalysisRound(concurrency: number, deps: AnalysisDeps):
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export interface TickState { lastRecovery: number; warnedNoKey: boolean; warnedNoR2?: boolean; warnedBudget?: boolean; /** Recovery runs on its own timer, not inside the loop. */ noRecovery?: boolean }
+export interface TickState { lastRecovery: number; warnedNoKey: boolean; warnedNoR2?: boolean; warnedBudget?: boolean; /** Recovery runs on its own timer, not inside the loop. */ noRecovery?: boolean; /** Why the last pass did or did not analyse anything (for the periodic log line). */ lastReason?: string }
 
 /**
  * One pass of the Studio loop: recover stale work now and then, then analyse a round of images. Returns what happened so the
  * loop knows how long to rest. Without an API key nothing is claimed, so images stay pending instead of all being failed.
  */
 export async function studioTick(deps: AnalysisDeps, state: TickState, now = Date.now()): Promise<'waiting' | 'idle' | 'worked'> {
-  if (!studioWorkerEnabled() || stopping) return 'waiting';
+  if (!studioWorkerEnabled() || stopping) { state.lastReason = stopping ? 'stopping' : 'STUDIO_WORKER is off'; return 'waiting'; }
   if (!state.noRecovery && now - state.lastRecovery >= RECOVERY_EVERY_MS) {
     const r = await recoverStaleAnalysis(now);
     if (r.requeued || r.failed) console.log(`[studio-worker] stale analysis recovered: ${r.requeued} requeued, ${r.failed} failed`);
@@ -145,21 +145,26 @@ export async function studioTick(deps: AnalysisDeps, state: TickState, now = Dat
   }
   if (!analysisConfigured()) {
     if (!state.warnedNoKey) { console.warn('[studio-worker] ANTHROPIC_API_KEY is not set: image analysis is waiting'); state.warnedNoKey = true; }
+    state.lastReason = 'ANTHROPIC_API_KEY is not set';
     return 'waiting';
   }
   // R2 must be reachable BEFORE an image is claimed: otherwise every claim would fail on the read and be marked failed.
   if (!(deps.r2Ready ? deps.r2Ready() : true)) {
     if (!state.warnedNoR2) { console.warn('[studio-worker] Cloudflare R2 is not configured: image analysis is waiting'); state.warnedNoR2 = true; }
+    state.lastReason = 'R2 is not configured';
     return 'waiting';
   }
   state.warnedNoR2 = false;
   const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
   if ((await budgetStatus(ANALYSIS_KIND, limit, now)).exhausted) {
     if (!state.warnedBudget) { console.warn(`[studio-worker] hourly analysis budget (${limit}) is used up: images stay pending until the next hour`); state.warnedBudget = true; }
+    state.lastReason = `hourly budget used up (${limit})`;
     return 'waiting';
   }
   state.warnedBudget = false;
-  return (await runAnalysisRound(analysisConcurrency(), deps)) > 0 ? 'worked' : 'idle';
+  const handled = await runAnalysisRound(analysisConcurrency(), deps);
+  state.lastReason = handled > 0 ? `analysed ${handled} image(s)` : 'no pending images';
+  return handled > 0 ? 'worked' : 'idle';
 }
 
 export const defaultGenerationDeps = (): GenerationDeps => ({
@@ -256,13 +261,20 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
   void report();
   const reporter = setInterval(() => { void report(); }, WORKER_REPORT_EVERY_MS);
   reporter.unref?.();
+  let lastLogged: string | undefined; let lastLoggedAt = 0;
   void (async () => {
     while (!stopping) {
       try {
         const outcome = await studioTick(deps, analysisState);
+        // One line a minute (or when the reason changes) so the log shows what this loop is doing, even when it is idle.
+        const nowMs = Date.now();
+        if (analysisState.lastReason !== lastLogged || nowMs - lastLoggedAt >= 60_000) {
+          console.log(`[studio-worker] analysis loop: ${analysisState.lastReason ?? 'running'}`);
+          lastLogged = analysisState.lastReason; lastLoggedAt = nowMs;
+        }
         await sleep(outcome === 'worked' ? 250 : outcome === 'waiting' ? STUDIO_POLL_MS * 10 : STUDIO_POLL_MS);
       } catch (err) {
-        console.error('[studio-worker] analysis loop error (continuing):', (err as Error).message);
+        console.error('[studio-worker] analysis loop error (continuing):', (err as Error).name, (err as Error).message);
         await sleep(STUDIO_POLL_MS * 2);
       }
     }
