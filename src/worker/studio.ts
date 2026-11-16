@@ -130,25 +130,28 @@ export async function runAnalysisRound(concurrency: number, deps: AnalysisDeps):
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export interface TickState { lastRecovery: number; warnedNoKey: boolean; warnedNoR2?: boolean; warnedBudget?: boolean; /** Recovery runs on its own timer, not inside the loop. */ noRecovery?: boolean; /** Why the last pass did or did not analyse anything (for the periodic log line). */ lastReason?: string }
+export interface TickState { lastRecovery: number; warnedNoKey: boolean; warnedNoR2?: boolean; warnedBudget?: boolean; /** Recovery runs on its own timer, not inside the loop. */ noRecovery?: boolean; /** Why the last pass did or did not analyse anything (for the periodic log line). */ lastReason?: string; /** The step the pass is on, so a pass that does not finish can be named. */ step?: string }
 
 /**
  * One pass of the Studio loop: recover stale work now and then, then analyse a round of images. Returns what happened so the
  * loop knows how long to rest. Without an API key nothing is claimed, so images stay pending instead of all being failed.
  */
 export async function studioTick(deps: AnalysisDeps, state: TickState, now = Date.now()): Promise<'waiting' | 'idle' | 'worked'> {
+  state.step = 'checking switches';
   if (!studioWorkerEnabled() || stopping) { state.lastReason = stopping ? 'stopping' : 'STUDIO_WORKER is off'; return 'waiting'; }
   if (!state.noRecovery && now - state.lastRecovery >= RECOVERY_EVERY_MS) {
     const r = await recoverStaleAnalysis(now);
     if (r.requeued || r.failed) console.log(`[studio-worker] stale analysis recovered: ${r.requeued} requeued, ${r.failed} failed`);
     state.lastRecovery = now;
   }
+  state.step = 'checking the API key';
   if (!analysisConfigured()) {
     if (!state.warnedNoKey) { console.warn('[studio-worker] ANTHROPIC_API_KEY is not set: image analysis is waiting'); state.warnedNoKey = true; }
     state.lastReason = 'ANTHROPIC_API_KEY is not set';
     return 'waiting';
   }
   // R2 must be reachable BEFORE an image is claimed: otherwise every claim would fail on the read and be marked failed.
+  state.step = 'checking R2';
   if (!(deps.r2Ready ? deps.r2Ready() : true)) {
     if (!state.warnedNoR2) { console.warn('[studio-worker] Cloudflare R2 is not configured: image analysis is waiting'); state.warnedNoR2 = true; }
     state.lastReason = 'R2 is not configured';
@@ -156,12 +159,14 @@ export async function studioTick(deps: AnalysisDeps, state: TickState, now = Dat
   }
   state.warnedNoR2 = false;
   const limit = (deps.budgetPerHour ?? analysisBudgetPerHour)();
+  state.step = 'reading the hourly budget';
   if ((await budgetStatus(ANALYSIS_KIND, limit, now)).exhausted) {
     if (!state.warnedBudget) { console.warn(`[studio-worker] hourly analysis budget (${limit}) is used up: images stay pending until the next hour`); state.warnedBudget = true; }
     state.lastReason = `hourly budget used up (${limit})`;
     return 'waiting';
   }
   state.warnedBudget = false;
+  state.step = 'running an analysis round';
   const handled = await runAnalysisRound(analysisConcurrency(), deps);
   state.lastReason = handled > 0 ? `analysed ${handled} image(s)` : 'no pending images';
   return handled > 0 ? 'worked' : 'idle';
@@ -251,6 +256,7 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
   configureSharpForWorker();
   console.log('[studio-worker] started');
   stopping = false;
+  console.log(`[studio-worker] analysis loop starting (concurrency ${analysisConcurrency()}, budget ${analysisBudgetPerHour()}/h)`);
   const analysisState: TickState = { lastRecovery: 0, warnedNoKey: false, noRecovery: true };
   const genState: GenerationTickState = { lastRecovery: 0, noRecovery: true };
   const recovery = setInterval(() => { void recoverStudioWork(genDeps); }, RECOVERY_EVERY_MS);
@@ -265,7 +271,10 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
   void (async () => {
     while (!stopping) {
       try {
-        const outcome = await studioTick(deps, analysisState);
+        // If a pass does not finish, say which step it is on (the pass itself is not interrupted).
+        const watchdog = setInterval(() => console.warn(`[studio-worker] analysis pass still running after 20 s, at step: ${analysisState.step ?? 'start'}`), 20_000);
+        let outcome: Awaited<ReturnType<typeof studioTick>>;
+        try { outcome = await studioTick(deps, analysisState); } finally { clearInterval(watchdog); }
         // One line a minute (or when the reason changes) so the log shows what this loop is doing, even when it is idle.
         const nowMs = Date.now();
         if (analysisState.lastReason !== lastLogged || nowMs - lastLoggedAt >= 60_000) {
