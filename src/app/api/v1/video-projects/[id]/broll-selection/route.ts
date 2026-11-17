@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, asc, eq, gt } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { videoScreens } from '@/db/schema.pg';
+import { studioAssets, videoScreens } from '@/db/schema.pg';
+import { signKeys } from '@/lib/studio/image-store';
 import { getSelection, saveSelection } from '@/lib/overlays/selection';
 import { overlayErrorResponse, overlayGuard } from '@/lib/overlays/route-helpers';
 
@@ -12,7 +13,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const scenes = (await db.select({ id: videoScreens.id, n: videoScreens.screenNumber, d: videoScreens.dialogue }).from(videoScreens)
     .where(and(eq(videoScreens.videoProjectId, g.projectId), gt(videoScreens.screenNumber, 0))).orderBy(asc(videoScreens.position)))
     .map((s) => ({ screenId: s.id, sceneNumber: s.n, dialogue: s.d }));
-  return NextResponse.json({ enabled: true, selection: await getSelection(g.projectId), scenes });
+  const selection = await getSelection(g.projectId);
+  // Small pictures of the chosen Scene Pack images (signed links), so the screens can show what was chosen.
+  const assetIds = [...new Set(selection.character.map((c) => c.assetId))];
+  const rows = assetIds.length ? await db.select({ id: studioAssets.id, thumbKey: studioAssets.thumbKey, storageKey: studioAssets.storageKey }).from(studioAssets).where(inArray(studioAssets.id, assetIds)) : [];
+  const signed = await signKeys(rows.map((r) => r.thumbKey ?? r.storageKey));
+  const previews = { assets: Object.fromEntries(rows.map((r) => [r.id, signed.get(r.thumbKey ?? r.storageKey) ?? null])) as Record<number, string | null> };
+  return NextResponse.json({ enabled: true, selection, scenes, previews });
 }
 
 // Replaces the selection. Creates no overlays and starts no jobs.

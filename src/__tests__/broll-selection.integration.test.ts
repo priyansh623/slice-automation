@@ -125,7 +125,9 @@ describe('selection storage', () => {
     const w = await world();
     const r = await put(w, { generic: [{ clipId: w.clip, screenId: w.screens[1] }], character: [{ assetId: w.asset, screenId: w.screens[1], action: 'taps card' }] });
     expect(r.status).toBe(200);
-    expect((await get(w)).selection).toEqual({ version: 1, generic: [{ clipId: w.clip, screenId: w.screens[1] }], character: [{ assetId: w.asset, screenId: w.screens[1], action: 'taps card' }] });
+    const back = await get(w);
+    expect(back.selection).toEqual({ version: 1, generic: [{ clipId: w.clip, screenId: w.screens[1] }], character: [{ assetId: w.asset, screenId: w.screens[1], action: 'taps card' }] });
+    expect(back.previews.assets[w.asset]).toMatch(/^https:\/\/files\.test\//);                                      // a picture link for the chosen image
     expect(await counts()).toEqual({ jobs: 0, items: 0, overlays: 0 });
   });
 
