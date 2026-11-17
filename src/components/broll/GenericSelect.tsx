@@ -5,7 +5,7 @@ import { Check, Search, Sparkles } from 'lucide-react';
 import { api } from '@/components/composition/types';
 import { searchClips } from '@/lib/broll-search';
 import { recommendClips } from '@/lib/broll-recommend';
-import { ScenePicker, ScriptRail, Tray, type TrayItem } from './parts';
+import { SceneHint, ScenePicker, ScriptRail, Tray, type TrayItem } from './parts';
 import type { useBrollSelection } from './useBrollSelection';
 
 interface Clip { id: number; title: string; signedUrl: string | null; durationSeconds: number | null; userTags: string | null; subject: string | null; activity: string | null; setting: string | null; brand: string | null; description: string | null; categoryIds: number[]; brands?: { brandName: string | null; role: string }[]; createdAt: number }
@@ -19,10 +19,10 @@ const flat = (nodes: Cat[]): Cat[] => nodes.flatMap((n) => [n, ...flat(n.childre
  * are highlighted and shown first. They come from the library's own search (its concept lexicon, tags and categories), never an AI call.
  * Ticking a clip asks which scene it is for. Nothing is generated here.
  */
-export default function GenericSelect({ b, onDone }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void }) {
+export default function GenericSelect({ b, onDone, initialFocus = null }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void; initialFocus?: number | null }) {
   const { scenes, sel, saving, message, save, setClipScenes, removeClip } = b;
   const [clips, setClips] = useState<Clip[] | null>(null); const [cats, setCats] = useState<Cat[]>([]);
-  const [q, setQ] = useState(''); const [catId, setCatId] = useState<number | null>(null); const [focus, setFocus] = useState<number | null>(null);
+  const [q, setQ] = useState(''); const [catId, setCatId] = useState<number | null>(null); const [focus, setFocus] = useState<number | null>(initialFocus);
   const [picker, setPicker] = useState<Clip | null>(null);
 
   useEffect(() => {
@@ -67,6 +67,7 @@ export default function GenericSelect({ b, onDone }: { b: ReturnType<typeof useB
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <ScriptRail scenes={scenes} counts={counts} focus={focus} onFocus={setFocus} />
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '20px 24px 40px' }}>
+          <SceneHint scene={scenes.find((x) => x.screenId === focus) ?? null} onClear={() => setFocus(null)} />
           <div style={{ position: 'relative', maxWidth: 560, marginBottom: 16 }}>
             <Search size={16} color="#9A9AA0" style={{ position: 'absolute', left: 14, top: 13 }} />
             <input aria-label="Search the B-roll library" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search clips, tags or categories…" style={{ width: '100%', boxSizing: 'border-box', height: 42, borderRadius: 10, border: '1px solid #E4E4E0', padding: '0 14px 0 40px', font: '400 14px/1 Satoshi', background: '#fff' }} />
@@ -94,7 +95,7 @@ export default function GenericSelect({ b, onDone }: { b: ReturnType<typeof useB
       <Tray items={tray} saving={saving} onClear={() => save({ ...sel, generic: [] })} onDone={onDone} doneLabel={sel.generic.length ? `Add ${sel.generic.length} to project` : 'Done'} />
       {picker && (
         <ScenePicker title={picker.title} subtitle={dur(picker.durationSeconds) ? `${dur(picker.durationSeconds)} · library clip` : 'Library clip'} thumb={{ kind: 'video', url: picker.signedUrl }} scenes={scenes}
-          initial={sel.generic.filter((g) => g.clipId === picker.id).map((g) => g.screenId)} suggested={rec.clips.find((r) => r.clip.id === picker.id)?.scenes ?? []} withAction={false} initialAction=""
+          initial={(() => { const e = sel.generic.filter((g) => g.clipId === picker.id).map((g) => g.screenId); return e.length || !focus ? e : [focus]; })()} suggested={rec.clips.find((r) => r.clip.id === picker.id)?.scenes ?? []} withAction={false} initialAction=""
           onSave={(screens) => setClipScenes(picker.id, screens)} onClose={() => setPicker(null)} />
       )}
     </div>

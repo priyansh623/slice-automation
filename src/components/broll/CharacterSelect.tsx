@@ -6,7 +6,7 @@ import { post } from '@/components/composition/types';
 import { CodeChip, TileChip, smallBtn } from '@/components/studio/ui/ds';
 import { api as studioApi, type StudioAsset, type StudioPack } from '@/lib/studio/client';
 import { chipOf, codeOf } from '@/lib/studio/ui';
-import { ScenePicker, ScriptRail, Tray, type TrayItem } from './parts';
+import { SceneHint, ScenePicker, ScriptRail, Tray, type TrayItem } from './parts';
 import type { useBrollSelection } from './useBrollSelection';
 
 interface Rec { packId: number; name: string; score: number; reasons: string[]; moments: string[] }
@@ -17,11 +17,11 @@ const bg = (url: string | null | undefined) => (url ? `#E4E4E0 url("${url}") cen
  * Character B-roll selection, laid out like the Studio's Select step: the script on the left, the Scene Packs the script points to first (with a
  * Recommended badge), then every other pack. Ticking an image asks which scene it is for. Nothing is generated here.
  */
-export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void }) {
+export default function CharacterSelect({ b, onDone, initialFocus = null }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void; initialFocus?: number | null }) {
   const { base, scenes, sel, saving, message, save, setAssetScenes, removeAsset } = b;
   const [packs, setPacks] = useState<StudioPack[]>([]); const [assets, setAssets] = useState<Record<number, StudioAsset[]>>({});
   const [recs, setRecs] = useState<Rec[] | null>(null); const [recState, setRecState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
-  const [focus, setFocus] = useState<number | null>(null);
+  const [focus, setFocus] = useState<number | null>(initialFocus);
   const [picker, setPicker] = useState<null | { assetIds: number[]; title: string; subtitle?: string; thumb: string | null; packId: number }>(null);
   const [error, setError] = useState('');
 
@@ -70,7 +70,8 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
 
   const open = (a: StudioAsset, packId: number) => setPicker({ assetIds: [a.id], title: codeOf(a), subtitle: a.originalFilename ?? undefined, thumb: a.thumbUrl, packId });
   const pk = picker ? picker : null;
-  const pickerInitial = pk && pk.assetIds.length === 1 ? sel.character.filter((c) => c.assetId === pk.assetIds[0]).map((c) => c.screenId) : [];
+  const existing = pk && pk.assetIds.length === 1 ? sel.character.filter((c) => c.assetId === pk.assetIds[0]).map((c) => c.screenId) : [];
+  const pickerInitial = existing.length || !focus ? existing : [focus];
   const pickerAction = pk && pk.assetIds.length === 1 ? sel.character.find((c) => c.assetId === pk.assetIds[0])?.action ?? '' : '';
 
   return (
@@ -78,6 +79,7 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <ScriptRail scenes={scenes} counts={counts} focus={focus} onFocus={setFocus} />
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '16px 20px 40px' }}>
+          <SceneHint scene={focusScene} onClear={() => setFocus(null)} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', font: '500 13px/1.4 Satoshi', color: '#5E5E65' }}>
             {recState === 'loading' ? <><Loader2 size={14} className="spin" /> Finding the Scene Packs your script points to…</> : recState === 'unavailable' ? 'Recommendations are not available right now. Every pack is below.' : <><Sparkles size={14} color="#6C47FF" /> Recommended packs come first. Nothing is chosen for you.</>}
           </div>
@@ -122,7 +124,7 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
           initial={pickerInitial} suggested={suggestedScenes(pk.packId)} withAction initialAction={pickerAction}
           onSave={(screens, action) => {
             // a pick that already started on the Generation screen cannot be taken off its scene here
-            const keep = pk.assetIds.length === 1 ? [...new Set([...screens, ...pickerInitial.filter((sid) => started(pk.assetIds[0], sid))])] : screens;
+            const keep = pk.assetIds.length === 1 ? [...new Set([...screens, ...existing.filter((sid) => started(pk.assetIds[0], sid))])] : screens;
             setAssetScenes(pk.assetIds, keep, action, pk.assetIds.length === 1);
           }}
           onClose={() => setPicker(null)} />
