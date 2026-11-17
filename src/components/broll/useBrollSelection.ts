@@ -18,14 +18,15 @@ export function useBrollSelection(projectId: string) {
   const [name, setName] = useState('');
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [sel, setSel] = useState<Selection>({ generic: [], character: [] });
+  const [previews, setPreviews] = useState<Record<number, string | null>>({});
   const [saving, setSaving] = useState(false); const [message, setMessage] = useState('');
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const load = useCallback(async () => {
-    const [p, s] = await Promise.all([api<{ name: string }>(base), api<{ selection: Selection; scenes: Scene[] }>(`${base}/broll-selection`)]);
+    const [p, s] = await Promise.all([api<{ name: string }>(base), api<{ selection: Selection; scenes: Scene[]; previews?: { assets: Record<number, string | null> } }>(`${base}/broll-selection`)]);
     if (s.status === 404) { setState('off'); return; }
     if (!p.ok || !s.ok) { setState('error'); return; }
-    setName(p.data.name ?? ''); setScenes(s.data.scenes); setSel(s.data.selection); setState('ready');
+    setName(p.data.name ?? ''); setScenes(s.data.scenes); setSel(s.data.selection); setPreviews(s.data.previews?.assets ?? {}); setState('ready');
   }, [base]);
   useEffect(() => { void load(); }, [load]);
 
@@ -49,5 +50,5 @@ export function useBrollSelection(projectId: string) {
   };
   const removeClip = (clipId: number, screenId: number) => save({ ...sel, generic: sel.generic.filter((g) => !(g.clipId === clipId && g.screenId === screenId)) });
   const removeAsset = (assetId: number, screenId: number) => save({ ...sel, character: sel.character.filter((c) => !(c.assetId === assetId && c.screenId === screenId)) });
-  return { base, state, name, scenes, sel, saving, message, save, setClipScenes, setAssetScenes, removeClip, removeAsset, reload: load };
+  return { base, state, name, scenes, sel, previews, saving, message, save, setClipScenes, setAssetScenes, removeClip, removeAsset, reload: load };
 }
