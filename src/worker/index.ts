@@ -26,6 +26,8 @@ import {
 } from '../services/video-workflow';
 import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 import { startStudioWorker, stopStudioWorker } from './studio';
+import { processOverlayIngest } from './overlay-ingest';
+import { processCharacterClips } from './character-clips';
 
 const POLL_INTERVAL_MS = 5_000;
 const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude call
@@ -99,6 +101,9 @@ async function tick(): Promise<void> {
   if (process.env.MOCK_USEAPI === 'true') return;
 
   await pollInFlightGenerations();
+  // B-roll overlays (BROLL_OVERLAYS_ENABLED): prepare library clips before a compilation can use them. Does nothing when the flag is off.
+  await processOverlayIngest();
+  await processCharacterClips();
   await processPendingCompilation();
 }
 

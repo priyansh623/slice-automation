@@ -6,9 +6,11 @@ import {
   videoProjects,
   videoScreens,
   videoGenerations,
+  videoCompilationOverlayCounts,
 } from '@/db/schema.pg';
 import { and, eq, gt, inArray } from 'drizzle-orm';
 import { requireUser, requireProject } from '@/lib/api-auth';
+import { overlaysEnabled, snapshotOverlaysForCompilation } from '@/lib/overlays/service';
 import { annotateVersions, ffmpegClipLimitMessage, MAX_COMPILATION_CLIPS, MAX_FFMPEG_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '@/lib/compilation-versions';
 
 // Lists every compilation of the project, newest first. Each one carries its version number (successful compilations
@@ -59,6 +61,9 @@ export async function GET(
     }),
   );
 }
+
+// Thrown inside the request's transaction so the half-made compilation is rolled back when an overlay blocks it.
+class OverlayBlocked extends Error { constructor(message: string, public code: string) { super(message); } }
 
 function isUniqueViolation(err: unknown): boolean {
   const e = err as { code?: string; cause?: { code?: string } } | null;
@@ -212,13 +217,24 @@ export async function POST(
           createdAt: now,
         })),
       );
-      return { created } as const;
+
+      // B-roll overlays (feature flag). Frozen here, in the same transaction, so this version never changes when overlays are
+      // edited later. A project without overlays (or with the flag off) skips this entirely: nothing about the Flow path changes.
+      let overlayCount = 0;
+      if (overlaysEnabled()) {
+        const snap = await snapshotOverlaysForCompilation(tx, projectId, created.id, scenes.map((s) => s.videoScreenId));
+        if ('blocked' in snap) throw new OverlayBlocked(snap.blocked, snap.code);
+        overlayCount = snap.count;
+        if (snap.count > 0) await tx.update(videoCompilationOverlayCounts).set({ overlayCount: snap.count }).where(eq(videoCompilationOverlayCounts.id, created.id));
+      }
+      return { created, overlayCount } as const;
     });
 
     if ('stale' in compilation) return NextResponse.json({ error: compilation.stale, code: 'scenes_changed' }, { status: 409 });
     if ('activeId' in compilation) return alreadyRunning(compilation.activeId ?? null);
-    return NextResponse.json({ ...compilation.created, version: null, isCurrent: false }, { status: 201 });
+    return NextResponse.json({ ...compilation.created, version: null, isCurrent: false, ...(overlaysEnabled() ? { overlayCount: compilation.overlayCount } : {}) }, { status: 201 });
   } catch (err) {
+    if (err instanceof OverlayBlocked) return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
     if (isUniqueViolation(err)) return alreadyRunning(null);
     throw err;
   }

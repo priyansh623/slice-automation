@@ -24,6 +24,7 @@ import {
 } from '../db/schema.pg';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { compileWithFfmpeg } from './compilation-ffmpeg';
+import { applyOverlays, type CompiledScene } from './compilation-overlay-run';
 import { safely, startMemoryProbe, WORKER_LIFETIME } from './container-memory';
 import { ffmpegClipLimitMessage, MAX_COMPILATION_CLIPS, MAX_FFMPEG_COMPILATION_CLIPS, MIN_COMPILATION_CLIPS } from '../lib/compilation-versions';
 
@@ -151,6 +152,7 @@ async function runCompilation(projectId: number, compilationId: number): Promise
   const selections = await db
     .select({
       videoGenerationId: compilationSceneSelections.videoGenerationId,
+      videoScreenId: compilationSceneSelections.videoScreenId,
       position: videoScreens.position,
       screenNumber: videoScreens.screenNumber,
     })
@@ -165,15 +167,17 @@ async function runCompilation(projectId: number, compilationId: number): Promise
 
   // Look up each clip's media ID (for the concatenate endpoint) and its stored video file (for the FFmpeg path)
   const clips: { sceneNumber: number; mediaGenerationId: string | null; videoStoragePath: string | null }[] = [];
+  const compiledScenes: CompiledScene[] = [];
   for (const sel of selections) {
     const genRows = await db
-      .select({ mediaGenerationId: videoGenerations.mediaGenerationId, videoStoragePath: videoGenerations.videoStoragePath })
+      .select({ mediaGenerationId: videoGenerations.mediaGenerationId, videoStoragePath: videoGenerations.videoStoragePath, durationSeconds: videoGenerations.durationSeconds })
       .from(videoGenerations)
       .where(eq(videoGenerations.id, sel.videoGenerationId))
       .limit(1);
     const gen = genRows[0];
     if (!gen) throw new Error(`Generation ${sel.videoGenerationId} not found`);
     clips.push({ sceneNumber: sel.screenNumber, mediaGenerationId: gen.mediaGenerationId, videoStoragePath: gen.videoStoragePath });
+    compiledScenes.push({ screenId: sel.videoScreenId, sceneNumber: sel.screenNumber, storagePath: gen.videoStoragePath, nominalSeconds: gen.durationSeconds });
   }
 
   const outputStoragePath = `compilations/${projectId}/${Date.now()}-compilation-${compilationId}.mp4`;
@@ -193,7 +197,7 @@ async function runCompilation(projectId: number, compilationId: number): Promise
       crf,
       { download: (p) => getStorage().download('videos', p) },
     );
-    await uploadResult(outputStoragePath, video);
+    await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, video, crf));
     return { outputStoragePath, method: 'ffmpeg' };
   }
 
@@ -233,8 +237,16 @@ async function runCompilation(projectId: number, compilationId: number): Promise
     throw new Error(`Concatenate response missing video data. Keys: ${Object.keys(json).join(', ')}`);
   }
 
-  await uploadResult(outputStoragePath, videoBuffer);
+  const settings = await db.select({ crf: adminSettings.compilationCrf }).from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
+  await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, videoBuffer, settings[0]?.crf ?? 23));
   return { outputStoragePath, method: 'useapi' };
+}
+
+/** A compilation with no overlays returns its video untouched (one cheap query); only one with overlays runs the compositing pass. */
+async function withOverlays(compilationId: number, scenes: CompiledScene[], video: Buffer, crf: number): Promise<Buffer> {
+  const out = await applyOverlays(compilationId, scenes, video, crf);
+  if (out.overlays > 0 && 'passes' in out) console.log(`[compilation] Job ${compilationId}: added ${out.overlays} B-roll overlay(s) in ${out.passes} pass(es), ${out.elapsedMs} ms`);
+  return out.video;
 }
 
 async function uploadResult(outputStoragePath: string, video: Buffer): Promise<void> {

@@ -60,7 +60,7 @@ export async function checkWorkerForProvider(webProvider: string | null, now = D
     return { status: 'provider_mismatch', workerProviders: providers, message: `The web app is set to ${show(webProvider)} but the worker is set to ${providers.map(show).join(' and ')}. Set STUDIO_PROVIDER to the same value on both, or nothing queued now would be processed.` };
   }
   if (!rows.some((r) => r.generationReady)) {
-    const why = !rows.some((r) => r.workerEnabled) ? 'the worker has Studio switched off (STUDIO_WORKER=off)' : !rows.some((r) => r.r2Ready) ? 'the worker cannot reach Cloudflare R2' : 'the worker cannot use the provider';
+    const why = !rows.some((r) => r.workerEnabled) ? 'the worker has Studio switched off (STUDIO_WORKER=off)' : !rows.some((r) => r.r2Ready) ? 'the worker cannot reach Cloudflare R2' : 'the worker cannot use the provider (its credentials are probably missing)';
     return { status: 'not_ready', workerProviders: providers, message: `The Studio worker is running but is not ready to generate: ${why}.` };
   }
   return { status: 'ok', workerProviders: providers, message: null };

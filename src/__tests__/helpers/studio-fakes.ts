@@ -52,15 +52,15 @@ export async function call(handler: unknown, opts: { method?: string; body?: unk
  * Makes the database look like a Studio worker is running and reporting: batches are only accepted while a worker that uses the
  * same provider as the web app is ready. `ageMs` makes the report old (a worker that stopped reporting).
  */
-export async function reportFakeWorker(target: PGlite, over: { id?: string; provider?: string | null; mode?: 'disabled' | 'mock' | 'real'; ready?: boolean; r2Ready?: boolean; enabled?: boolean; ageMs?: number } = {}): Promise<void> {
+export async function reportFakeWorker(target: PGlite, over: { id?: string; provider?: string | null; mode?: 'disabled' | 'mock' | 'real'; ready?: boolean; r2Ready?: boolean; enabled?: boolean; ageMs?: number; clipProvider?: string | null } = {}): Promise<void> {
   const provider = over.provider === undefined ? 'mock' : over.provider;
   const mode = over.mode ?? (provider === 'mock' ? 'mock' : provider ? 'real' : 'disabled');
   const ready = over.ready ?? true;
   const seen = Date.now() - (over.ageMs ?? 0);
   await target.query(
     `insert into studio_worker_status (worker_id, provider, mode, generation_ready, r2_ready, worker_enabled, analysis_ready, details, started_at, last_seen_at)
-     values ($1, $2, $3, $4, $5, $6, true, '{}'::jsonb, $7, $7)
-     on conflict (worker_id) do update set provider = $2, mode = $3, generation_ready = $4, r2_ready = $5, worker_enabled = $6, last_seen_at = $7`,
-    [over.id ?? 'test-worker', provider, mode, ready, over.r2Ready ?? true, over.enabled ?? true, seen],
+     values ($1, $2, $3, $4, $5, $6, true, $8::jsonb, $7, $7)
+     on conflict (worker_id) do update set provider = $2, mode = $3, generation_ready = $4, r2_ready = $5, worker_enabled = $6, details = $8::jsonb, last_seen_at = $7`,
+    [over.id ?? 'test-worker', provider, mode, ready, over.r2Ready ?? true, over.enabled ?? true, seen, JSON.stringify({ clipProvider: over.clipProvider === undefined ? 'mock' : over.clipProvider })],
   );
 }
