@@ -25,17 +25,25 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
   const [picker, setPicker] = useState<null | { assetIds: number[]; title: string; subtitle?: string; thumb: string | null; packId: number }>(null);
   const [error, setError] = useState('');
 
+  const [loadingPacks, setLoadingPacks] = useState<Set<number>>(new Set());
+  // Every pack is shown at once and each fills in as its own images arrive (a big pack no longer holds the others back).
   useEffect(() => {
     void (async () => {
       try {
         const list = (await studioApi<{ packs: StudioPack[] }>('/api/v1/studio/packs')).packs.filter((p) => !p.archivedAt);
-        setPacks(list);
-        const entries = await Promise.all(list.map(async (p) => {
-          const all: StudioAsset[] = []; let after: number | null = null;
-          do { const q = new URLSearchParams({ limit: '60' }); if (after) q.set('after', String(after)); const r: { assets: StudioAsset[]; nextCursor: number | null } = await studioApi(`/api/v1/studio/packs/${p.id}/assets?${q}`); all.push(...r.assets.filter((a) => !a.archived)); after = r.nextCursor; } while (after);
-          return [p.id, all] as const;
+        setPacks(list); setLoadingPacks(new Set(list.map((p) => p.id)));
+        await Promise.all(list.map(async (p) => {
+          try {
+            const all: StudioAsset[] = []; let after: number | null = null;
+            do {
+              const q = new URLSearchParams({ limit: '200' }); if (after) q.set('after', String(after));
+              const r: { assets: StudioAsset[]; nextCursor: number | null } = await studioApi(`/api/v1/studio/packs/${p.id}/assets?${q}`);
+              all.push(...r.assets.filter((a) => !a.archived)); after = r.nextCursor;
+              setAssets((prev) => ({ ...prev, [p.id]: [...all] }));
+            } while (after);
+          } catch (e) { setError(`Could not load the images of ${p.name}: ${(e as Error).message}`); }
+          setLoadingPacks((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
         }));
-        setAssets(Object.fromEntries(entries));
       } catch (e) { setError((e as Error).message); }
     })();
   }, []);
@@ -88,6 +96,7 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
                   <div style={{ flex: 1 }} />
                   <button disabled={items.length === 0} onClick={() => setPicker({ assetIds: items.map((i) => i.id), title: `All ${items.length} images in ${pack.name}`, thumb: items[0]?.thumbUrl ?? null, packId: pack.id })} style={smallBtn}>Select all</button>
                 </div>
+                {items.length === 0 && <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', padding: '4px 0 8px' }}>{loadingPacks.has(pack.id) ? <><Loader2 size={13} className="spin" style={{ verticalAlign: -2 }} /> Loading images…</> : 'No images in this pack.'}</div>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 12 }}>
                   {items.map((g) => {
                     const mine = sel.character.filter((c) => c.assetId === g.id); const on = mine.length > 0; const c = chipOf(g);
