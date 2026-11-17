@@ -189,6 +189,7 @@ export const defaultGenerationDeps = (): GenerationDeps => ({
   provider: getProvider,
   // Queued jobs wait (they are not failed) while R2 is unreachable or no provider is enabled.
   canSubmit: () => getStorage().r2Configured() && generationConfig().enabled && workerProviderReady(),
+  dbTimeoutMs: DB_STEP_TIMEOUT_MS,
   read: (key) => getStorage().downloadR2Only('uploads', key),
   put: async (key, body, mime) => {
     try { await getStorage().putR2Only('uploads', key, body, { contentType: mime }); return 'created'; }
@@ -301,15 +302,24 @@ export function startStudioWorker(deps: AnalysisDeps = defaultAnalysisDeps(), ge
       }
     }
   })();
+  console.log(`[studio-worker] generation loop starting (concurrency ${jobConcurrency()})`);
   void (async () => {
+    let genLogged: string | undefined; let genLoggedAt = 0;
     while (!stopping) {
+      let reason = 'idle';
+      // Like the analysis loop: say so when a pass is slow, and write one line a minute so the log shows this loop is alive.
+      const watchdog = setInterval(() => console.warn('[studio-worker] generation pass still running after 20 s'), 20_000);
       try {
         const outcome = await generationTick(genDeps, genState);
+        reason = outcome === 'worked' ? 'handled work' : 'idle (nothing queued or due)';
         await sleep(outcome === 'worked' ? 500 : STUDIO_POLL_MS);
       } catch (err) {
+        reason = `error: ${(err as Error).message}`;
         console.error('[studio-worker] generation loop error (continuing):', (err as Error).message);
         await sleep(STUDIO_POLL_MS * 2);
-      }
+      } finally { clearInterval(watchdog); }
+      const t = Date.now();
+      if (reason !== genLogged || t - genLoggedAt >= 60_000) { console.log(`[studio-worker] generation loop: ${reason}`); genLogged = reason; genLoggedAt = t; }
     }
   })();
 }

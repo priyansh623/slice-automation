@@ -7,6 +7,8 @@ import { ReviewImage, type ImageState } from '@/components/ReviewImage';
 import type { CharRow, CharacterProduction } from './useCharacterProduction';
 
 const ORANGE = '#C2410C';
+/** A queued image job that no worker has picked up for a while (it has not been sent anywhere, so nothing is charged). */
+const stuckQueued = (i?: CompItem): number | null => (i && i.imageStatus === 'generating' && i.imageJobStatus === 'queued' && i.imageJobCreatedAt && Date.now() - i.imageJobCreatedAt > 90_000 ? Math.round((Date.now() - i.imageJobCreatedAt) / 60_000) : null);
 const clipActive = (i?: CompItem) => !!i && ['queued', 'submitting', 'processing'].includes(i.clipStatus);
 
 /** One line of status for a Character B-roll row. */
@@ -17,6 +19,7 @@ export function statusOf(r: CharRow, imageReady: boolean): { text: string; color
   if (i.clipStatus === 'ready') return { text: 'Ready', color: C.ok };
   if (clipActive(i)) return { text: 'Animating…', color: '#6C47FF' };
   if (i.clipStatus === 'failed') return { text: 'Video failed', color: C.danger };
+  if (stuckQueued(i) !== null) return { text: 'Waiting for the worker', color: C.warn };
   if (i.imageStatus === 'generating' || i.imageStatus === 'pending') return { text: 'Making image…', color: '#6C47FF' };
   if (i.imageStatus === 'ready') return { text: 'Needs approval', color: '#6C47FF' };
   if (i.imageStatus === 'approved') return { text: 'Make the video', color: '#6C47FF' };
@@ -118,7 +121,7 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
                 <figcaption style={{ font: '600 12px/1 Satoshi', color: '#6C47FF', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>With your character</figcaption>
                 {['ready', 'approved', 'rejected'].includes(it.imageStatus) || it.imageUrl || it.fullImageUrl
                   ? <ReviewImage item={it} onState={setImgState} onRetry={() => void prod.reload()} width="100%" />
-                  : <div style={{ aspectRatio: '3 / 5.5', borderRadius: 8, background: C.soft, border: `1px solid ${C.border}`, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 16, font: '500 13px/1.5 Satoshi', color: '#5E5E65' }}>{it.imageStatus === 'failed' ? <span style={{ color: C.danger }}>{it.imageError ?? 'The image failed.'}</span> : <span><Loader2 size={20} className="spin" /><br />Making the personalised image…<br /><span style={{ color: C.muted }}>This takes about a minute.</span></span>}</div>}
+                  : <div style={{ aspectRatio: '3 / 5.5', borderRadius: 8, background: C.soft, border: `1px solid ${C.border}`, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 16, font: '500 13px/1.5 Satoshi', color: '#5E5E65' }}>{it.imageStatus === 'failed' ? <span style={{ color: C.danger }}>{it.imageError ?? 'The image failed.'}</span> : stuckQueued(it) !== null ? <span style={{ color: C.warn }}>Still waiting for the worker to pick this up ({stuckQueued(it)} min).<br /><span style={{ color: C.muted }}>It has not been sent yet, so nothing is charged. If this does not change, let us know.</span></span> : <span><Loader2 size={20} className="spin" /><br />Making the personalised image…<br /><span style={{ color: C.muted }}>This takes about a minute.</span></span>}</div>}
               </figure>
             </div>
             {row.action && <div style={{ font: '400 13px/1.5 Satoshi', color: C.muted, margin: '14px 0 0' }}>Action: {row.action}</div>}

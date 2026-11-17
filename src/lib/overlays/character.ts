@@ -115,6 +115,8 @@ export interface ItemView extends PublicItem {
   /** The Studio job behind the image step ('submit_unknown' = the provider may or may not have started it). */
   imageJobStatus: string | null;
   imageNote: string | null;
+  /** When the image job was queued (ms), so the screen can say it is still waiting for the worker. */
+  imageJobCreatedAt: number | null;
   isTestImage: boolean;
   /** The finished 5-second clip (signed link), once it is ready. */
   clipUrl: string | null;
@@ -141,6 +143,7 @@ export async function listItems(videoProjectId: number): Promise<ItemView[]> {
       fullImageUrl: o ? signed.get(o.storageKey) ?? null : null,
       imageWidth: o?.width ?? null, imageHeight: o?.height ?? null,
       imageJobStatus: j?.status ?? null,
+      imageJobCreatedAt: j?.createdAt ?? null,
       imageNote: j && (j.status === 'submit_unknown' || j.status === 'failed') ? j.errorMessage : null,
       isTestImage: j?.provider === 'mock',
       clipUrl: r.clipStatus === 'ready' && r.clipStoragePath ? clipSigned.get(r.clipStoragePath) ?? null : null,

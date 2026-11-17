@@ -11,7 +11,7 @@ export interface CompOverlay {
 }
 export interface CompItem {
   id: number; studioAssetId: number; intendedAction: string; imageStatus: 'pending' | 'generating' | 'ready' | 'approved' | 'rejected' | 'failed'; imageError: string | null; imageUrl: string | null;
-  fullImageUrl: string | null; imageWidth: number | null; imageHeight: number | null; imageJobStatus: string | null; imageNote: string | null;
+  fullImageUrl: string | null; imageWidth: number | null; imageHeight: number | null; imageJobStatus: string | null; imageJobCreatedAt: number | null; imageNote: string | null;
   motionPrompt: string | null; promptEdited: boolean;
   clipStatus: 'not_started' | 'queued' | 'submitting' | 'submit_unknown' | 'processing' | 'ready' | 'failed'; clipErrorCode: string | null; clipErrorMessage: string | null; clipRetryable: boolean | null;
   clipProvider: string | null; clipEndpoint: string | null; clipDurationMs: number | null; clipWidth: number | null; clipHeight: number | null; clipUrl: string | null;
