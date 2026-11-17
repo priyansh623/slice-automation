@@ -17,11 +17,11 @@ const bg = (url: string | null | undefined) => (url ? `#E4E4E0 url("${url}") cen
  * Character B-roll selection, laid out like the Studio's Select step: the script on the left, the Scene Packs the script points to first (with a
  * Recommended badge), then every other pack. Ticking an image asks which scene it is for. Nothing is generated here.
  */
-export default function CharacterSelect({ b, onDone, initialFocus = null }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void; initialFocus?: number | null }) {
+export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void }) {
   const { base, scenes, sel, saving, message, save, setAssetScenes, removeAsset } = b;
   const [packs, setPacks] = useState<StudioPack[]>([]); const [assets, setAssets] = useState<Record<number, StudioAsset[]>>({});
   const [recs, setRecs] = useState<Rec[] | null>(null); const [recState, setRecState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
-  const [focus, setFocus] = useState<number | null>(initialFocus);
+  const [focus, setFocus] = useState<number | null>(null);
   const [picker, setPicker] = useState<null | { assetIds: number[]; title: string; subtitle?: string; thumb: string | null; packId: number }>(null);
   const [error, setError] = useState('');
 
