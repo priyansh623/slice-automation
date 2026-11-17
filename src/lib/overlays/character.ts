@@ -116,6 +116,8 @@ export interface ItemView extends PublicItem {
   imageJobStatus: string | null;
   imageNote: string | null;
   isTestImage: boolean;
+  /** The finished 5-second clip (signed link), once it is ready. */
+  clipUrl: string | null;
 }
 
 export async function listItems(videoProjectId: number): Promise<ItemView[]> {
@@ -129,6 +131,8 @@ export async function listItems(videoProjectId: number): Promise<ItemView[]> {
   const outById = new Map(outs.map((o) => [o.id, o])); const jobById = new Map(jobs.map((j) => [j.id, j]));
   const keys = outs.flatMap((o) => [o.thumbKey ?? o.storageKey, o.storageKey]);
   const signed = keys.length ? await signKeys(keys).catch(() => new Map<string, string>()) : new Map<string, string>();
+  const clipKeys = synced.map((r) => r.clipStoragePath).filter((k): k is string => !!k);
+  const clipSigned = clipKeys.length ? await getStorage().signedReadUrls('videos', clipKeys, 3600).catch(() => new Map<string, string>()) : new Map<string, string>();
   return synced.map((r) => {
     const o = outById.get(r.studioOutputId ?? -1); const j = jobById.get(r.studioJobId ?? -1);
     return {
@@ -139,6 +143,7 @@ export async function listItems(videoProjectId: number): Promise<ItemView[]> {
       imageJobStatus: j?.status ?? null,
       imageNote: j && (j.status === 'submit_unknown' || j.status === 'failed') ? j.errorMessage : null,
       isTestImage: j?.provider === 'mock',
+      clipUrl: r.clipStatus === 'ready' && r.clipStoragePath ? clipSigned.get(r.clipStoragePath) ?? null : null,
     };
   });
 }

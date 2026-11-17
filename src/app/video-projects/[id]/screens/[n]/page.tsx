@@ -2,13 +2,14 @@
 
 import { workflowSteps } from '@/lib/steps';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
-import CharacterGeneration from '@/components/CharacterGeneration';
+import { CharacterRail, CharacterWorkspace } from '@/components/character/CharacterWorkspace';
+import ContinueButton from '@/components/character/ContinueButton';
+import { useCharacterProduction } from '@/components/character/useCharacterProduction';
 import { useProject } from '@/contexts/ProjectContext';
-import CompileButton from '@/components/CompileButton';
 import { AddSceneModal, DeleteSceneModal, readAddSceneDraft } from '@/components/SceneModals';
 import { summarizeApproval } from '@/lib/scene-approval';
 
@@ -101,6 +102,9 @@ export default function ScreenPage() {
   const { id, n } = useParams<{ id: string; n: string }>();
   const { project, refreshProject } = useProject();
   const router = useRouter();
+  const prod = useCharacterProduction(id);
+  const cb = useSearchParams().get('cb');
+  const selectedRow = prod.rows.find((r) => r.key === cb) ?? null;
   const [showAddScene, setShowAddScene] = useState(false);
   const [sceneToDelete, setSceneToDelete] = useState<{ id: number; screenNumber: number; approvedGenerationId: number | null } | null>(null);
 
@@ -489,7 +493,7 @@ export default function ScreenPage() {
         projectId={id}
         projectName={project.name}
         steps={projectSteps}
-        actions={<><CharacterGeneration projectId={id} /><CompileButton projectId={id} screens={project.screens} onStale={() => void refreshProject()} /></>}
+        actions={<ContinueButton projectId={id} screens={project.screens} />}
       />
 
       <div className="workspace-shell">
@@ -536,7 +540,7 @@ export default function ScreenPage() {
           {/* Scene list */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {project.screens.map((s) => {
-              const isActive = s.screenNumber === currentScreenNum;
+              const isActive = s.screenNumber === currentScreenNum && !selectedRow;
               const approved = !!s.approvedGenerationId;
               return (
                 <div
@@ -665,6 +669,7 @@ export default function ScreenPage() {
             {project.screens.length === 0 && (
               <div style={{ padding: '20px 16px', font: '400 13px/1.5 Satoshi', color: '#75757C' }}>No scenes yet. Use Add scene to create one.</div>
             )}
+            <CharacterRail rows={prod.rows} imageReady={prod.imageReady} selectedKey={selectedRow?.key ?? null} onSelect={(k) => router.push(`/video-projects/${id}/screens/${currentScreenNum}?cb=${k}`)} />
             {deletedScenes.length > 0 && (
               <div style={{ borderTop: '1px solid #ECECE8', marginTop: 8 }}>
                 <button
@@ -690,6 +695,7 @@ export default function ScreenPage() {
           </div>
         </nav>
 
+        {selectedRow ? <CharacterWorkspace key={selectedRow.key} row={selectedRow} prod={prod} /> : (<>
         {/* ── Middle panel ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #ECECE8' }}>
 
@@ -1173,6 +1179,7 @@ export default function ScreenPage() {
             )}
           </div>
         </div>
+        </>)}
 
       </div>
 
