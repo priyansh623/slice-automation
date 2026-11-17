@@ -14,7 +14,7 @@ export interface CompItem {
   fullImageUrl: string | null; imageWidth: number | null; imageHeight: number | null; imageJobStatus: string | null; imageNote: string | null;
   motionPrompt: string | null; promptEdited: boolean;
   clipStatus: 'not_started' | 'queued' | 'submitting' | 'submit_unknown' | 'processing' | 'ready' | 'failed'; clipErrorCode: string | null; clipErrorMessage: string | null; clipRetryable: boolean | null;
-  clipProvider: string | null; clipEndpoint: string | null; clipDurationMs: number | null; clipWidth: number | null; clipHeight: number | null;
+  clipProvider: string | null; clipEndpoint: string | null; clipDurationMs: number | null; clipWidth: number | null; clipHeight: number | null; clipUrl: string | null;
 }
 export interface FillResult { created: number; moved: number; unplaced: number; sceneMissing: number; waiting: number }
 export interface Composition {
