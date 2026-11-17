@@ -1,87 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronLeft, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
-import { api, C, post, type CompItem, type Composition } from './types';
-import { backdrop, sheet } from './LibraryPicker';
-
-interface Pack { id: number; name: string; assetCount?: number; imageCount?: number; activeCount?: number }
-interface Asset { id: number; thumbUrl: string | null; originalFilename: string | null }
+import { useEffect, useState } from 'react';
+import { Check, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { C, post, type CompItem } from '@/components/composition/types';
 
 const imageText: Record<CompItem['imageStatus'], string> = { pending: 'Waiting', generating: 'Making the personalised image…', ready: 'Ready for your review', approved: 'Approved', rejected: 'Rejected', failed: 'Image failed' };
 const clipText: Record<CompItem['clipStatus'], string> = { not_started: 'Video not started', queued: 'Video queued', submitting: 'Sending to the video model…', submit_unknown: 'Could not confirm the request was accepted', processing: 'Making the 5-second video…', ready: 'Video ready', failed: 'Video failed' };
 
 /**
- * Character B-roll: choose a Scene Pack image, review the personalised image (the project's character swapped in), approve it, review
- * or edit the motion prompt, then start the 5-second silent video. The video step is paid and only unlocks after the image is approved.
+ * One Character B-roll item on the Generation screen: the personalised image (review, approve, reject, make again), the motion prompt, and the
+ * paid 5-second video (only after the image is approved), with the outcome-unknown and retry rules. This is the ONLY place these controls exist.
  */
-export default function CharacterPanel({ projectId, data, onClose, onChanged, onPlaced }: { projectId: string; data: Composition; onClose: () => void; onChanged: () => void; onPlaced: (overlayId: number | null) => void }) {
-  const [picking, setPicking] = useState(false);
-  const [packs, setPacks] = useState<Pack[]>([]); const [packId, setPackId] = useState<number | null>(null); const [assets, setAssets] = useState<Asset[]>([]);
-  const [action, setAction] = useState(''); const [chosen, setChosen] = useState<number | null>(null);
-  const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState('');
-  const base = `/api/v1/video-projects/${projectId}/character-broll`;
-
-  useEffect(() => { if (picking && packs.length === 0) api<{ packs: Pack[] }>('/api/v1/studio/packs').then((r) => r.ok && setPacks(r.data.packs ?? [])); }, [picking, packs.length]);
-  useEffect(() => { if (packId != null) api<{ assets: Asset[] }>(`/api/v1/studio/packs/${packId}/assets?limit=60`).then((r) => r.ok && setAssets(r.data.assets ?? [])); }, [packId]);
-
-  const run = useCallback(async (key: string, fn: () => Promise<{ ok: boolean; data: { error?: string } }>) => {
-    setBusy(key); setError('');
-    const r = await fn();
-    if (!r.ok) setError(r.data.error ?? 'Something went wrong.');
-    setBusy(null); onChanged();
-    return r;
-  }, [onChanged]);
-
-  const create = async () => { if (chosen == null) return; const r = await run('create', () => post(base, { studioAssetId: chosen, intendedAction: action })); if (r.ok) { setPicking(false); setChosen(null); setAction(''); } };
-
-  return (
-    <div role="dialog" aria-label="Character B-roll" style={backdrop} onClick={onClose}>
-      <div style={{ ...sheet, width: 'min(880px, 100%)', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={{ font: '700 16px/1.2 Satoshi' }}>{picking ? 'Choose a Scene Pack image' : 'Character B-roll'}</div>
-          <button aria-label="Close" onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>
-        </div>
-        {!data.imageGeneration.ready && <div role="alert" style={{ margin: '8px 0', padding: '8px 10px', borderRadius: 8, background: '#FFF4D6', color: C.warn, font: '400 12px/1.4 Satoshi' }}>Personalised images cannot be made right now: {data.imageGeneration.message ?? 'image generation is not available.'} You can still review existing ones.</div>}
-        {data.imageGeneration.provider === 'mock' && <div style={{ margin: '8px 0', padding: '8px 10px', borderRadius: 8, background: '#EFEBFF', color: C.primary, font: '400 12px/1.4 Satoshi' }}>Test mode: images are placeholders from the mock provider, not real replacements.</div>}
-        {error && <div role="alert" className="alert alert-error" style={{ margin: '8px 0' }}>{error}</div>}
-
-        {picking ? (
-          <div>
-            <button onClick={() => (packId != null ? setPackId(null) : setPicking(false))} style={link}><ChevronLeft size={14} /> Back</button>
-            {packId == null ? (
-              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                {packs.map((p) => <button key={p.id} onClick={() => setPackId(p.id)} style={row}>{p.name}<span style={{ color: C.muted }}>{p.activeCount ?? p.imageCount ?? p.assetCount ?? ''}</span></button>)}
-                {packs.length === 0 && <div style={{ color: C.muted, font: '400 13px/1.4 Satoshi' }}>No Scene Packs yet.</div>}
-              </div>
-            ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8, margin: '10px 0', maxHeight: '40vh', overflow: 'auto' }}>
-                  {assets.map((a) => <button key={a.id} onClick={() => setChosen(a.id)} aria-pressed={chosen === a.id} style={{ padding: 0, border: chosen === a.id ? `3px solid ${C.primary}` : `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', cursor: 'pointer', background: '#fff' }}>{a.thumbUrl ? <img src={a.thumbUrl} alt={a.originalFilename ?? 'Scene Pack image'} style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', display: 'block' }} /> : <div style={{ aspectRatio: '3 / 4', background: C.soft }} />}</button>)}
-                </div>
-                <label style={{ display: 'block', font: '500 12px/1.4 Satoshi', color: C.muted }}>What should the character do? (used to write the motion prompt)
-                  <textarea value={action} onChange={(e) => setAction(e.target.value)} rows={2} placeholder="For example: she picks up her coffee and smiles" style={{ width: '100%', marginTop: 4, borderRadius: 8, border: `1px solid ${C.borderStrong}`, padding: 8, font: '400 13px/1.4 Satoshi', boxSizing: 'border-box' }} />
-                </label>
-                <button disabled={chosen == null || busy === 'create' || !data.imageGeneration.ready} onClick={create} style={{ ...primary, marginTop: 10, opacity: chosen == null || !data.imageGeneration.ready ? 0.5 : 1 }}>{busy === 'create' ? 'Starting…' : 'Make the personalised image'}</button>
-                <div style={{ font: '400 11px/1.4 Satoshi', color: C.muted, marginTop: 6 }}>This makes an image only. Nothing is charged for video until you approve the image and start the video yourself.</div>
-              </>
-            )}
-          </div>
-        ) : (
-          <>
-            <button onClick={() => setPicking(true)} style={{ ...primary, marginTop: 8 }}><Plus size={14} /> New from a Scene Pack image</button>
-            <div style={{ display: 'grid', gap: 14, marginTop: 14 }}>
-              {data.items.length === 0 && <div style={{ color: C.muted, font: '400 13px/1.5 Satoshi' }}>No Character B-roll yet. Pick a Scene Pack image to put your character into it.</div>}
-              {data.items.map((it) => <ItemCard key={it.id} it={it} base={base} busy={busy} run={run} onPlaced={onPlaced} placed={data.overlays.some((o) => o.characterItemId === it.id)} videoReady={data.videoGeneration.ready} videoMessage={data.videoGeneration.message} onRefresh={onChanged} />)}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ItemCard({ it, base, busy, run, onPlaced, placed, videoReady, videoMessage, onRefresh }: { onRefresh: () => void; videoReady: boolean; videoMessage: string | null; it: CompItem; base: string; busy: string | null; run: (k: string, f: () => Promise<{ ok: boolean; data: { error?: string } }>) => Promise<{ ok: boolean; data: unknown }>; onPlaced: (id: number | null) => void; placed: boolean }) {
+export function ItemCard({ it, base, busy, run, videoReady, videoMessage, onRefresh }: { onRefresh: () => void; videoReady: boolean; videoMessage: string | null; it: CompItem; base: string; busy: string | null; run: (k: string, f: () => Promise<{ ok: boolean; data: { error?: string } }>) => Promise<{ ok: boolean; data: unknown }> }) {
   const [prompt, setPrompt] = useState(it.motionPrompt ?? '');
   useEffect(() => setPrompt(it.motionPrompt ?? ''), [it.motionPrompt]);
   const step = (a: string, body?: unknown) => run(`${it.id}:${a}`, () => post(`${base}/${it.id}/${a}`, body));
@@ -152,8 +82,7 @@ function ItemCard({ it, base, busy, run, onPlaced, placed, videoReady, videoMess
                 </>
               )}
               {it.clipStatus === 'submit_unknown' && <button disabled={!!busy} onClick={() => step('generate', { confirmDuplicate: true })} style={{ ...ghost, marginTop: 8 }}>Try again anyway (could be charged twice)</button>}
-              {it.clipStatus === 'ready' && !placed && <button disabled={!!busy} onClick={async () => { const r = await run(`${it.id}:place`, () => post(`${base}/${it.id}/place`)); if (r.ok) onPlaced((r.data as { id?: number }).id ?? null); }} style={{ ...primary, marginTop: 8 }}>Add to the timeline</button>}
-              {it.clipStatus === 'ready' && placed && <div style={{ font: '400 12px/1.4 Satoshi', color: C.ok, marginTop: 4 }}>On the timeline.</div>}
+              {it.clipStatus === 'ready' && <div style={{ font: '400 12px/1.4 Satoshi', color: C.ok, marginTop: 4 }}>Ready. It is placed on its scene in Composition automatically.</div>}
             </div>
           </div>
         )}
@@ -163,8 +92,6 @@ function ItemCard({ it, base, busy, run, onPlaced, placed, videoReady, videoMess
 }
 const primary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', borderRadius: 9, background: C.primary, color: '#fff', border: 'none', font: '700 13px/1 Satoshi', cursor: 'pointer' };
 const ghost: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 8, background: '#fff', border: `1px solid ${C.borderStrong}`, font: '500 12px/1 Satoshi', cursor: 'pointer', color: C.text };
-const link: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'none', cursor: 'pointer', font: '500 12px/1 Satoshi', color: C.muted, padding: 0 };
-const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 40, padding: '0 12px', borderRadius: 9, border: `1px solid ${C.border}`, background: '#fff', font: '500 13px/1 Satoshi', cursor: 'pointer' };
 
 type ImageState = 'loading' | 'ok' | 'failed';
 

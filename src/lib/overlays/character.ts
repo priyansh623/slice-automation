@@ -8,7 +8,7 @@
 import * as crypto from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { characterBrollItems, studioAssets, studioJobs, studioOutputs, studioProjectLinks, studioProjects, videoOverlays, videoProjects, studioSelections } from '@/db/schema.pg';
+import { characterBrollItems, studioAssets, studioJobs, studioOutputs, studioProjectLinks, studioProjects, videoProjects, studioSelections } from '@/db/schema.pg';
 import { getStorage } from '@/lib/object-store';
 import { registerObjectIfAbsent } from '@/lib/object-store/registry';
 import { approvePacks, listProjectPacks } from '@/lib/studio/approvals';
@@ -21,9 +21,8 @@ import { newCharacterKey } from '@/lib/studio/keys';
 import { reviewOutput } from '@/lib/studio/outputs';
 import { StudioError } from '@/lib/studio/repository';
 import { addToSelection } from '@/lib/studio/selection';
-import { OverlayError, overlayLimit, planningSpans } from './service';
+import { OverlayError } from './service';
 import { videoGenerationReadiness } from './readiness';
-import { checkPlacement, firstFreePlacement } from './timeline';
 
 export const CLIP_SECONDS = 5;
 export type ItemRow = typeof characterBrollItems.$inferSelect;
@@ -251,40 +250,6 @@ export async function startClip(videoProjectId: number, itemId: number, opts: { 
     if (!row) throw err(409, 'state_changed', 'The image changed. Look at it again.');
     return row;
   } catch (e) { await refundBudget(slot); throw e; }
-}
-
-// ── Putting a ready clip on the timeline ─────────────────────────────────────
-
-export interface PlaceCharacter { anchorScreenId?: number; startOffsetMs?: number; durationMs?: number; sourceStartMs?: number; track?: number }
-
-export async function createCharacterOverlay(videoProjectId: number, userId: string, itemId: number, place: PlaceCharacter = {}) {
-  return db.transaction(async (tx) => {
-    await tx.select({ id: videoProjects.id }).from(videoProjects).where(eq(videoProjects.id, videoProjectId)).for('update');
-    const [item] = await tx.select().from(characterBrollItems).where(and(eq(characterBrollItems.id, itemId), eq(characterBrollItems.videoProjectId, videoProjectId))).limit(1);
-    if (!item) throw err(404, 'not_found', 'Character B-roll not found.');
-    if (item.clipStatus !== 'ready' || !item.clipStoragePath) throw err(409, 'clip_not_ready', 'The video is not ready yet.');
-    const existing = await tx.select().from(videoOverlays).where(eq(videoOverlays.videoProjectId, videoProjectId));
-    if (existing.length >= overlayLimit()) throw err(409, 'overlay_limit', `A video can have at most ${overlayLimit()} B-roll overlays.`);
-    if (existing.some((o) => o.characterItemId === item.id)) throw err(409, 'already_placed', 'This clip is already on the timeline.');
-    const { spans } = await planningSpans(tx, videoProjectId);
-    if (spans.length === 0) throw err(422, 'no_scenes', 'Add Flow scenes before adding B-roll.');
-    const track = place.track ?? 0; const sourceStart = Math.max(0, Math.round(place.sourceStartMs ?? 0));
-    const clipMs = item.clipDurationMs ?? CLIP_SECONDS * 1000;
-    const duration = Math.max(500, Math.min(Math.round(place.durationMs ?? clipMs), clipMs - sourceStart));
-    let anchor = place.anchorScreenId; let offset = place.startOffsetMs;
-    const timing = existing.map((o) => ({ id: o.id, track: o.track, anchorScreenId: o.anchorScreenId, startOffsetMs: o.startOffsetMs, durationMs: o.durationMs, sourceStartMs: o.sourceStartMs, assetDurationMs: o.assetDurationMs }));
-    if (anchor == null) {
-      const free = firstFreePlacement(spans, timing, duration, track);
-      if (!free) throw err(409, 'no_room', 'There is no free space on the B-roll track for this clip.');
-      anchor = free.anchorScreenId; offset = free.startOffsetMs;
-    }
-    const cand = { id: -1, track, anchorScreenId: anchor, startOffsetMs: Math.round(offset ?? 0), durationMs: duration, sourceStartMs: sourceStart, assetDurationMs: clipMs };
-    const problems = checkPlacement(spans, timing, cand);
-    if (problems.length) throw err(409, problems[0].code, problems[0].message);
-    const now = Date.now();
-    const [row] = await tx.insert(videoOverlays).values({ videoProjectId, kind: 'character', track, anchorScreenId: cand.anchorScreenId, startOffsetMs: cand.startOffsetMs, durationMs: duration, sourceStartMs: sourceStart, assetStoragePath: item.clipStoragePath, assetWidth: item.clipWidth, assetHeight: item.clipHeight, assetDurationMs: clipMs, characterItemId: item.id, status: 'ready', createdBy: userId, createdAt: now, updatedAt: now }).returning();
-    return row;
-  });
 }
 
 export { studioSelections };

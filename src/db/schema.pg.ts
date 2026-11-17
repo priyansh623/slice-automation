@@ -70,6 +70,7 @@ export const videoProjects = pgTable('video_projects', {
   baseImageSignedUrl: text('base_image_signed_url'),       // cached signed URL (see migration 0015)
   baseImageSignedUrlExpiresAt: bigint('base_image_signed_url_expires_at', { mode: 'number' }), // Unix ms
   archivedAt: bigint('archived_at', { mode: 'number' }),   // set when admin archives the project
+  brollSelection: jsonb('broll_selection'),                // migration 0029: B-roll picked before generation, IDs only (see lib/overlays/selection.ts)
   createdAt: bigint('created_at', { mode: 'number' }).notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
@@ -593,6 +594,7 @@ export const videoOverlays = pgTable('video_overlays', {
   brollClipId: integer('broll_clip_id').references(() => brollClips.id),
   characterItemId: integer('character_item_id').references(() => characterBrollItems.id),
   status: text('status').notNull().default('preparing'),            // preparing | ready | failed
+  placementSource: text('placement_source').notNull().default('manual'), // migration 0029: 'auto' (system arranged) | 'manual' (a person placed or edited it)
   errorMessage: text('error_message'),
   claimedAt: bigint('claimed_at', { mode: 'number' }),
   createdBy: uuid('created_by').notNull(),

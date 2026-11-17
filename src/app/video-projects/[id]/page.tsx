@@ -136,6 +136,9 @@ function sceneStatus(s: Screen, promptTask: PromptTask | undefined, isNext: bool
   return { kind: 'not-started' };
 }
 
+/** Projects whose post-approval redirect is already on its way (the page re-renders while it waits). */
+const redirecting = new Set<string>();
+
 export default function VideoProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -458,7 +461,14 @@ export default function VideoProjectPage() {
 
   // Phase 3: Breakdown approved — redirect to scene 1
   if (project.breakdownApprovedAt) {
-    router.replace(`/video-projects/${id}/screens/1`);
+    // A project that has not started generating goes to B-roll selection first (when B-roll is on); otherwise straight to the scenes, as before.
+    const nothingGenerated = editedScreens.every((s) => !s.latestGen && !s.approvedGenerationId);
+    if (!redirecting.has(String(id))) {
+      redirecting.add(String(id)); setTimeout(() => redirecting.delete(String(id)), 3000);
+      const toScenes = () => router.replace(`/video-projects/${id}/screens/1`);
+      if (!nothingGenerated) toScenes();
+      else fetch(`/api/v1/video-projects/${id}/broll-selection`).then((r) => (r.ok ? router.replace(`/video-projects/${id}/broll`) : toScenes())).catch(toScenes);
+    }
     return null;
   }
 

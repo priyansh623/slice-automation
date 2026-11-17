@@ -33,6 +33,7 @@ export default function Details({ overlay, scenes, item, onChange, onRemove, onR
         <span style={{ ...pill, background: overlay.status === 'ready' ? '#E7F5EE' : overlay.status === 'failed' ? '#FDECEA' : '#FFF4D6', color: overlay.status === 'ready' ? C.ok : overlay.status === 'failed' ? C.danger : C.warn }}>{statusText[overlay.status]}</span>
       </div>
       <div style={{ font: '400 12px/1.4 Satoshi', color: C.muted, marginTop: 4 }}>{sourceLine}</div>
+      <div style={{ font: '500 11px/1.4 Satoshi', color: overlay.placementSource === 'auto' ? C.muted : C.primary, marginTop: 4 }} data-testid="placement-source">{overlay.placementSource === 'auto' ? 'Placed automatically. Change it and it becomes yours.' : 'Placed or edited by you. It is never moved automatically.'}</div>
 
       {overlay.needsAttention && (
         <div role="alert" style={{ display: 'flex', gap: 8, marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#FDECEA', color: C.danger, font: '400 12px/1.4 Satoshi' }}>

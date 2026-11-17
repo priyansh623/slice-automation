@@ -9,9 +9,8 @@ import Preview, { type PreviewHandle } from '@/components/composition/Preview';
 import Timelines from '@/components/composition/Timelines';
 import Details from '@/components/composition/Details';
 import LibraryPicker from '@/components/composition/LibraryPicker';
-import CharacterPanel from '@/components/composition/CharacterPanel';
-import { api, C, patch, post, type Composition } from '@/components/composition/types';
-import { AlertTriangle, ChevronRight, Film, UserRound } from 'lucide-react';
+import { api, C, patch, post, type Composition, type FillResult } from '@/components/composition/types';
+import { AlertTriangle, ChevronRight, Film } from 'lucide-react';
 
 /**
  * Composition: the Flow sequence (primary timeline, in compile order) with B-roll overlays placed on top of it. Overlays are silent and
@@ -25,22 +24,25 @@ export default function CompositionPage() {
   const [time, setTime] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [picker, setPicker] = useState<null | { mode: 'add' } | { mode: 'replace'; id: number }>(null);
-  const [character, setCharacter] = useState(false);
   const [message, setMessage] = useState('');
   const preview = useRef<PreviewHandle>(null);
   const base = `/api/v1/video-projects/${id}`;
 
-  const load = useCallback(async () => {
+  // The timeline is filled in from the B-roll selection (library clips, and Character clips that finished on the Generation screen). Safe to
+  // repeat: it makes nothing twice, never brings back a clip you removed and never moves a clip you placed or edited.
+  const [fill, setFill] = useState<FillResult | null>(null);
+  const load = useCallback(async (populate = false) => {
+    if (populate) { const f = await api<FillResult>(`${base}/overlays/populate`, { method: 'POST' }); if (f.ok) setFill(f.data as FillResult); }
     const r = await api<Composition>(`${base}/composition`);
     if (r.status === 404) { setState('off'); return; }
     if (!r.ok) { setState('error'); return; }
     setData(r.data as unknown as Composition); setState('ready');
   }, [base]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(true); }, [load]);
 
   // Keep fresh while something is being prepared or generated.
   const busy = !!data && (data.overlays.some((o) => o.status === 'preparing') || data.items.some((i) => i.imageStatus === 'generating' || ['queued', 'submitting', 'submit_unknown', 'processing'].includes(i.clipStatus)));
-  useEffect(() => { if (!busy) return; const t = setInterval(() => void load(), 4000); return () => clearInterval(t); }, [busy, load]);
+  useEffect(() => { if (!busy) return; const t = setInterval(() => void load(true), 4000); return () => clearInterval(t); }, [busy, load]);
 
   const run = async (fn: () => Promise<{ ok: boolean; data: { error?: string } }>): Promise<string | null> => {
     setMessage('');
@@ -89,12 +91,14 @@ export default function CompositionPage() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ font: '400 12px/1 Satoshi', color: C.muted }}>{data.overlays.length} / {data.limit} B-roll</span>
               <button disabled={atLimit} onClick={() => setPicker({ mode: 'add' })} style={tool}><Film size={14} /> Add library B-roll</button>
-              <button disabled={atLimit} onClick={() => setCharacter(true)} style={tool}><UserRound size={14} /> Character B-roll</button>
             </div>
           </div>
-          <p style={{ font: '400 13px/1.5 Satoshi', color: C.muted, margin: '6px 0 16px' }}>B-roll sits on top of your Flow scenes and is silent. The Flow narration keeps playing, and the Flow footage comes back when a clip ends.</p>
+          <p style={{ font: '400 13px/1.5 Satoshi', color: C.muted, margin: '6px 0 16px' }}>B-roll sits on top of your Flow scenes and is silent. It was placed for you from the scenes you chose it for; drag, trim or remove anything and your changes are kept. The Flow narration keeps playing, and the Flow footage comes back when a clip ends.</p>
 
           {message && <div role="alert" className="alert alert-error" style={{ marginBottom: 12 }}>{message}</div>}
+          {fill && fill.waiting > 0 && <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, padding: '8px 12px', borderRadius: 9, background: '#FFF4D6', color: C.warn, font: '500 12px/1.4 Satoshi' }}>{fill.waiting} Character B-roll clip{fill.waiting === 1 ? ' is' : 's are'} still being made. {fill.waiting === 1 ? 'It' : 'They'} will appear here, on the right scene, once the video is ready. <Link href={`/video-projects/${id}/screens/1`} style={{ color: 'inherit', textDecoration: 'underline' }}>Open Generation</Link></div>}
+          {fill && fill.unplaced > 0 && <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, padding: '8px 12px', borderRadius: 9, background: '#FFF4D6', color: C.warn, font: '500 12px/1.4 Satoshi' }}>{fill.unplaced} selected clip{fill.unplaced === 1 ? '' : 's'} did not fit inside {fill.unplaced === 1 ? 'its' : 'their'} scene without overlapping another clip, so {fill.unplaced === 1 ? 'it was' : 'they were'} not placed. Make room or choose another scene.</div>}
+          {fill && fill.sceneMissing > 0 && <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, padding: '8px 12px', borderRadius: 9, background: '#FDECEA', color: C.danger, font: '500 12px/1.4 Satoshi' }}>{fill.sceneMissing} selected clip{fill.sceneMissing === 1 ? ' belongs' : 's belong'} to a scene that was deleted. {fill.sceneMissing === 1 ? 'It was' : 'They were'} not placed. <Link href={`/video-projects/${id}/broll`} style={{ color: 'inherit', textDecoration: 'underline' }}>Choose B-roll again</Link></div>}
           {attention.length > 0 && <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, padding: '8px 12px', borderRadius: 9, background: '#FDECEA', color: C.danger, font: '500 12px/1.4 Satoshi' }}><AlertTriangle size={14} /> {attention.length} B-roll clip{attention.length === 1 ? ' needs' : 's need'} attention before you can compile.</div>}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
@@ -114,7 +118,6 @@ export default function CompositionPage() {
       </div>
 
       {picker && <LibraryPicker title={picker.mode === 'replace' ? 'Replace with another library clip' : 'Add library B-roll'} onPick={(cid) => void addLibrary(cid)} onClose={() => setPicker(null)} />}
-      {character && <CharacterPanel projectId={id} data={data} onClose={() => setCharacter(false)} onChanged={() => void load()} onPlaced={(oid) => { setCharacter(false); setSelectedId(oid); }} />}
     </AppShell>
   );
 }

@@ -22,8 +22,8 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: { g
 vi.mock('@/lib/object-store', async (orig) => ({ ...(await orig<typeof import('@/lib/object-store')>()), getStorage: () => holder.store }));
 
 import { POST as actionPost } from '@/app/api/v1/video-projects/[id]/character-broll/[cid]/[action]/route';
-import { GET as itemsGet, POST as itemsPost } from '@/app/api/v1/video-projects/[id]/character-broll/route';
-import { approveImage, createCharacterItem, createCharacterOverlay, getItem, regenerateImage, rejectImage, setMotionPrompt, startClip, suggestMotionPrompt } from '@/lib/overlays/character';
+import { GET as itemsGet } from '@/app/api/v1/video-projects/[id]/character-broll/route';
+import { approveImage, createCharacterItem, getItem, regenerateImage, rejectImage, setMotionPrompt, startClip, suggestMotionPrompt } from '@/lib/overlays/character';
 import { generationRound, type GenerationDeps } from '@/lib/studio/generation';
 import { MockReplacementProvider } from '@/lib/studio/mock-provider';
 import { MockClipProvider } from '@/lib/overlays/mock-clip-provider';
@@ -185,9 +185,6 @@ describe('the video job', () => {
     expect(probeJson(f).streams.some((s) => s.codec_type === 'audio')).toBe(false);   // the raw clip had a tone; ours is silent
     expect(store.objects.has(`videos/${(done.clipProbe as { sourceKey: string }).sourceKey}`)).toBe(true);   // provider file kept as it arrived
     expect(Math.abs((done.clipDurationMs ?? 0) - 5000)).toBeLessThan(150);
-    const overlay = await createCharacterOverlay(w.p, USER, id, { anchorScreenId: w.screens[0], startOffsetMs: 2000, durationMs: 3000 });
-    expect(overlay).toMatchObject({ kind: 'character', status: 'ready', assetStoragePath: done.clipStoragePath, characterItemId: id });
-    await expect(createCharacterOverlay(w.p, USER, id)).rejects.toMatchObject({ code: 'already_placed' });
   }, 180_000);
 
   it('a rejected submission fails the item without charging a second time; retry uses a NEW idempotency key and the same approval', async () => {
@@ -298,6 +295,5 @@ describe('the video job', () => {
     const w = await world();
     process.env.BROLL_OVERLAYS_ENABLED = 'false';
     expect((await call(itemsGet, { params: w.params })).status).toBe(404);
-    expect((await call(itemsPost, { method: 'POST', params: w.params, body: { studioAssetId: w.assetId } })).status).toBe(404);
   });
 });

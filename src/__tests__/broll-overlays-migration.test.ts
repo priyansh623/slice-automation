@@ -77,3 +77,27 @@ describe('migration 0028', () => {
     await bare.close();
   });
 });
+
+describe('migration 0029', () => {
+  it('adds the selection column and the placement marker, defaults existing overlays to manual, and keeps nothing else', async () => {
+    const w = await world();
+    await overlay(w);
+    const row = (await pg.query<{ placement_source: string }>(`select placement_source from video_overlays where video_project_id = $1`, [w.p])).rows[0];
+    expect(row.placement_source).toBe('manual');
+    expect((await pg.query<{ broll_selection: unknown }>(`select broll_selection from video_projects where id = $1`, [w.p])).rows[0].broll_selection).toBeNull();
+    await pg.query(`update video_projects set broll_selection = $2::jsonb where id = $1`, [w.p, JSON.stringify({ version: 1, generic: [{ clipId: w.c, screenId: w.s }], character: [] })]);
+    expect(((await pg.query<{ broll_selection: { generic: unknown[] } }>(`select broll_selection from video_projects where id = $1`, [w.p])).rows[0].broll_selection).generic).toHaveLength(1);
+    await expect(pg.query(`update video_overlays set placement_source = 'user' where video_project_id = $1`, [w.p])).rejects.toThrow(/placement_source_check/);
+    await pg.query(`update video_overlays set placement_source = 'auto' where video_project_id = $1`, [w.p]);
+    const cols = (await pg.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'video_overlays'`)).rows.map((r) => r.column_name);
+    expect(cols).not.toContain('anchor_text_hash');
+  });
+
+  it('is safe to run again and fails clearly without 0028', async () => {
+    const sql = fs.readFileSync(path.join(ROOT, 'drizzle/pg/0029_broll_selection.sql'), 'utf8');
+    await pg.exec(sql);
+    const bare = new PGlite();
+    await expect(bare.exec(sql)).rejects.toThrow(/needs migration 0028/);
+    await bare.close();
+  });
+});
