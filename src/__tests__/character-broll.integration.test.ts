@@ -157,7 +157,8 @@ describe('the motion prompt', () => {
     expect(sent.messages[0].content.find((c) => c.type === 'text')?.text).toContain('She picks up her coffee and smiles');   // and the intended action
     expect(sent.system).toContain('Generate a video where the model is cooking');           // Soma's own prompts are the examples
     expect(sent.system).toContain('no speaking'); expect(sent.system).toContain('keep the camera static');
-    expect(sent.system).toMatch(/KEEP IT SHORT AND SIMPLE/); expect(sent.system).toMatch(/no emotional transitions/);   // short, simple, like the examples
+    expect(sent.system).toMatch(/INTENDED ACTION ALWAYS WINS/);                                 // the person's action is never replaced
+    expect(sent.system).toMatch(/KEEP IT SHORT AND SIMPLE/); expect(sent.system).toMatch(/no emotional build-up/);   // short, simple, like the examples
     expect(sent.system).toMatch(/FIRST FRAME/); expect(sent.system).toMatch(/do not use @ references/i);   // written for the frame; no @ tags (one image only)
     expect(sent.system).not.toMatch(/always add|append/i);                                  // the camera line is chosen per image, never pasted on
     const edited = await setMotionPrompt(w.p, it.id, '  Slow dolly in as she smiles.  ');
