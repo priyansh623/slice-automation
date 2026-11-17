@@ -22,13 +22,12 @@ export default function BrollPage() {
   const router = useRouter();
   const params = useSearchParams();
   const view = params.get('view');
-  const sceneParam = Number(params.get('scene')) || null;
   const b = useBrollSelection(id);
-  const [clipTitles, setClipTitles] = useState<Record<number, string>>({}); const [clipThumbs, setClipThumbs] = useState<string[]>([]); const [packThumbs, setPackThumbs] = useState<string[]>([]);
+  const [clipThumbs, setClipThumbs] = useState<string[]>([]); const [packThumbs, setPackThumbs] = useState<string[]>([]);
 
   // A few real items for the two cards' pictures (no choice is made by showing them).
   useEffect(() => {
-    api<Array<{ id: number; title: string; signedUrl: string | null }>>('/api/v1/broll').then((r) => { if (!r.ok) return; const list = r.data as unknown as Array<{ id: number; title: string; signedUrl: string | null }>; setClipThumbs(list.map((c) => c.signedUrl).filter((u): u is string => !!u).slice(0, 4)); setClipTitles(Object.fromEntries(list.map((c) => [c.id, c.title]))); });
+    api<Array<{ signedUrl: string | null }>>('/api/v1/broll').then((r) => { if (!r.ok) return; const list = r.data as unknown as Array<{ signedUrl: string | null }>; setClipThumbs(list.map((c) => c.signedUrl).filter((u): u is string => !!u).slice(0, 4)); });
     void (async () => { try {
       const packs = (await studioApi<{ packs: StudioPack[] }>('/api/v1/studio/packs')).packs.filter((p) => !p.archivedAt && p.assetCount > 0);
       const first = packs[0]; if (!first) return;
@@ -38,7 +37,7 @@ export default function BrollPage() {
   }, []);
 
   const steps = workflowSteps('B-roll');
-  const go = (v: string | null, scene?: number) => router.push(v ? `/video-projects/${id}/broll?view=${v}${scene ? `&scene=${scene}` : ''}` : `/video-projects/${id}/broll`);
+  const go = (v: string | null) => router.push(v ? `/video-projects/${id}/broll?view=${v}` : `/video-projects/${id}/broll`);
   if (b.state === 'loading') return <AppShell><div className="page-body"><div className="skeleton" style={{ height: 28, width: '40%' }} /></div></AppShell>;
   if (b.state !== 'ready') return <AppShell><div className="page-body" style={{ maxWidth: 560 }}><h1 style={{ font: '700 22px/1.2 Satoshi' }}>{b.state === 'off' ? 'B-roll is not turned on' : 'Could not load this step'}</h1><p style={{ font: '400 14px/1.5 Satoshi', color: C.muted }}>{b.state === 'off' ? 'Continue to scene generation.' : 'Reload the page to try again.'}</p><a href={`/video-projects/${id}/screens/1`}>Continue</a></div></AppShell>;
 
@@ -53,7 +52,7 @@ export default function BrollPage() {
           <button onClick={() => go(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', cursor: 'pointer', font: '500 13px/1 Satoshi', color: C.muted }}><ArrowLeft size={14} /> B-roll</button>
           <span style={{ color: '#C4C4C9' }}>/</span><b style={{ font: '700 14px/1 Satoshi' }}>{view === 'generic' ? 'Add Generic B-roll' : 'Add Character B-roll'}</b>
         </div>
-        {view === 'generic' ? <GenericSelect key={sceneParam ?? 'all'} b={b} onDone={() => go(null)} initialFocus={sceneParam} /> : <CharacterSelect key={sceneParam ?? 'all'} b={b} onDone={() => go(null)} initialFocus={sceneParam} />}
+        {view === 'generic' ? <GenericSelect b={b} onDone={() => go(null)} /> : <CharacterSelect b={b} onDone={() => go(null)} />}
       </AppShell>
     );
   }
@@ -86,30 +85,6 @@ export default function BrollPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 28 }}>
             {card('generic', 'Add Generic B-roll', 'Ready-to-use clips from the Generic B-roll library.', nGen, clipThumbs, <Film size={22} />)}
             {card('character', 'Add Character B-roll', 'Pick scenes from the Scene Pack. Your character takes the place of the person in them.', nChar, packThumbs, <UserRound size={22} color="#6C47FF" />)}
-          </div>
-          <h2 style={{ margin: '40px 0 4px', font: '700 22px/1.2 Satoshi' }}>Your script, scene by scene</h2>
-          <p style={{ margin: '0 0 16px', font: '400 14px/1.5 Satoshi', color: '#75757C' }}>See what is chosen for each scene, or add B-roll to a specific scene.</p>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {b.scenes.map((s) => {
-              const gens = b.sel.generic.filter((g) => g.screenId === s.screenId); const chars = b.sel.character.filter((c) => c.screenId === s.screenId);
-              const btn: React.CSSProperties = { height: 32, padding: '0 12px', borderRadius: 8, background: '#fff', border: '1px solid #E4E4E0', font: '600 12px/1 Satoshi', cursor: 'pointer', whiteSpace: 'nowrap' };
-              return (
-                <div key={s.screenId} data-testid={`scene-row-${s.sceneNumber}`} style={{ display: 'flex', gap: 16, alignItems: 'center', padding: '14px 16px', borderRadius: 14, background: '#fff', border: '1px solid #ECECE8', flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-                    <b style={{ font: '700 11px/1 Satoshi', color: '#6C47FF', textTransform: 'uppercase', letterSpacing: '.05em' }}>Scene {s.sceneNumber}</b>
-                    <div style={{ font: '400 14px/1.5 Satoshi', marginTop: 4 }}>{s.dialogue}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: gens.length + chars.length ? 8 : 0 }}>
-                      {gens.map((g) => <span key={`g${g.clipId}`} style={{ padding: '4px 10px', borderRadius: 999, background: '#EFF6FF', color: '#1D4ED8', font: '500 12px/1.2 Satoshi' }}>Clip: {clipTitles[g.clipId] ?? 'Library clip'}</span>)}
-                      {chars.map((c) => <span key={`c${c.assetId}`} style={{ padding: '4px 10px', borderRadius: 999, background: '#FFF1E8', color: '#C2410C', font: '500 12px/1.2 Satoshi' }}>Character image{c.action ? `: ${c.action.slice(0, 40)}` : ''}</span>)}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={btn} onClick={() => go('generic', s.screenId)}>+ Generic B-roll</button>
-                    <button style={btn} onClick={() => go('character', s.screenId)}>+ Character B-roll</button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 14, marginTop: 32 }}>
             <span style={{ font: '400 13px/1.4 Satoshi', color: C.muted }}>{nGen + nChar === 0 ? 'You can skip B-roll and add it later.' : 'Nothing is generated or charged until you start it on the next screen.'}</span>

@@ -19,10 +19,10 @@ const flat = (nodes: Cat[]): Cat[] => nodes.flatMap((n) => [n, ...flat(n.childre
  * are highlighted and shown first. They come from the library's own search (its concept lexicon, tags and categories), never an AI call.
  * Ticking a clip asks which scene it is for. Nothing is generated here.
  */
-export default function GenericSelect({ b, onDone, initialFocus = null }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void; initialFocus?: number | null }) {
+export default function GenericSelect({ b, onDone }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void }) {
   const { scenes, sel, saving, message, save, setClipScenes, removeClip } = b;
   const [clips, setClips] = useState<Clip[] | null>(null); const [cats, setCats] = useState<Cat[]>([]);
-  const [q, setQ] = useState(''); const [catId, setCatId] = useState<number | null>(null); const [focus, setFocus] = useState<number | null>(initialFocus);
+  const [q, setQ] = useState(''); const [catId, setCatId] = useState<number | null>(null); const [focus, setFocus] = useState<number | null>(null);
   const [picker, setPicker] = useState<Clip | null>(null);
 
   useEffect(() => {
