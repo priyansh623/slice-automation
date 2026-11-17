@@ -58,6 +58,11 @@ export interface GenerationDeps {
    * (they are not claimed and not failed) while running jobs are still polled and finished.
    */
   canSubmit?: () => boolean;
+  /** A quick database step (claiming or finding jobs) that does not answer within this long is turned into an error, so a dead connection cannot freeze the loop silently. */
+  dbTimeoutMs?: number;
+  /** Tests only: replace the claim / due-job lookups. */
+  claim?: typeof claimQueuedJobs;
+  due?: typeof dueJobs;
 }
 
 const EXT_OF_MIME: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
@@ -335,8 +340,14 @@ export async function reconcileAmbiguousJobs(deps: GenerationDeps, opts: { limit
 /** One pass: submit up to `submitLimit` queued jobs and poll up to `pollLimit` due ones, all concurrently. Returns how many it handled. */
 export async function generationRound(deps: GenerationDeps, limits: { submit: number; poll: number }): Promise<number> {
   const now = (deps.now ?? Date.now)();
-  const claimed = deps.canSubmit && !deps.canSubmit() ? [] : await claimQueuedJobs(limits.submit, now);
-  const due = await dueJobs(limits.poll, now);
+  const guard = <T,>(p: Promise<T>, what: string): Promise<T> => {
+    if (!deps.dbTimeoutMs) return p;
+    let timer: ReturnType<typeof setTimeout>;
+    const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} did not answer within ${deps.dbTimeoutMs! / 1000} s`)), deps.dbTimeoutMs); });
+    return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+  };
+  const claimed = deps.canSubmit && !deps.canSubmit() ? [] : await guard((deps.claim ?? claimQueuedJobs)(limits.submit, now), 'claiming queued images');
+  const due = await guard((deps.due ?? dueJobs)(limits.poll, now), 'finding images to check');
   await Promise.all([...claimed.map((j) => submitJob(j, deps)), ...due.map((j) => pollJob(j, deps))]);
   return claimed.length + due.length;
 }
