@@ -1,5 +1,6 @@
 'use client';
 
+import { workflowSteps } from '@/lib/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -154,13 +155,7 @@ export default function CompilePage() {
 
   const unapprovedScenes = project.screens.filter((s) => !s.approvedGenerationId);
 
-  const projectSteps = [
-    { label: 'Script', status: 'complete' as const },
-    { label: 'Breakdown', status: 'complete' as const },
-    { label: 'Scenes', status: allApproved ? ('complete' as const) : ('active' as const) },
-    { label: 'Compile', status: 'active' as const },
-    { label: 'Review', status: 'pending' as const },
-  ];
+  const projectSteps = workflowSteps('Compile').map((st) => (st.label === 'Scenes' && !allApproved ? { ...st, status: 'active' as const } : st));
 
   const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
 

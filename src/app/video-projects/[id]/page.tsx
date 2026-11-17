@@ -1,5 +1,6 @@
 'use client';
 
+import { workflowSteps } from '@/lib/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -502,13 +503,7 @@ export default function VideoProjectPage() {
       <ProjectHeader
         projectId={project.id}
         projectName={project.name}
-        steps={[
-          { label: 'Script', status: 'complete' },
-          { label: 'Breakdown', status: 'active' },
-          { label: 'Scenes', status: 'pending' },
-          { label: 'Compile', status: 'pending' },
-          { label: 'Review', status: 'pending' },
-        ]}
+        steps={workflowSteps('Breakdown')}
         statusLabel="Breakdown review"
       />
 

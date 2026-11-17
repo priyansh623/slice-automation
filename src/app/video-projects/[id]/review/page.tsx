@@ -1,5 +1,6 @@
 'use client';
 
+import { workflowSteps } from '@/lib/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -133,13 +134,7 @@ export default function ReviewPage() {
   const isFailed = compilation?.status === 'failed';
   const isCompleted = compilation?.status === 'completed';
 
-  const projectSteps = [
-    { label: 'Script', status: 'complete' as const },
-    { label: 'Breakdown', status: 'complete' as const },
-    { label: 'Scenes', status: 'complete' as const },
-    { label: 'Compile', status: 'complete' as const },
-    { label: 'Review', status: 'active' as const },
-  ];
+  const projectSteps = workflowSteps('Review');
 
   return (
     <AppShell>

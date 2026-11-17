@@ -29,7 +29,7 @@ import { POST as characterAction } from '@/app/api/v1/video-projects/[id]/charac
 import { GET as compositionGet } from '@/app/api/v1/video-projects/[id]/composition/route';
 import { POST as compilePost } from '@/app/api/v1/video-projects/[id]/compilations/route';
 import { approveImage, setMotionPrompt, startClip } from '@/lib/overlays/character';
-import { recommendGeneric, tokens } from '@/lib/overlays/recommend-generic';
+import { recommendClips } from '@/lib/broll-recommend';
 import { generationRound, type GenerationDeps } from '@/lib/studio/generation';
 import { MockReplacementProvider } from '@/lib/studio/mock-provider';
 import { MockClipProvider } from '@/lib/overlays/mock-clip-provider';
@@ -98,30 +98,25 @@ async function finishCharacterClip(w: W, itemId: number) {
   for (let i = 0; i < 6; i++) { await pg.exec(`update character_broll_items set next_poll_at = 0 where next_poll_at is not null`); await processCharacterClips(d); }
 }
 
-describe('script-based suggestions (no AI, no new data)', () => {
-  const scenes = [{ screenId: 1, sceneNumber: 1, dialogue: 'I tap my card at the cafe and order coffee.' }, { screenId: 2, sceneNumber: 2, dialogue: 'Quiet night.' }];
-  const clip = (id: number, over: Record<string, unknown>) => ({ id, title: 'x', aiTags: null, aiSubjects: null, aiSummary: null, aiSceneType: null, userTags: null, category: null, subject: null, activity: null, reviewStatus: 'approved', ...over });
-  it('orders clips by shared words, explains why, and never suggests a clip with no shared word', () => {
-    const out = recommendGeneric(scenes, [clip(1, { aiTags: '["coffee","cafe"]' }), clip(2, { title: 'Coffee shop' }), clip(3, { aiTags: '["mountain"]' }), clip(4, { aiSummary: 'someone taps a card' })]);
-    expect(out[1].map((s) => s.clipId)).toEqual([1, 2, 4]);
-    expect(out[1][0].matches).toEqual(expect.arrayContaining(['coffee', 'cafe']));
-    expect(out[2]).toEqual([]);
+describe('script-based suggestions (the library\'s own search, no AI, no new data)', () => {
+  const clip = (id: number, over: Record<string, unknown>) => ({ id, title: 'x', userTags: null, ...over });
+  const scenes = [{ screenId: 1, dialogue: 'I tap my card at the cafe and pay.' }, { screenId: 2, dialogue: 'Quiet night.' }];
+  it('suggests clips the script points to, with the scene and the reason, and nothing for a scene with no match', () => {
+    const out = recommendClips(scenes, [clip(1, { title: 'Paying with a credit card', userTags: JSON.stringify(['payment', 'card']) }), clip(2, { title: 'Mountain sunrise', userTags: JSON.stringify(['travel']) })], []);
+    expect(out.map((r) => r.clip.id)).toEqual([1]);
+    expect(out[0].scenes).toEqual([1]); expect(out[0].why.length).toBeGreaterThan(0);
   });
-  it('leaves out archived and rejected clips, and stems simple word forms', () => {
-    expect(tokens('tapping cards')).toEqual(expect.arrayContaining(['tapp', 'card'].map((x) => x)) );
-    const out = recommendGeneric(scenes, [clip(1, { aiTags: '["coffee"]', reviewStatus: 'archived' }), clip(2, { aiTags: '["coffee"]', reviewStatus: 'rejected' }), clip(3, { aiTags: '["coffee"]' })]);
-    expect(out[1].map((s) => s.clipId)).toEqual([3]);
+  it('returns nothing when the script has no concept the library understands', () => {
+    expect(recommendClips([{ screenId: 1, dialogue: 'Hmm.' }], [clip(1, { title: 'Paying' })], [])).toEqual([]);
   });
 });
 
 describe('selection storage', () => {
-  it('a project with no selection returns an empty one, with its scenes and suggestions, and reading creates nothing', async () => {
+  it('a project with no selection returns an empty one, with its scenes, and reading creates nothing', async () => {
     const w = await world();
     const g = await get(w);
     expect(g.selection).toEqual({ version: 1, generic: [], character: [] });
     expect(g.scenes).toHaveLength(3);
-    expect(g.genericSuggestions[w.screens[1]][0].clipId).toBe(w.clip);          // "coffee"/"cafe" in scene 2
-    expect(g.genericSuggestions[w.screens[0]]).toEqual([]);
     expect(await counts()).toEqual({ jobs: 0, items: 0, overlays: 0 });          // suggestions select nothing
     expect((await q<{ s: unknown }>(`select broll_selection as s from video_projects where id = $1`, [w.p]))[0].s).toBeNull();
   });
