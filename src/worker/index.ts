@@ -25,7 +25,7 @@ import {
   submitQueuedGeneration,
 } from '../services/video-workflow';
 import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
-import { startStudioWorker, stopStudioWorker } from './studio';
+import { startStudioWorker, stopStudioWorker, withTimeout } from './studio';
 import { processOverlayIngest } from './overlay-ingest';
 import { processCharacterClips } from './character-clips';
 
@@ -53,6 +53,8 @@ export async function main(): Promise<void> {
   await recoverStaleCompilations();
   // Character B-roll Studio's own loops: independent of the video loop below (they never run inside tick()).
   startStudioWorker();
+  // B-roll's own loop too: a Flow step that stops answering must never hold up library clips or Character videos.
+  void runBrollLoop();
   await runLoop();
 }
 
@@ -86,25 +88,54 @@ async function recoverStaleTasks(): Promise<void> {
   console.log('[worker] Stale task recovery complete.');
 }
 
+let tickStep = 'idle';
+const inStep = async <T,>(name: string, fn: () => Promise<T>): Promise<T> => { tickStep = name; return fn(); };
+
 async function runLoop(): Promise<void> {
   console.log('[worker] Polling loop started.');
   while (true) {
-    await tick();
+    // Say which step a slow pass is on, so a step that stops answering is named in the log instead of freezing the loop silently.
+    const watchdog = setInterval(() => console.warn(`[worker] tick still running after 20 s, at step: ${tickStep}`), 20_000);
+    try { await tick(); }
+    catch (err) { console.error('[worker] tick error (continuing):', (err as Error).message); }
+    finally { clearInterval(watchdog); tickStep = 'idle'; }
+    await sleep(POLL_INTERVAL_MS);
+  }
+}
+
+/**
+ * Library clips (prepared for the timeline) and Character B-roll videos (sent to the video model, polled, stored). They run on their own loop,
+ * and each pass has a time limit, so one database call that never answers becomes a logged error and the next pass tries again.
+ */
+async function runBrollLoop(): Promise<void> {
+  console.log('[worker] B-roll loop started.');
+  let lastLogged: string | undefined; let lastLoggedAt = 0;
+  while (true) {
+    let reason = 'idle (nothing to do)';
+    if (process.env.MOCK_USEAPI === 'true') { await sleep(POLL_INTERVAL_MS * 6); continue; }
+    try {
+      const prepared = await withTimeout(processOverlayIngest(), 'preparing library clips', 120_000);
+      const handled = await withTimeout(processCharacterClips(), 'the Character video pass', 120_000);
+      if (prepared || handled) reason = 'handled work';
+    } catch (err) {
+      reason = `error: ${(err as Error).message}`;
+      console.error('[worker] B-roll loop error (continuing):', (err as Error).message);
+    }
+    const t = Date.now();
+    if (reason !== lastLogged || t - lastLoggedAt >= 60_000) { console.log(`[worker] B-roll loop: ${reason}`); lastLogged = reason; lastLoggedAt = t; }
     await sleep(POLL_INTERVAL_MS);
   }
 }
 
 async function tick(): Promise<void> {
-  await processPromptTasks();
-  await processQueuedGenerations();
+  await inStep('prompt tasks', () => processPromptTasks());
+  await inStep('queued generations', () => processQueuedGenerations());
 
   if (process.env.MOCK_USEAPI === 'true') return;
 
-  await pollInFlightGenerations();
-  // B-roll overlays (BROLL_OVERLAYS_ENABLED): prepare library clips before a compilation can use them. Does nothing when the flag is off.
-  await processOverlayIngest();
-  await processCharacterClips();
-  await processPendingCompilation();
+  await inStep('in-flight generations', () => pollInFlightGenerations());
+  // Library clips and Character videos run on their own loop (runBrollLoop), not here.
+  await inStep('pending compilations', () => processPendingCompilation());
 }
 
 export async function processPromptTasks(): Promise<void> {

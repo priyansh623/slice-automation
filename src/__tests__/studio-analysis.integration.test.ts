@@ -241,7 +241,11 @@ describe('failure messages and the loop', () => {
     const index = fs.readFileSync(path.join(ROOT, 'src/worker/index.ts'), 'utf8');
     const tick = index.slice(index.indexOf('async function tick()'), index.indexOf('export async function processPromptTasks'));
     expect(tick).not.toMatch(/studio/i);
-    expect(index).toMatch(/startStudioWorker\(\);\s*\n\s*await runLoop\(\)/);
+    expect(index).toMatch(/startStudioWorker\(\);[\s\S]*?void runBrollLoop\(\);\s*\n\s*await runLoop\(\)/);   // Studio, then the B-roll loop, both outside tick()
+    // Library clips and Character videos have their own loop with a time limit per pass, and are not run by the Flow tick.
+    expect(tick).not.toMatch(/processCharacterClips|processOverlayIngest/);
+    const broll = index.slice(index.indexOf('async function runBrollLoop'), index.indexOf('async function tick()'));
+    expect(broll).toMatch(/withTimeout\(processOverlayIngest\(\)/); expect(broll).toMatch(/withTimeout\(processCharacterClips\(\)/);
     const studio = fs.readFileSync(path.join(ROOT, 'src/worker/studio.ts'), 'utf8');
     expect(studio).not.toMatch(/from '\.\/index'|from '\.\/compilation'/);
   });
