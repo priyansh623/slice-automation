@@ -90,3 +90,14 @@ export function Tray({ items, onClear, onDone, doneLabel, saving }: { items: Tra
     </div>
   );
 }
+
+/** Says plainly how scenes work, at the top of every selection view. */
+export function SceneHint({ scene, onClear }: { scene: Scene | null; onClear: () => void }) {
+  return (
+    <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 14px', padding: '10px 14px', borderRadius: 12, background: scene ? '#F5F3FF' : '#fff', border: `1px solid ${scene ? '#DDD6FE' : '#ECECE8'}`, font: '500 13px/1.45 Satoshi', color: '#3D3D45' }}>
+      {scene
+        ? <><span style={{ flex: 1 }}>Showing what fits <b>Scene {scene.sceneNumber}</b>: &ldquo;{scene.dialogue.length > 70 ? scene.dialogue.slice(0, 70) + '…' : scene.dialogue}&rdquo; Anything you tick will be pre-set to this scene.</span><button onClick={onClear} style={{ border: 'none', background: 'none', color: '#6C47FF', font: '600 12px/1 Satoshi', cursor: 'pointer' }}>Show all scenes</button></>
+        : <span>B-roll plays during one scene of your script. Pick a scene on the left to see what fits it, or tick anything and you will be asked which scene it is for.</span>}
+    </div>
+  );
+}
