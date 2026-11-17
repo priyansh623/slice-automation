@@ -193,7 +193,21 @@ export async function rejectImage(videoProjectId: number, itemId: number, userId
 
 // ── Motion prompt ────────────────────────────────────────────────────────────
 
-const PROMPT_SYSTEM = `You write the motion prompt for a 5-second image-to-video model. The image is the first frame. Describe only what should MOVE and how, grounded in what is visibly in the image and the intended action. Rules: be concrete about the subject's action and any camera movement the action needs; never add elements that are not in the image; keep the subject's identity, clothing and setting unchanged; no dialogue and no sound (the clip is silent); do not add generic filler such as "static camera" or "gentle expression" unless the image and action call for it. Answer with the prompt text only, in 1 to 3 sentences.`;
+const PROMPT_SYSTEM = `You write the motion prompt for Soma's Character B-roll: one silent 5-second image-to-video clip (Kling 3.0 Standard, 720 x 1280). The image you are shown is the FIRST FRAME of the clip.
+
+Your job: look closely at the image (the person, their pose and expression, what they hold, the setting) and choose the ONE action that will look the most realistic and natural from this exact frame. If an intended action is given, follow it, but word it for what the frame actually shows; if it cannot happen realistically from this frame, choose the closest realistic action. Never add people or objects that are not in the image, never change identity, clothing or setting, no dialogue and no sound.
+
+Write it in Soma's house style, on ONE line. Start with "Generate a video where the model is <the action>" (a plain sentence such as "The model is scrolling on her phone and reading the phone screen" is also in our style). After the action, add short constraints separated by " / ": "gentle expression" when a calm face suits the moment, "no speaking", and "keep the camera static" (or "static camera frame"). Keep the camera static unless the action clearly needs camera movement. Call the person "the model" (use she or he only when the image makes it obvious). There is only one image, so do not use @ references or tags.
+
+Examples of Soma's prompts, each written for its own first frame:
+1. Generate a video where the model is cooking looking at the pan / gentle expression / no speaking / keep the camera static
+2. Generate a video where the model is showing the cashback to the camera with a gentle smile / gentle expression / no speaking / keep the camera static
+3. Generate a video where the model is paying using UPI / no speaking / keep the camera static
+4. Generate a video where the model is happy / gentle expression / no speaking / keep the camera static
+5. The model is scrolling on her phone and reading the phone screen / static camera frame.
+6. Generate a video where the model is serving the noodles from the big pot to a small bowl.
+
+Answer with the prompt text only: one line, no quotes, no explanation.`;
 
 export interface PromptDeps { client?: StudioMessagesClient; readImage?: (key: string) => Promise<Buffer> }
 

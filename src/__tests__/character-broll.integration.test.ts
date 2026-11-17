@@ -155,7 +155,10 @@ describe('the motion prompt', () => {
     const sent = (client as unknown as { messages: { create: { mock: { calls: Array<[{ messages: Array<{ content: Array<{ type: string; text?: string }> }>; system: string }]> } } } }).messages.create.mock.calls[0][0];
     expect(sent.messages[0].content.some((c) => c.type === 'image')).toBe(true);          // the actual image
     expect(sent.messages[0].content.find((c) => c.type === 'text')?.text).toContain('She picks up her coffee and smiles');   // and the intended action
-    expect(sent.system).not.toMatch(/always add|append/i);                                  // no blanket "static camera" suffix
+    expect(sent.system).toContain('Generate a video where the model is cooking');           // Soma's own prompts are the examples
+    expect(sent.system).toContain('no speaking'); expect(sent.system).toContain('keep the camera static');
+    expect(sent.system).toMatch(/FIRST FRAME/); expect(sent.system).toMatch(/do not use @ references/i);   // written for the frame; no @ tags (one image only)
+    expect(sent.system).not.toMatch(/always add|append/i);                                  // the camera line is chosen per image, never pasted on
     const edited = await setMotionPrompt(w.p, it.id, '  Slow dolly in as she smiles.  ');
     expect(edited).toMatchObject({ motionPrompt: 'Slow dolly in as she smiles.', promptEdited: true });
     await expect(setMotionPrompt(w.p, it.id, '   ')).rejects.toMatchObject({ code: 'empty_prompt' });
