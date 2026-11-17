@@ -12,7 +12,7 @@ const clipActive = (i?: CompItem) => !!i && ['queued', 'submitting', 'processing
 /** One line of status for a Character B-roll row. */
 export function statusOf(r: CharRow, imageReady: boolean): { text: string; color: string } {
   const i = r.item;
-  if (!i) return r.startError ? { text: "Couldn't start", color: C.danger } : r.starting ? { text: 'Starting…', color: C.muted } : imageReady ? { text: 'Starting…', color: C.muted } : { text: 'Waiting', color: C.warn };
+  if (!i) return r.startError ? { text: "Couldn't start", color: C.danger } : r.starting ? { text: 'Starting…', color: '#6C47FF' } : imageReady ? { text: 'Not started', color: C.muted } : { text: 'Waiting', color: C.warn };
   if (i.imageJobStatus === 'submit_unknown' || i.clipStatus === 'submit_unknown') return { text: 'Needs a decision', color: C.warn };
   if (i.clipStatus === 'ready') return { text: 'Ready', color: C.ok };
   if (clipActive(i)) return { text: 'Animating…', color: '#6C47FF' };
@@ -95,10 +95,17 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
       <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
         {prod.error && <div role="alert" style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', font: '400 13px/1.4 Satoshi' }}>{prod.error}</div>}
         {!it ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', font: '400 14px/1.6 Satoshi', color: '#5E5E65' }}>
-            {row.startError ? <><div style={{ font: '700 16px/1.3 Satoshi', color: C.danger, marginBottom: 6 }}>The image could not be started</div>{row.startError}<br /><button onClick={() => void prod.startOne(row)} style={{ ...btn('primary'), marginTop: 16 }}>Try again</button></>
-              : !prod.imageReady ? <><div style={{ font: '700 16px/1.3 Satoshi', marginBottom: 6 }}>Waiting for image generation</div>{comp?.imageGeneration.message ?? 'Image generation is not available right now.'}<br /><button onClick={() => void prod.startOne(row)} style={{ ...btn('ghost'), marginTop: 16 }}>Try again</button></>
-              : <><Loader2 size={22} className="spin" /><div style={{ font: '700 16px/1.3 Satoshi', margin: '10px 0 4px' }}>Starting the personalised image…</div>Your character is being put into this image.</>}
+          <div style={{ textAlign: 'center', padding: '60px 20px', font: '400 14px/1.6 Satoshi', color: '#5E5E65', maxWidth: 520, margin: '0 auto' }}>
+            {row.starting ? <><Loader2 size={22} className="spin" /><div style={{ font: '700 16px/1.3 Satoshi', margin: '10px 0 4px' }}>Starting the personalised image…</div>Your character is being put into this image.</>
+              : <>
+                  {row.startError && <div role="alert" style={{ font: '500 13px/1.5 Satoshi', color: C.danger, marginBottom: 14 }}>{row.startError}</div>}
+                  <div style={{ width: 120, aspectRatio: '3 / 5.5', borderRadius: 8, background: '#E4E4E0', overflow: 'hidden', margin: '0 auto 16px', border: `1px solid ${C.border}` }}>{row.thumb && <img src={row.thumb} alt="Scene Pack image" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</div>
+                  <div style={{ font: '700 16px/1.3 Satoshi', color: '#111113', marginBottom: 6 }}>Put your character into this image</div>
+                  {row.action ? <div style={{ marginBottom: 6 }}>Action: {row.action}</div> : null}
+                  {!prod.imageReady ? <div role="alert" style={{ color: C.warn }}>Image generation is not available right now: {comp?.imageGeneration.message ?? 'it is not switched on.'}</div> : <>You review and approve it before any video is made.</>}
+                  <div><button disabled={!prod.imageReady || !!busy} onClick={() => void prod.startOne(row)} style={{ ...btn('primary'), marginTop: 16, opacity: prod.imageReady ? 1 : 0.45, cursor: prod.imageReady ? 'pointer' : 'not-allowed' }}>{row.startError ? 'Try again' : 'Make the personalised image'}</button></div>
+                  <div style={{ font: '400 12px/1.5 Satoshi', color: C.muted, marginTop: 10 }}>Paid step: one personalised image (Grok Imagine 2.0).</div>
+                </>}
           </div>
         ) : tab === 'image' ? (
           <div>
@@ -176,10 +183,10 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
       <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
         {showVideo ? <video key={it!.clipUrl!} src={it!.clipUrl!} controls loop playsInline style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, background: '#000' }} />
           : previewImg && it && it.imageStatus !== 'generating' ? <img src={previewImg} alt="Personalised image" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 12 }} />
-          : <div style={{ textAlign: 'center', color: '#9A9AA0', font: '400 13px/1.5 Satoshi' }}><span style={{ width: 64, height: 64, borderRadius: '50%', background: '#F0F0EC', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}><Play size={22} color="#9A9AA0" /></span>{it?.imageStatus === 'generating' || !it ? 'Making the personalised image…' : 'Nothing to show yet'}</div>}
+          : <div style={{ textAlign: 'center', color: '#9A9AA0', font: '400 13px/1.5 Satoshi' }}><span style={{ width: 64, height: 64, borderRadius: '50%', background: '#F0F0EC', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}><Play size={22} color="#9A9AA0" /></span>{row.starting || it?.imageStatus === 'generating' ? 'Making the personalised image…' : !it ? 'Not started yet' : 'Nothing to show yet'}</div>}
       </div>
       <div style={{ padding: '14px 20px', borderTop: '1px solid #ECECE8', background: '#fff', flexShrink: 0, display: 'flex', gap: 8 }}>
-        {!it ? <div style={{ flex: 1, textAlign: 'center', font: '400 13px/40px Satoshi', color: '#9A9AA0' }}>Starting…</div>
+        {!it ? <div style={{ flex: 1, textAlign: 'center', font: '400 13px/40px Satoshi', color: '#9A9AA0' }}>{row.starting ? 'Starting…' : 'Make the image to continue'}</div>
           : it.imageStatus === 'ready' ? (<>
               <button disabled={!!busy || imgState !== 'ok'} title={imgState !== 'ok' ? 'The image has not loaded, so it cannot be approved yet.' : undefined} onClick={() => void approve()} style={{ ...btn('primary'), flex: 1, opacity: imgState !== 'ok' ? 0.5 : 1 }}><Check size={14} /> {working('approve') ? 'Approving…' : 'Approve'}</button>
               <button disabled={!!busy} onClick={() => void step('reject')} style={btn('ghost')}>Reject</button></>)

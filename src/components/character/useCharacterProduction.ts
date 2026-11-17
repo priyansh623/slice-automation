@@ -10,10 +10,9 @@ export interface CharRow {
 interface SelResponse { selection: { character: Array<{ assetId: number; screenId: number; action: string; itemId?: number }> }; scenes: Array<{ screenId: number; sceneNumber: number }>; previews?: { assets: Record<number, string | null> } }
 
 /**
- * The Character B-roll of a project on the Generation screen. Entering the screen starts the personalised image (once) for every picked image
- * that has not been started: the item is created and its single paid image job is queued by the existing process. Nothing is repeated on a later
- * visit (a started pick has an item), the video is never started here, and everything else (approval, motion prompt, video, retries, the
- * outcome-unknown confirmation) stays exactly as it was.
+ * The Character B-roll of a project on the Generation screen. Entering the screen only reads. The personalised image of a picked image starts when the
+ * person presses its button (`startOne`: the item is created and its single paid image job is queued by the existing process, once per pick), and
+ * everything else (approval, motion prompt, video, retries, the outcome-unknown confirmation) works as before.
  */
 export function useCharacterProduction(projectId: string) {
   const base = `/api/v1/video-projects/${projectId}`;
@@ -22,7 +21,6 @@ export function useCharacterProduction(projectId: string) {
   const [enabled, setEnabled] = useState(false); const [loaded, setLoaded] = useState(false);
   const [startErrors, setStartErrors] = useState<Record<string, string>>({}); const [starting, setStarting] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null); const [error, setError] = useState('');
-  const attempted = useRef<Set<string>>(new Set());
   const startErrorsRef = useRef(startErrors); startErrorsRef.current = startErrors;
 
   const load = useCallback(async () => {
@@ -48,18 +46,8 @@ export function useCharacterProduction(projectId: string) {
     await load();
   }, [base, load]);
 
-  // Entering the screen: read everything, then start the picks that were never started (each at most once from here).
-  useEffect(() => {
-    void (async () => {
-      const first = await load();
-      if (!first || !first.comp.imageGeneration.ready) return;
-      for (const r of first.rows.filter((x) => x.itemId === undefined)) {
-        if (attempted.current.has(r.key)) continue;
-        attempted.current.add(r.key);
-        await startOne(r);
-      }
-    })();
-  }, [load, startOne]);
+  // Entering the screen only READS. Nothing is started until the person presses the button for that image.
+  useEffect(() => { void load(); }, [load]);
 
   const active = rows.some((r) => starting.has(r.key) || r.item?.imageStatus === 'generating' || ['queued', 'submitting', 'processing'].includes(r.item?.clipStatus ?? ''));
   useEffect(() => { if (!active) return; const t = setInterval(() => void load(), 4000); return () => clearInterval(t); }, [active, load]);
