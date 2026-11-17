@@ -2,19 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq, gt } from 'drizzle-orm';
 import { db } from '@/db';
 import { videoScreens } from '@/db/schema.pg';
-import { genericSuggestionsForProject } from '@/lib/overlays/recommend-generic';
 import { getSelection, saveSelection } from '@/lib/overlays/selection';
 import { overlayErrorResponse, overlayGuard } from '@/lib/overlays/route-helpers';
 
-// The B-roll a person picked for this project (IDs only), the Flow scenes it can be attached to, and the library suggestions per scene.
-// Suggestions only order and explain clips; reading this never selects, creates or generates anything.
+// The B-roll a person picked for this project (IDs only) and the Flow scenes it can be attached to. Reading this never selects, creates or generates anything.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const g = await overlayGuard(params);
   if (g instanceof NextResponse) return g;
   const scenes = (await db.select({ id: videoScreens.id, n: videoScreens.screenNumber, d: videoScreens.dialogue }).from(videoScreens)
     .where(and(eq(videoScreens.videoProjectId, g.projectId), gt(videoScreens.screenNumber, 0))).orderBy(asc(videoScreens.position)))
     .map((s) => ({ screenId: s.id, sceneNumber: s.n, dialogue: s.d }));
-  return NextResponse.json({ enabled: true, selection: await getSelection(g.projectId), scenes, genericSuggestions: await genericSuggestionsForProject(g.projectId) });
+  return NextResponse.json({ enabled: true, selection: await getSelection(g.projectId), scenes });
 }
 
 // Replaces the selection. Creates no overlays and starts no jobs.

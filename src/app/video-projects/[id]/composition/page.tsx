@@ -1,5 +1,6 @@
 'use client';
 
+import { workflowSteps } from '@/lib/steps';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -60,10 +61,7 @@ export default function CompositionPage() {
   const item = selected?.characterItemId ? data.items.find((i) => i.id === selected.characterItemId) ?? null : null;
   const attention = data.overlays.filter((o) => o.needsAttention);
   const atLimit = data.overlays.length >= data.limit;
-  const steps = [
-    { label: 'Script', status: 'complete' as const }, { label: 'Breakdown', status: 'complete' as const },
-    { label: 'Scenes', status: 'complete' as const }, { label: 'Compile', status: 'active' as const }, { label: 'Review', status: 'pending' as const },
-  ];
+  const steps = workflowSteps('Composition');
 
   const addLibrary = async (clipId: number) => {
     const p = picker; setPicker(null);

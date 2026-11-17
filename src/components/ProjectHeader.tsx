@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, ChevronRight } from 'lucide-react';
+import { stepUrl } from '@/lib/steps';
 
 interface Step {
   label: string;
@@ -21,13 +22,6 @@ interface Props {
   actions?: ReactNode;
 }
 
-const STEP_URLS = (projectId: number | string) => [
-  `/video-projects/${projectId}`,
-  `/video-projects/${projectId}`,
-  `/video-projects/${projectId}/screens/1`,
-  `/video-projects/${projectId}/compile`,
-  '',
-];
 
 export default function ProjectHeader({
   projectId,
@@ -40,7 +34,6 @@ export default function ProjectHeader({
   actions,
 }: Props) {
   const router = useRouter();
-  const urls = STEP_URLS(projectId);
 
   return (
     <header style={{
@@ -103,7 +96,8 @@ export default function ProjectHeader({
         {steps.map((step, i) => {
           const isComplete = step.status === 'complete';
           const isActive = step.status === 'active';
-          const canClick = isComplete && !!urls[i];
+          const url = stepUrl(projectId, step.label);
+          const canClick = isComplete && !!url;
 
           const circleBg = isComplete ? '#EFEBFF' : isActive ? '#6C47FF' : '#EFEFEC';
           const circleFg = isComplete ? '#6C47FF' : isActive ? '#fff' : '#9A9AA0';
@@ -113,7 +107,7 @@ export default function ProjectHeader({
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button
-                onClick={canClick ? () => router.push(urls[i]) : undefined}
+                onClick={canClick ? () => router.push(url) : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
