@@ -107,7 +107,6 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
                   {row.action ? <div style={{ marginBottom: 6 }}>Action: {row.action}</div> : null}
                   {!prod.imageReady ? <div role="alert" style={{ color: C.warn }}>Image generation is not available right now: {comp?.imageGeneration.message ?? 'it is not switched on.'}</div> : <>You review and approve it before any video is made.</>}
                   <div><button disabled={!prod.imageReady || !!busy} onClick={() => void prod.startOne(row)} style={{ ...btn('primary'), marginTop: 16, opacity: prod.imageReady ? 1 : 0.45, cursor: prod.imageReady ? 'pointer' : 'not-allowed' }}>{row.startError ? 'Try again' : 'Make the personalised image'}</button></div>
-                  <div style={{ font: '400 12px/1.5 Satoshi', color: C.muted, marginTop: 10 }}>Paid step: one personalised image (Grok Imagine 2.0).</div>
                 </>}
           </div>
         ) : tab === 'image' ? (
@@ -140,7 +139,6 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
             )}
             {it.imageError && !imageUnknown && it.imageStatus !== 'failed' && <div style={{ marginTop: 12, font: '400 13px/1.5 Satoshi', color: C.danger }}>{it.imageError}</div>}
             {(it.imageStatus === 'rejected' || it.imageStatus === 'failed') && it.clipStatus === 'not_started' && <button disabled={!!busy} onClick={() => void step('regenerate')} style={{ ...btn('ghost'), marginTop: 16 }}><RefreshCw size={14} /> {working('regenerate') ? 'Starting…' : 'Make it again'}</button>}
-            <div style={{ font: '400 12px/1.5 Satoshi', color: C.muted, marginTop: 16 }}>Paid step: one personalised image (Grok Imagine 2.0). {comp?.imageGeneration.provider === 'mock' ? 'Test mode: placeholder images.' : ''}</div>
           </div>
         ) : (
           <div style={{ maxWidth: 560 }}>
@@ -164,7 +162,6 @@ export function CharacterWorkspace({ row, prod }: { row: CharRow; prod: Characte
                     <>
                       <button disabled={!canStartVideo} aria-disabled={!canStartVideo} onClick={() => void step('generate')} style={{ ...btn('primary'), marginTop: 12, opacity: canStartVideo ? 1 : 0.45, cursor: canStartVideo ? 'pointer' : 'not-allowed' }}>{working('generate') ? 'Starting…' : it!.clipStatus === 'failed' ? 'Try the video again' : 'Make the 5-second video'}</button>
                       {!videoReady && <div role="alert" style={{ font: '400 12px/1.4 Satoshi', color: C.danger, marginTop: 6 }}>{comp?.videoGeneration.message ?? 'Video generation is not available right now.'}</div>}
-                      <div style={{ font: '400 12px/1.5 Satoshi', color: C.muted, marginTop: 8 }}>Paid step: one Kling 3.0 Standard video, 5 seconds, silent. Failed or blocked requests are not charged.</div>
                     </>
                   )}
                   {it!.clipStatus === 'submit_unknown' && <button disabled={!!busy} onClick={() => void step('generate', { confirmDuplicate: true })} style={{ ...btn('ghost'), marginTop: 12 }}>Try again anyway (could be charged twice)</button>}
