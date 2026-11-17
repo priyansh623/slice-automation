@@ -16,7 +16,8 @@ import { analyseImage, analysisConfigured, configureSharpForWorker, prepareForAn
 import { claimNextAsset, completeAnalysis, failAnalysis, heartbeat, recoverStaleAnalysis, releaseClaim, type ClaimedAsset } from '../lib/studio/analysis-queue';
 import type { MetadataRecord } from '../lib/studio/metadata';
 import { generationRound, reconcileAmbiguousJobs, recoverStaleJobs, type GenerationDeps } from '../lib/studio/generation';
-import { generationConfig, getProvider } from '../lib/studio/mock-provider';
+import { clipProviderFromEnv } from './character-clips';
+import { generationConfig, getProvider, workerProviderReady } from '../lib/studio/mock-provider';
 import { ANALYSIS_KIND, budgetStatus, pruneBudgetHistory, recordBudgetOutcome, refundBudget, reserveBudget, type BudgetSlot } from '../lib/studio/budget';
 import { retryPendingRemovals, sweepAbandonedUploads } from '../lib/studio/references';
 import { publishWorkerStatus, pruneStaleWorkers, removeWorkerStatus, WORKER_REPORT_EVERY_MS } from '../lib/studio/worker-status';
@@ -187,7 +188,7 @@ export async function studioTick(deps: AnalysisDeps, state: TickState, now = Dat
 export const defaultGenerationDeps = (): GenerationDeps => ({
   provider: getProvider,
   // Queued jobs wait (they are not failed) while R2 is unreachable or no provider is enabled.
-  canSubmit: () => getStorage().r2Configured() && generationConfig().enabled,
+  canSubmit: () => getStorage().r2Configured() && generationConfig().enabled && workerProviderReady(),
   read: (key) => getStorage().downloadR2Only('uploads', key),
   put: async (key, body, mime) => {
     try { await getStorage().putR2Only('uploads', key, body, { contentType: mime }); return 'created'; }
@@ -252,9 +253,9 @@ export async function reportWorkerStatus(now = Date.now()): Promise<void> {
   const r2Ready = (() => { try { return getStorage().r2Configured(); } catch { return false; } })();
   const budget = await budgetStatus(ANALYSIS_KIND, analysisBudgetPerHour(), now).catch(() => null);
   await publishWorkerStatus({
-    workerId, provider: cfg.provider, mode: cfg.mode, generationReady: enabled && cfg.enabled && r2Ready, r2Ready, workerEnabled: enabled,
+    workerId, provider: cfg.provider, mode: cfg.mode, generationReady: enabled && cfg.enabled && workerProviderReady() && r2Ready, r2Ready, workerEnabled: enabled,
     analysisReady: enabled && analysisConfigured() && r2Ready, startedAt: workerStartedAt,
-    details: { analysisConcurrency: analysisConcurrency(), analysisBudget: budget, stopping },
+    details: { analysisConcurrency: analysisConcurrency(), analysisBudget: budget, stopping, clipProvider: (() => { try { return clipProviderFromEnv()?.id ?? null; } catch { return null; } })() },
   }, now);
 }
 

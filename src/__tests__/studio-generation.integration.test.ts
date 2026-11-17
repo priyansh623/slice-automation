@@ -437,9 +437,11 @@ describe('the provider contract', () => {
     if (a.status === 'succeeded' && b.status === 'succeeded') { expect(sha(a.output.bytes!)).toBe(sha(b.output.bytes!)); expect((await sharp(a.output.bytes!).metadata()).format).toBe('png'); }
   });
 
-  it('only the mock exists for now; a real provider is not invented', () => {
+  it('only the mock and the Higgsfield provider exist; any other id is not invented, and Higgsfield needs its credentials', () => {
     expect(getProvider('mock').id).toBe('mock');
-    expect(() => getProvider('higgsfield')).toThrow('not available yet');
+    const saved = process.env.HF_CREDENTIALS; delete process.env.HF_CREDENTIALS;
+    try { expect(() => getProvider('higgsfield')).toThrow('HF_CREDENTIALS is missing'); } finally { if (saved !== undefined) process.env.HF_CREDENTIALS = saved; }
+    expect(() => getProvider('nanobanana')).toThrow('not available yet');
     const src = fs.readFileSync(path.resolve(__dirname, '../lib/studio/mock-provider.ts'), 'utf8') + fs.readFileSync(path.resolve(__dirname, '../lib/studio/provider.ts'), 'utf8');
     expect(src).not.toMatch(/https?:\/\/|api\.higgsfield|Authorization|apiKey/i);
   });

@@ -49,7 +49,8 @@ export type PollResult =
 export type SubmitOutcome = 'rejected' | 'unknown';
 
 export class ProviderError extends Error {
-  constructor(message: string, public readonly code: string, public readonly retryable: boolean, public readonly outcome: SubmitOutcome = 'rejected') {
+  /** `retryAfterMs`: for code 'rate_limited' only: the provider said when to try again. */
+  constructor(message: string, public readonly code: string, public readonly retryable: boolean, public readonly outcome: SubmitOutcome = 'rejected', public readonly retryAfterMs?: number) {
     super(message);
     this.name = 'ProviderError';
   }
@@ -64,6 +65,10 @@ export interface ReplacementProvider {
   readonly idempotentSubmit?: boolean;
   /** Optional: asks the provider whether it already has a job for this idempotency key. null means it has no record. */
   findSubmission?(idempotencyKey: string): Promise<{ providerJobId: string } | null>;
+  /** Said to the person when a submission's outcome is unknown (what they can check before choosing to generate again). */
+  readonly ambiguousHint?: string;
+  /** Called, best effort, once a finished output is safely stored. A failure here never affects the job. */
+  afterStored?(providerJobId: string): Promise<void>;
   submit(input: ReplacementInput): Promise<SubmitResult>;
   poll(providerJobId: string): Promise<PollResult>;
   /** Fetches an output that came back as a URL. Only called when ProviderOutput.url is set. */

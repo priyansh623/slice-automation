@@ -538,3 +538,95 @@ export const studioBudgetUsage = pgTable('studio_budget_usage', {
   exhaustedAt: bigint('exhausted_at', { mode: 'number' }),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 }, (t) => ({ pk: primaryKey({ columns: [t.kind, t.windowStart] }) }));
+
+// ── B-roll overlays (migration 0028) ─────────────────────────────────
+
+export const characterBrollItems = pgTable('character_broll_items', {
+  id: serial('id').primaryKey(),
+  videoProjectId: integer('video_project_id').notNull().references(() => videoProjects.id),
+  studioAssetId: integer('studio_asset_id').notNull().references(() => studioAssets.id),
+  intendedAction: text('intended_action').notNull().default(''),
+  studioJobId: integer('studio_job_id').references(() => studioJobs.id),
+  studioOutputId: integer('studio_output_id').references(() => studioOutputs.id),
+  imageStatus: text('image_status').notNull().default('pending'),   // pending | generating | ready | approved | rejected | failed
+  imageError: text('image_error'),
+  imageApprovedAt: bigint('image_approved_at', { mode: 'number' }),
+  imageApprovedBy: uuid('image_approved_by'),
+  motionPrompt: text('motion_prompt'),
+  promptEdited: boolean('prompt_edited').notNull().default(false),
+  clipStatus: text('clip_status').notNull().default('not_started'), // not_started | queued | submitting | submit_unknown | processing | ready | failed
+  clipAttempt: integer('clip_attempt').notNull().default(0),
+  clipProvider: text('clip_provider'),
+  clipEndpoint: text('clip_endpoint'),
+  idempotencyKey: text('idempotency_key'),
+  providerRequestId: text('provider_request_id'),
+  submittedAt: bigint('submitted_at', { mode: 'number' }),
+  claimedAt: bigint('claimed_at', { mode: 'number' }),
+  pollCount: integer('poll_count').notNull().default(0),
+  nextPollAt: bigint('next_poll_at', { mode: 'number' }),
+  clipErrorCode: text('clip_error_code'),
+  clipErrorMessage: text('clip_error_message'),
+  clipRetryable: boolean('clip_retryable'),
+  clipStoragePath: text('clip_storage_path'),
+  clipWidth: integer('clip_width'),
+  clipHeight: integer('clip_height'),
+  clipDurationMs: integer('clip_duration_ms'),
+  clipProbe: jsonb('clip_probe'),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const videoOverlays = pgTable('video_overlays', {
+  id: serial('id').primaryKey(),
+  videoProjectId: integer('video_project_id').notNull().references(() => videoProjects.id),
+  kind: text('kind').notNull(),                                     // generic | character
+  track: integer('track').notNull().default(0),
+  anchorScreenId: integer('anchor_screen_id').notNull().references(() => videoScreens.id),
+  startOffsetMs: integer('start_offset_ms').notNull(),              // relative to the anchor Flow scene's start
+  durationMs: integer('duration_ms').notNull(),
+  sourceStartMs: integer('source_start_ms').notNull().default(0),
+  assetStoragePath: text('asset_storage_path'),                     // the silent normalised project copy ('videos' bucket)
+  assetWidth: integer('asset_width'),
+  assetHeight: integer('asset_height'),
+  assetDurationMs: integer('asset_duration_ms'),
+  brollClipId: integer('broll_clip_id').references(() => brollClips.id),
+  characterItemId: integer('character_item_id').references(() => characterBrollItems.id),
+  status: text('status').notNull().default('preparing'),            // preparing | ready | failed
+  errorMessage: text('error_message'),
+  claimedAt: bigint('claimed_at', { mode: 'number' }),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+export const videoCompilationOverlays = pgTable('video_compilation_overlays', {
+  id: serial('id').primaryKey(),
+  compilationId: integer('compilation_id').notNull().references(() => videoCompilations.id),
+  overlayId: integer('overlay_id').references(() => videoOverlays.id),
+  kind: text('kind').notNull(),
+  track: integer('track').notNull().default(0),
+  anchorScreenId: integer('anchor_screen_id').notNull().references(() => videoScreens.id),
+  startOffsetMs: integer('start_offset_ms').notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  sourceStartMs: integer('source_start_ms').notNull().default(0),
+  assetStoragePath: text('asset_storage_path').notNull(),
+  assetWidth: integer('asset_width'),
+  assetHeight: integer('asset_height'),
+  assetDurationMs: integer('asset_duration_ms'),
+  resolvedStartMs: integer('resolved_start_ms'),
+  resolvedEndMs: integer('resolved_end_ms'),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+});
+
+// Columns that migration 0028 added to EXISTING tables are deliberately not part of those tables' definitions above: every Flow and Studio
+// query selects all of a table's declared columns, so declaring them there would make those queries depend on the migration having been
+// applied. They are read and written only through these narrow views, used only by the B-roll overlay code (behind its feature flag).
+export const studioProjectLinks = pgTable('studio_projects', {
+  id: serial('id').primaryKey(),
+  videoProjectId: integer('video_project_id'),      // the video project whose Character B-roll jobs this Studio project holds
+});
+export const videoCompilationOverlayCounts = pgTable('video_compilations', {
+  id: serial('id').primaryKey(),
+  overlayCount: integer('overlay_count'),           // how many B-roll overlays this compilation was asked to include (0 = plain Flow)
+});

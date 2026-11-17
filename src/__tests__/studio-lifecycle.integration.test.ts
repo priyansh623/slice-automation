@@ -528,9 +528,12 @@ describe('C3: the web app and the worker must agree before anything is queued', 
     g = (await call(configGet)).json.generation;
     expect(g).toMatchObject({ mode: 'mock', enabled: true, testMode: true, ready: true, code: null, worker: { status: 'ok', providers: ['mock'] } });
 
-    process.env.STUDIO_PROVIDER = 'higgsfield';                    // not implemented: never reported as a real mode that works
+    process.env.STUDIO_PROVIDER = 'higgsfield';                    // real: usable only when a worker that holds the Higgsfield credentials says so
     g = (await call(configGet)).json.generation;
-    expect(g).toMatchObject({ mode: 'disabled', ready: false, code: 'generation_disabled' });
+    expect(g).toMatchObject({ mode: 'real', enabled: true, testMode: false, ready: false, code: 'provider_mismatch' });   // the worker running here still reports 'mock'
+    await reportFakeWorker(pg, { provider: 'higgsfield', mode: 'real' });
+    g = (await call(configGet)).json.generation;
+    expect(g).toMatchObject({ mode: 'real', ready: true, testMode: false, code: null });
   });
 
   it('no worker running (or one that stopped reporting) means nothing is queued', async () => {

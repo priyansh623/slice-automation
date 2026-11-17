@@ -69,7 +69,7 @@ const EXT_OF_MIME: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 
 export async function claimQueuedJobs(limit: number, now = Date.now()): Promise<JobRow[]> {
   return db.update(studioJobs)
     .set({ status: 'submitting', claimedAt: now, startedAt: sql`coalesce(${studioJobs.startedAt}, ${now})`, submitAttempts: sql`${studioJobs.submitAttempts} + 1`, updatedAt: now })
-    .where(and(eq(studioJobs.status, 'queued'), sql`${studioJobs.id} = any(array(select id from studio_jobs where status = 'queued' order by id limit ${limit} for update skip locked))`))
+    .where(and(eq(studioJobs.status, 'queued'), sql`${studioJobs.id} = any(array(select id from studio_jobs where status = 'queued' and (next_poll_at is null or next_poll_at <= ${now}) order by id limit ${limit} for update skip locked))`))
     .returning();
 }
 
@@ -110,6 +110,9 @@ export async function storeOutput(job: JobRow, output: ProviderOutput, deps: Gen
   }).onConflictDoNothing();
   await db.update(studioJobs).set({ status: 'succeeded', errorCode: null, errorMessage: null, errorRetryable: null, claimedAt: null, nextPollAt: null, finishedAt: now, updatedAt: now })
     .where(and(eq(studioJobs.id, job.id), inArray(studioJobs.status, ['submitting', 'submit_unknown', 'processing'])));
+  // The image is ours now: let the provider drop its copy (best effort; never changes the outcome).
+  const providerRequest = job.providerJobId ?? null;
+  if (providerRequest && provider.afterStored) await provider.afterStored(providerRequest).catch((e) => console.warn(`[studio-generation] job ${job.id}: could not remove the provider's copy:`, (e as Error).message?.slice(0, 120)));
 }
 
 const describe = (err: unknown): { code: string; message: string; retryable: boolean } => {
@@ -167,7 +170,10 @@ async function applyLateSubmitResult(job: JobRow, result: SubmitResult, deps: Ge
 }
 
 /** Submits one claimed job. Never throws: success moves it on, a definite failure or an unknown outcome is recorded on that job alone. */
-export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'processing' | 'succeeded' | 'failed' | 'submit_unknown'> {
+/** A job told "busy" this many times is failed (retryable by a person) instead of waiting for ever. */
+export const MAX_RATE_LIMIT_SENDS = 20;
+
+export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'processing' | 'succeeded' | 'failed' | 'submit_unknown' | 'queued'> {
   const now = deps.now ?? Date.now;
   const providerMs = deps.providerTimeoutMs ?? PROVIDER_CALL_TIMEOUT_MS;
   const storageMs = deps.storageTimeoutMs ?? STORAGE_CALL_TIMEOUT_MS;
@@ -180,6 +186,12 @@ export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'pro
     provider = deps.provider(job.provider);
     inputs = await withTimeout(Promise.all([deps.read(job.characterKey), deps.read(job.sourceKey)]), storageMs, 'storage_timeout', 'Reading the images took too long.');
   } catch (err) {
+    if (err instanceof ProviderError && err.code === 'provider_not_configured' && job.submitAttempts < MAX_RATE_LIMIT_SENDS) {
+      // Nothing was sent. This worker just lacks the provider's credentials right now, so the job goes back to the queue instead of failing
+      // (bounded: after MAX_RATE_LIMIT_SENDS tries it fails with the message). A provider that does not exist at all still fails at once.
+      await db.update(studioJobs).set({ status: 'queued', claimedAt: null, nextPollAt: now() + 60_000, updatedAt: now() }).where(and(eq(studioJobs.id, job.id), eq(studioJobs.status, 'submitting')));
+      return 'queued';
+    }
     const d = describe(err);
     console.error(`[studio-generation] job ${job.id} could not be prepared:`, d.code);
     await failJob(job, d.code, d.message, d.retryable, now()).catch((e) => console.error('[studio-generation] could not record a failure:', e));
@@ -198,6 +210,13 @@ export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'pro
     const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new SubmitTimeout()), providerMs); });
     result = await Promise.race([sending, limit]).finally(() => clearTimeout(timer!));
   } catch (err) {
+    if (err instanceof ProviderError && err.outcome === 'rejected' && (err.code === 'rate_limited' || err.code === 'model_blocked') && job.submitAttempts < MAX_RATE_LIMIT_SENDS) {
+      // The provider said "busy, try again in N s": nothing was created, so the SAME job waits and is sent again later.
+      const wait = Math.max(5_000, err.retryAfterMs ?? 30_000);   // 429 and a temporarily blocked model (423): nothing was created
+      console.warn(`[studio-generation] job ${job.id}: provider is busy, trying again in ${Math.round(wait / 1000)} s`);
+      await db.update(studioJobs).set({ status: 'queued', claimedAt: null, nextPollAt: now() + wait, updatedAt: now() }).where(and(eq(studioJobs.id, job.id), eq(studioJobs.status, 'submitting')));
+      return 'queued';
+    }
     if (err instanceof ProviderError && err.outcome === 'rejected') {
       console.error(`[studio-generation] job ${job.id} was rejected by the provider:`, err.code);
       await failJob(job, err.code, err.message, err.retryable, now()).catch((e) => console.error('[studio-generation] could not record a failure:', e));
@@ -205,7 +224,7 @@ export async function submitJob(job: JobRow, deps: GenerationDeps): Promise<'pro
     }
     const timedOut = err instanceof SubmitTimeout;
     console.warn(`[studio-generation] job ${job.id}: submission outcome unknown (${timedOut ? 'timeout' : err instanceof ProviderError ? err.code : (err as { name?: string }).name ?? 'error'})`);
-    await markSubmitUnknown(job.id, timedOut ? 'submit_timeout' : 'submit_error', UNKNOWN_MESSAGE, now()).catch((e) => console.error('[studio-generation] could not record an unknown outcome:', e));
+    await markSubmitUnknown(job.id, timedOut ? 'submit_timeout' : 'submit_error', provider.ambiguousHint ? `${UNKNOWN_MESSAGE} ${provider.ambiguousHint}` : UNKNOWN_MESSAGE, now()).catch((e) => console.error('[studio-generation] could not record an unknown outcome:', e));
     // If the provider answers later, that answer is still used (its job id is recorded and the job is polled).
     if (timedOut) void sending.then((late) => applyLateSubmitResult(job, late, deps, provider)).catch(() => { /* a late failure leaves it unknown */ });
     return 'submit_unknown';
@@ -242,6 +261,13 @@ export async function pollJob(job: JobRow, deps: GenerationDeps): Promise<'proce
     if (r.status === 'succeeded') { await storeOutput(job, r.output, deps, provider); return 'succeeded'; }
     if (r.status === 'failed') { await failJob(job, r.code, r.message, r.retryable, now()); return 'failed'; }
   } catch (err) {
+    // This worker lacks the provider's credentials right now (for example it was restarted without them). That says nothing
+    // about the job, which is already running at the provider and paid for: leave it alone for a worker that can poll it.
+    if (err instanceof ProviderError && err.code === 'provider_not_configured') {
+      console.warn(`[studio-generation] job ${job.id}: this worker cannot poll the provider right now; the job is left running`);
+      await db.update(studioJobs).set({ nextPollAt: now() + 60_000, updatedAt: now() }).where(and(eq(studioJobs.id, job.id), eq(studioJobs.status, 'processing')));
+      return 'processing';
+    }
     if (err instanceof ProviderError && !err.retryable) { await failJob(job, err.code, err.message, false, now()); return 'failed'; }
     if (!(err instanceof ProviderError)) console.warn(`[studio-generation] polling job ${job.id} failed, will ask again:`, (err as { name?: string }).name ?? 'Error');
   }

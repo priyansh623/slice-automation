@@ -338,14 +338,16 @@ describe('C3: the mock provider is an explicit opt-in, never the silent default'
   });
 
   it('an empty or unknown provider is not the mock and is not silently replaced by it', async () => {
-    for (const v of ['', '  ', 'higgsfield', 'MOCKY']) {
+    for (const v of ['', '  ', 'MOCKY']) {
       process.env.STUDIO_PROVIDER = v;
       expect(generationConfig().enabled).toBe(false);
       expect(generationConfig().testMode).toBe(false);
     }
+    // Higgsfield is a real provider now: never test mode, and never replaced by the mock. A worker that reports the mock does not match it.
     process.env.STUDIO_PROVIDER = 'higgsfield';
-    expect((await batchOf(await world(1))).json.code).toBe('generation_disabled');
-    expect(() => getProvider('higgsfield')).toThrow(/not available yet/);
+    expect(generationConfig()).toMatchObject({ enabled: true, mode: 'real', testMode: false });
+    expect((await batchOf(await world(1))).json.code).toBe('provider_mismatch');
+    expect(() => getProvider('nanobanana')).toThrow(/not available yet/);
   });
 
   it('STUDIO_PROVIDER=mock turns it on, and the config says plainly that it is test mode', async () => {

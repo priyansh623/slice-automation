@@ -47,6 +47,8 @@ export default function CompilePage() {
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState('');
+  // B-roll overlays (feature flag): null when the feature is off, so nothing about this page changes.
+  const [overlayCount, setOverlayCount] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadData() {
@@ -62,6 +64,9 @@ export default function CompilePage() {
   }
 
   useEffect(() => { loadData(); }, [id]);
+  useEffect(() => {
+    fetch(`/api/v1/video-projects/${id}/overlays`).then(async (r) => { if (!r.ok) return; const d = await r.json() as { overlays?: unknown[] }; setOverlayCount(Array.isArray(d.overlays) ? d.overlays.length : 0); }).catch(() => undefined);
+  }, [id]);
 
   // The list is shown newest first; the view picks the current version, a running job and the latest failure from it.
   const view = compilationView(compilations);
@@ -221,6 +226,18 @@ export default function CompilePage() {
                   100% { transform: translateX(200%); width: 50%; }
                 }
               `}</style>
+            </div>
+          )}
+
+          {overlayCount !== null && (
+            <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', background: '#fff', border: '1px solid #ECECE8', borderRadius: 12 }}>
+              <div>
+                <div style={{ font: '700 14px/1.3 Satoshi' }}>B-roll</div>
+                <div style={{ font: '400 13px/1.4 Satoshi', color: '#75757C', marginTop: 2 }}>{overlayCount === 0 ? 'Add library or Character B-roll on top of your Flow scenes.' : `${overlayCount} B-roll clip${overlayCount === 1 ? '' : 's'} will be added to the next version.`}</div>
+              </div>
+              <Link href={`/video-projects/${id}/composition`} style={{ textDecoration: 'none' }}>
+                <button style={{ height: 32, padding: '0 14px', borderRadius: 8, background: '#fff', border: '1px solid #E4E4E0', font: '500 13px/1 Satoshi', cursor: 'pointer' }}>Open Composition</button>
+              </Link>
             </div>
           )}
 

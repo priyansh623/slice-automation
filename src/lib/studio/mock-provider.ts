@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import { HiggsfieldClient, configFromEnv, higgsfieldConfigured } from '../higgsfield/client';
+import { HiggsfieldGrokProvider } from './higgsfield-provider';
 import { ProviderError, type PollResult, type ReplacementInput, type ReplacementProvider, type SubmitResult } from './provider';
 
 /**
@@ -78,6 +80,13 @@ export function getProvider(id: string): ReplacementProvider {
     if (known) return known;
     const p = new MockReplacementProvider(); instances.set(id, p); return p;
   }
+  if (id === 'higgsfield') {
+    // Real generation: Grok Imagine 2.0 through the Higgsfield API. Credentials exist only where the worker runs.
+    if (!higgsfieldConfigured()) throw new ProviderError('Higgsfield is not configured on this worker (HF_CREDENTIALS is missing), so this job was not generated.', 'provider_not_configured', false);
+    const known = instances.get(id);
+    if (known) return known;
+    const p = new HiggsfieldGrokProvider(new HiggsfieldClient(configFromEnv())); instances.set(id, p); return p;
+  }
   throw new ProviderError(`The "${id}" provider is not available yet.`, 'provider_unavailable', false);
 }
 
@@ -100,11 +109,17 @@ export interface GenerationConfig {
 }
 
 /** True for the provider whose output is placeholder pictures. Used wherever an output or a job is shown. */
+/** Worker side: the chosen provider can actually be used here (the Higgsfield credentials are present). */
+export const workerProviderReady = (): boolean => configuredProvider() !== 'higgsfield' || higgsfieldConfigured();
+
 export const isTestProvider = (id: string | null | undefined): boolean => id === 'mock';
 
 export function generationConfig(): GenerationConfig {
   const id = configuredProvider();
   if (!id) return { enabled: false, mode: 'disabled', provider: null, testMode: false, reason: 'Image generation is not switched on yet: no provider is configured on the server. Nothing can be generated until one is.' };
   if (id === 'mock') return { enabled: true, mode: 'mock', provider: 'mock', testMode: true, reason: null };
+  // The web app does not hold the Higgsfield credentials (only the worker does), so this only says the provider is chosen; whether the
+  // worker can really use it is what the worker reports (see workerProviderReady).
+  if (id === 'higgsfield') return { enabled: true, mode: 'real', provider: 'higgsfield', testMode: false, reason: null };
   return { enabled: false, mode: 'disabled', provider: id, testMode: false, reason: `The "${id}" provider is not available yet, so nothing can be generated.` };
 }
