@@ -72,7 +72,7 @@ beforeAll(async () => {
   pg = new PGlite();
   db = drizzle(pg, { schema });
   holder.db = db;
-  await migrate(pg, '0024');
+  await migrate(pg, '9999');   // every migration: the code under test queries the current schema
   process.env.USEAPI_TOKEN = 'test-token';
 }, 120_000);
 afterAll(async () => { await pg.close(); });

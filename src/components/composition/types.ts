@@ -4,6 +4,7 @@ export interface CompScene extends UiScene { dialogue: string; generationId: num
 export interface CompOverlay {
   id: number; kind: 'generic' | 'character'; track: number; anchorScreenId: number; anchorSceneNumber: number | null;
   startOffsetMs: number; durationMs: number; sourceStartMs: number; status: 'preparing' | 'ready' | 'failed'; errorMessage: string | null;
+  placementSource: 'auto' | 'manual';
   startMs: number | null; endMs: number | null; needsAttention: boolean; attentionReason: string | null;
   assetUrl: string | null; assetDurationMs: number | null; title: string; brollClipId: number | null; characterItemId: number | null;
   problems: Array<{ code: string; message: string }>;
@@ -15,6 +16,7 @@ export interface CompItem {
   clipStatus: 'not_started' | 'queued' | 'submitting' | 'submit_unknown' | 'processing' | 'ready' | 'failed'; clipErrorCode: string | null; clipErrorMessage: string | null; clipRetryable: boolean | null;
   clipProvider: string | null; clipEndpoint: string | null; clipDurationMs: number | null; clipWidth: number | null; clipHeight: number | null;
 }
+export interface FillResult { created: number; moved: number; unplaced: number; sceneMissing: number; waiting: number }
 export interface Composition {
   enabled: true; project: { id: number; name: string | null }; scenes: CompScene[]; totalMs: number; limit: number;
   overlays: CompOverlay[]; items: CompItem[]; imageGeneration: { ready: boolean; provider: string | null; message: string | null };

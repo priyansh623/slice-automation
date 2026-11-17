@@ -101,6 +101,29 @@ suite('migration 0028 on real PostgreSQL', () => {
     expect(rls.map((r) => r.relrowsecurity)).toEqual([true, true, true]);
   });
 
+  it('migration 0029: existing overlays become manual, existing projects have no selection, the CHECK holds, and it is safe to apply twice', async () => {
+    const f = sqlFile('drizzle/pg/0029_broll_selection.sql');
+    const preexisting = await sql`select id from video_overlays order by id`;
+    expect(preexisting.length).toBeGreaterThan(0);
+    await sql.unsafe(f);                                                                            // applied on top of data that already exists
+    const before = await sql`select id, placement_source from video_overlays order by id`;
+    expect(before.length).toBeGreaterThan(0);
+    expect(new Set(before.map((r) => r.placement_source))).toEqual(new Set(['manual']));            // a person placed everything that existed
+    expect((await sql`select broll_selection from video_projects where id = ${ids.p}`)[0].broll_selection).toBeNull();
+    const cols = await sql`select column_name, is_nullable, data_type from information_schema.columns where table_name = 'video_projects' and column_name = 'broll_selection'`;
+    expect(cols[0]).toMatchObject({ is_nullable: 'YES', data_type: 'jsonb' });
+    await sql.unsafe(f);                                                                            // again: nothing changes, nothing fails
+    expect((await sql`select count(*)::int as n from video_overlays where placement_source = 'manual'`)[0].n).toBe(before.length);
+    expect(await fail(sql.unsafe(`update video_overlays set placement_source = 'user' where id = ${before[0].id}`))).toMatch(/video_overlays_placement_source_check/);
+    expect(await fail(sql.unsafe(`update video_overlays set placement_source = 'auto' where id = ${before[0].id}`))).toBeNull();
+    // nothing else was added: no new index, table or column on the overlay table
+    const oc = (await sql`select column_name from information_schema.columns where table_name = 'video_overlays'`).map((r) => r.column_name);
+    expect(oc).toContain('placement_source'); expect(oc).not.toContain('anchor_text_hash');
+    const bare = `${dbName}_bare29`; await admin.unsafe(`create database ${bare}`);
+    const u = new URL(URL_ENV!); u.pathname = `/${bare}`; const b = postgres(u.toString(), { max: 1, onnotice: () => {} });
+    try { expect(await fail(b.unsafe(f))).toMatch(/needs migration 0028/); } finally { await b.end({ timeout: 5 }); await admin.unsafe(`drop database if exists ${bare} with (force)`); }
+  });
+
   it('refuses to apply when the tables it depends on are missing, and names the problem', async () => {
     const bare = `${dbName}_bare`; await admin.unsafe(`create database ${bare}`);
     const u = new URL(URL_ENV!); u.pathname = `/${bare}`; const b = postgres(u.toString(), { max: 1, onnotice: () => {} });

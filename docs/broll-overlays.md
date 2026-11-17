@@ -6,9 +6,19 @@ Status: implemented on branch `feature/broll-overlays`, **not deployed, not comm
 Flow scenes stay the primary video and keep their own embedded narration. B-roll is a silent **overlay** placed over Flow footage, positioned relative to a Flow scene (anchor scene + offset), never a scene. `video_screens` / `video_generations` are untouched.
 
 ## Deploy order (when approved)
-1. Apply `drizzle/pg/0028_broll_overlays.sql` (additive, idempotent, no rewrites of existing rows).
+1. Apply `drizzle/pg/0028_broll_overlays.sql` (done) and then `drizzle/pg/0029_broll_selection.sql` (additive, idempotent, no rewrites of existing rows).
 2. Deploy web + worker. Without the flag the new code paths are inert, and the compile worker does not query overlay tables unless they exist.
 3. Set `BROLL_OVERLAYS_ENABLED=true` on web **and** worker when ready.
+
+## B-roll selection before generation (migration 0029)
+Order of the workflow: Details, Breakdown, **B-roll selection** (`/video-projects/[id]/broll`), the existing Generation screens, Composition, Compile, Review. Nothing about Flow, Grok, Kling, the workers, storage, approval, retry or audio changed.
+
+- **Selection is IDs only**, in `video_projects.broll_selection` (nullable JSONB): `generic: [{clipId, screenId, overlayId?}]`, `character: [{assetId, screenId, action, itemId?, overlayId?}]`. Saving it (`PUT /broll-selection`) creates no overlay, no item, no job and costs nothing. Revisiting any screen costs nothing.
+- **Suggestions** never select anything. Generic: word match of each scene's dialogue against the library's own tags, subjects, activity, category, title and summary (`lib/overlays/recommend-generic.ts`, no AI). Character: the existing Studio recommender (`lib/studio/recommend.ts`, one model call, only when the person presses the button).
+- **Character B-roll runs on the existing Generation screen**: the header button "Character B-roll (n)" lists the picked images. Pressing "Make the personalised image" starts the existing process (`startCharacterPick` -> `createCharacterItem`, one item and one job; a double click cannot start two). The existing item card (`components/CharacterItemCard.tsx`, the only place these controls exist; Composition only shows finished clips and edits placement) does personalise -> approve -> motion prompt -> 5 s Kling video, unchanged.
+- **Composition fills itself** (`POST /overlays/populate`, safe to repeat): library clips right away; Character clips once their video is ready. Each pick gets at most one overlay (the overlay id is written back to the pick), a clip the person removed does not come back, and a scene that was deleted is reported, never re-attached.
+- **`video_overlays.placement_source`** is `auto` for overlays the system placed and `manual` for anything a person placed or edited (any edit, including replace, sets `manual`). Automatic arrangement (`lib/overlays/arrange.ts`: spread evenly inside the clip's own scene, snapped to 0.1 s, routing around manual clips) only ever moves `auto` overlays. Existing overlays default to `manual`.
+- **Migration 0029** is additive: `video_projects.broll_selection JSONB NULL`, `video_overlays.placement_source TEXT NOT NULL DEFAULT 'manual'` with a CHECK. Apply it BEFORE deploying the code: `brollSelection` is declared on `videoProjects`, so every query that selects that table's columns needs the column to exist.
 
 ## Providers (final decision)
 Image personalisation: **Grok Imagine 2.0** (`xai/grok-imagine-image-2.0`) through the Higgsfield API. Video: **Kling 3.0 Standard** (`kling-video/v3.0/std/image-to-video`), 5 s, sound off. No other provider is used or substituted.
@@ -99,3 +109,7 @@ Supabase egress: none for the image path; video files touch Supabase only if `ST
 * No live Higgsfield call has been made. Everything is verified against a local fake that follows the public documentation, not the real service.
 * Not documented by Higgsfield: idempotency-key retention and lookup, `public_url` accessibility/expiry, the meaning of `retention=temporary`, per-file deletion, fetch behaviour and requirements for reference URLs (redirects, size, content type), the error for an unreachable reference URL (probably a generic `failed`), base64 input, a seed, and Kling's output size.
 * Polling follows our own backoff (Studio 3 s growing to 60 s; video 5 s to 30 s), slower than the 2 s to 10 s the docs suggest. Results are therefore noticed a few seconds later; this was kept to limit load.
+
+## Known pre-existing test issues (verified at baseline 2f647ed, not caused by this work)
+- `studio-postgres.concurrency.test.ts` > "touches no table that existed before" fails on a real PostgreSQL (`TEST_POSTGRES_URL`): it builds a comparison database without migrations 0025-0027 but still applies 0028, which requires them. It fails identically on a clean checkout of 2f647ed. Fix when convenient by also excluding 0028 and later from the probe database (and comparing only up to 0027).
+- `signed-url-cache-route.integration.test.ts` has 26 TypeScript errors (TS2352: the test casts the typed database handle to `Record<string, unknown>`). They are identical at baseline and are test-only; `tsc --noEmit` reports exactly those 26 and nothing else.

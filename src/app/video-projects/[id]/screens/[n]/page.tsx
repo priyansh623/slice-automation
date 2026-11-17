@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ProjectHeader from '@/components/ProjectHeader';
+import CharacterGeneration from '@/components/CharacterGeneration';
 import { useProject } from '@/contexts/ProjectContext';
 import CompileButton from '@/components/CompileButton';
 import { AddSceneModal, DeleteSceneModal, readAddSceneDraft } from '@/components/SceneModals';
@@ -493,7 +494,7 @@ export default function ScreenPage() {
         projectId={id}
         projectName={project.name}
         steps={projectSteps}
-        actions={<CompileButton projectId={id} screens={project.screens} onStale={() => void refreshProject()} />}
+        actions={<><CharacterGeneration projectId={id} /><CompileButton projectId={id} screens={project.screens} onStale={() => void refreshProject()} /></>}
       />
 
       <div className="workspace-shell">

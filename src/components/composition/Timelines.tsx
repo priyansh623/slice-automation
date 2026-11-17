@@ -44,6 +44,12 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: '#fff', padding: '12px 14px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 10, alignItems: 'center' }}>
+        <div style={label}>Script</div>
+        <div style={{ position: 'relative', height: 40, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }} data-testid="script-track" aria-label="Script by scene">
+          {scenes.map((s) => (
+            <div key={s.screenId} title={s.dialogue} style={{ position: 'absolute', left: pct(s.startMs), width: pct(s.durationMs), top: 0, bottom: 0, boxSizing: 'border-box', borderRight: `1px solid ${C.border}`, padding: '4px 6px', overflow: 'hidden', font: '400 10px/1.3 Satoshi', color: C.muted }}>{s.dialogue}</div>
+          ))}
+        </div>
         <div style={label}>Flow scenes</div>
         <div ref={trackRef} onClick={seekFromClick} style={{ position: 'relative', height: 46, background: C.soft, borderRadius: 8, cursor: 'pointer', overflow: 'hidden' }} data-testid="flow-track">
           {scenes.map((s, i) => (
@@ -70,6 +76,7 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
                 title={o.needsAttention ? o.attentionReason ?? '' : o.title}
                 style={{ position: 'absolute', top: 5, bottom: 5, left: pct(Math.max(0, left)), width: pct(width), minWidth: 8, background: o.needsAttention ? '#FDECEA' : colour, color: o.needsAttention ? C.danger : '#fff', border: sel ? `2px solid ${C.text}` : o.needsAttention ? `1px dashed ${C.danger}` : 'none', borderRadius: 6, cursor: 'grab', touchAction: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '0 8px', overflow: 'hidden', boxSizing: 'border-box', opacity: o.status === 'ready' || o.needsAttention ? 1 : 0.65 }}>
                 {o.needsAttention ? <AlertTriangle size={12} /> : o.status === 'preparing' ? <Loader2 size={12} className="spin" /> : null}
+                <span aria-label={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed by you'} title={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed or edited by you'} style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: o.placementSource === 'auto' ? 'rgba(255,255,255,.55)' : '#fff', border: o.placementSource === 'auto' ? '1px dashed #fff' : 'none' }} />
                 <span style={{ font: '500 11px/1 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.title}</span>
                 {o.startMs != null && <div onPointerDown={(e) => begin(e, o, 'resize')} aria-label="Change duration" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', background: 'rgba(0,0,0,.25)' }} />}
               </div>
@@ -79,6 +86,7 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, marginLeft: 102, font: '400 11px/1 Satoshi', color: C.muted }}><span>0:00.0</span><span>{fmtTime(total)}</span></div>
+      <div style={{ marginTop: 6, marginLeft: 102, font: '400 11px/1.4 Satoshi', color: C.muted }}>Dashed dot: placed automatically from the scene it was chosen for. Solid dot: placed or edited by you (never moved automatically).</div>
       <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );

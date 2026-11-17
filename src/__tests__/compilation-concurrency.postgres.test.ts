@@ -77,7 +77,7 @@ suite('compilation versions under real concurrent connections', () => {
       holder.db = db;
       // The stand-in for what Supabase provides; it exists only inside the throwaway database.
       await client.unsafe(`create schema auth; create function auth.uid() returns uuid language sql as 'select null::uuid'; create function auth.jwt() returns jsonb language sql as $$select '{}'::jsonb$$;`);
-      const files = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00(0[1-9]|1[0-9]|2[0-4])_.*\.sql$/.test(f) && !f.includes('verification')).sort();
+      const files = fs.readdirSync(path.join(ROOT, 'drizzle/pg')).filter((f) => /^00\d\d_.*\.sql$/.test(f) && !f.includes('verification')).sort();
       for (const f of files.filter((m) => m < '0022_')) await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));
       await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/0009_broll_categories.sql'), 'utf8'));
       for (const f of files.filter((m) => m >= '0022_')) await client.unsafe(fs.readFileSync(path.join(ROOT, 'drizzle/pg', f), 'utf8'));

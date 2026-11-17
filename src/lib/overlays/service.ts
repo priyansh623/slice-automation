@@ -111,10 +111,11 @@ export async function updateOverlay(projectId: number, overlayId: number, patch:
     const cur = all.find((o) => o.id === overlayId);
     if (!cur) throw new OverlayError(404, 'not_found', 'Overlay not found.');
     const { spans } = await planningSpans(tx, projectId);
-    const values: Partial<typeof videoOverlays.$inferInsert> = { updatedAt: Date.now() };
+    // Any edit by a person makes the placement theirs: the automatic arrangement never moves it again.
+    const values: Partial<typeof videoOverlays.$inferInsert> = { updatedAt: Date.now(), placementSource: 'manual' };
     let assetMs = cur.assetDurationMs;
     if (patch.replaceWithBrollClipId != null) {
-      if (cur.kind !== 'generic') throw new OverlayError(422, 'not_generic', 'Only a library clip can be replaced this way. Character B-roll is changed from its own panel.');
+      if (cur.kind !== 'generic') throw new OverlayError(422, 'not_generic', 'Only a library clip can be replaced this way. Character B-roll is made and changed on the Generation screen.');
       const [clip] = await tx.select().from(brollClips).where(eq(brollClips.id, patch.replaceWithBrollClipId)).limit(1);
       if (!clip) throw new OverlayError(404, 'clip_not_found', 'That clip is not in the B-roll library.');
       Object.assign(values, { brollClipId: clip.id, status: 'preparing', assetStoragePath: null, assetWidth: null, assetHeight: null, assetDurationMs: clipMsFor(clip), errorMessage: null, claimedAt: null, sourceStartMs: 0 });
