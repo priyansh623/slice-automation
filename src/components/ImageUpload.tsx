@@ -13,9 +13,12 @@ interface Props {
   onChange: (result: UploadResult | null) => void;
   label?: string;
   hint?: string;
+  /** 'tall' fills its container (a portrait box with a dashed purple drop zone); the default is the compact one. */
+  variant?: 'default' | 'tall';
 }
 
-export default function ImageUpload({ value, onChange, label, hint }: Props) {
+export default function ImageUpload({ value, onChange, label, hint, variant = 'default' }: Props) {
+  const tall = variant === 'tall';
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -107,7 +110,7 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, ...(tall ? { height: '100%' } : {}) }}>
       {label && <span className="form-label">{label}</span>}
 
       {/* Hidden file input */}
@@ -123,18 +126,19 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
         /* ── Preview state ── */
         <div style={{
           border: '1px solid var(--border)',
-          borderRadius: 10,
+          borderRadius: tall ? 16 : 10,
           overflow: 'hidden',
           background: 'var(--bg-page)',
+          ...(tall ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } : {}),
         }}>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', ...(tall ? { flex: 1, minHeight: 0 } : {}) }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={localPreview ?? value!.previewUrl}
               alt="Reference image preview"
               style={{
                 width: '100%',
-                maxHeight: 220,
+                ...(tall ? { height: '100%' } : { maxHeight: 220 }),
                 objectFit: 'cover',
                 display: 'block',
               }}
@@ -180,9 +184,10 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
           disabled={uploading}
           style={{
             width: '100%',
-            border: `2px dashed ${dragging ? 'var(--brand)' : 'var(--border-input)'}`,
-            borderRadius: 10,
-            background: dragging ? 'var(--brand-light)' : 'var(--bg-page)',
+            border: tall ? `1.5px dashed #6C47FF` : `2px dashed ${dragging ? 'var(--brand)' : 'var(--border-input)'}`,
+            borderRadius: tall ? 16 : 10,
+            background: tall ? (dragging ? '#EAE4FF' : '#F5F3FF') : dragging ? 'var(--brand-light)' : 'var(--bg-page)',
+            ...(tall ? { flex: 1, justifyContent: 'center' } : {}),
             padding: '32px 24px',
             cursor: uploading ? 'wait' : 'pointer',
             display: 'flex',
@@ -192,17 +197,17 @@ export default function ImageUpload({ value, onChange, label, hint }: Props) {
             transition: 'border-color 0.15s, background 0.15s',
           }}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke={dragging ? 'var(--brand)' : 'var(--text-muted)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32">
+          {!tall && <svg viewBox="0 0 24 24" fill="none" stroke={dragging ? 'var(--brand)' : 'var(--text-muted)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="32" height="32">
             <rect x="3" y="3" width="18" height="18" rx="3"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
             <polyline points="21 15 16 10 5 21"/>
-          </svg>
-          <span style={{ fontSize: 14, fontWeight: 500, color: uploading ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-            {uploading ? 'Uploading…' : 'Click to upload or drag & drop'}
+          </svg>}
+          <span style={tall ? { font: '500 20px/1.3 Satoshi', color: uploading ? 'var(--text-muted)' : '#6C47FF' } : { fontSize: 14, fontWeight: 500, color: uploading ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+            {uploading ? 'Uploading…' : tall ? 'Upload character image' : 'Click to upload or drag & drop'}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {!tall && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             JPEG, PNG or WEBP
-          </span>
+          </span>}
         </button>
       )}
 
