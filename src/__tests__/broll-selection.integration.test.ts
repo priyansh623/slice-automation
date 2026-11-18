@@ -277,6 +277,19 @@ describe('Character B-roll goes through the existing Generation process, then la
   });
 });
 
+describe('library and Character clips have their own lanes', () => {
+  it('a library clip and a Character clip can both play over the same scene (tracks 0 and 1), each placed on its own', async () => {
+    const w = await world();
+    await put(w, { generic: [{ clipId: w.clip, screenId: w.screens[1] }], character: [{ assetId: w.asset, screenId: w.screens[1], action: '' }] });
+    const itemId = (await call(characterStart, { method: 'POST', params: w.params, body: { assetId: w.asset, screenId: w.screens[1] } })).json.id as number;
+    await finishCharacterClip(w, itemId);
+    expect(await populate(w)).toMatchObject({ created: 2, unplaced: 0 });
+    const rows = await q<{ kind: string; track: number; placement_source: string }>(`select kind, track, placement_source from video_overlays order by track`);
+    expect(rows).toEqual([{ kind: 'generic', track: 0, placement_source: 'auto' }, { kind: 'character', track: 1, placement_source: 'auto' }]);
+    expect((await comp(w)).overlays.every((o: { problems: unknown[] }) => o.problems.length === 0)).toBe(true);   // no overlap problem between lanes
+  }, 180_000);
+});
+
 describe('compilation is unchanged', () => {
   it('compiles the automatic arrangement; the Flow narration is bit-identical to a compile without B-roll', async () => {
     const w = await world();
