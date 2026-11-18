@@ -119,6 +119,7 @@ export default function CompositionPage() {
             onMove={(oid, to) => run(() => patch(`${base}/overlays/${oid}`, to))}
             onResize={(oid, durationMs) => run(() => patch(`${base}/overlays/${oid}`, { durationMs }))}
             onReplace={(oid) => setPicker({ mode: 'replace', id: oid })} onRemove={removeClip}
+            onTrim={(oid, to) => run(() => patch(`${base}/overlays/${oid}`, to))}
             onScene={(oid, screenId) => { const sc = data.scenes.find((x) => x.screenId === screenId); const ov = data.overlays.find((x) => x.id === oid); const off = sc && ov ? Math.max(0, Math.round((sc.durationMs - ov.durationMs) / 2 / 100) * 100) : 0; void run(() => patch(`${base}/overlays/${oid}`, { anchorScreenId: screenId, startOffsetMs: off })); }}
             onRetry={(oid) => void run(() => post(`${base}/overlays/${oid}/retry`))}
             onAddGeneric={() => setPicker({ mode: 'add' })} />

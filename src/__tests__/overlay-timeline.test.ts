@@ -61,6 +61,13 @@ describe('placing', () => {
   it('returns null when nothing fits', () => {
     expect(firstFreePlacement(buildSceneSpans([{ screenId: 10, durationMs: 2000 }]), [ov(1, 10, 0, 2000)], 1000)).toBeNull();
   });
+  it('checkPlacement refuses a clip that overlaps B-roll on another lane, with a plain message', () => {
+    const sp = buildSceneSpans([{ screenId: 10, durationMs: 8000 }]);
+    const lane0 = ov(1, 10, 0, 3000);
+    const cand = { ...ov(2, 10, 2000, 2000), track: 1 };
+    expect(checkPlacement(sp, [lane0], cand)).toMatchObject([{ code: 'overlap', overlayId: 2, message: 'It overlaps another B-roll. Trim or move the other one first.' }]);
+    expect(checkPlacement(sp, [lane0], { ...cand, startOffsetMs: 3000 })).toEqual([]);
+  });
   it('checkPlacement reports a clash for the moved overlay only, and ignores the overlay\'s own old position', () => {
     const others = [ov(1, 10, 0, 3000), ov(2, 11, 0, 1000)];
     expect(checkPlacement(spans, others, ov(3, 10, 1000, 1000))).toMatchObject([{ code: 'overlap', overlayId: 3 }]);

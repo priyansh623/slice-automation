@@ -86,7 +86,8 @@ export function resolveOverlays(spans: readonly SceneSpan[], overlays: readonly 
 
 /** The first free stretch on `track` (in the order of the video) long enough for `durationMs`, inside the preferred scene if possible. */
 export function firstFreePlacement(spans: readonly SceneSpan[], overlays: readonly OverlayTiming[], durationMs: number, track = 0, preferredScreenId?: number): { anchorScreenId: number; startOffsetMs: number } | null {
-  const { resolved } = resolveOverlays(spans, overlays.filter((o) => o.track === track));
+  void track; // B-roll on any lane blocks the same time
+  const { resolved } = resolveOverlays(spans, overlays);
   const busy = resolved.map((r) => [r.startMs, r.endMs] as const).sort((a, b) => a[0] - b[0]);
   const order = preferredScreenId != null ? [...spans.filter((s) => s.screenId === preferredScreenId), ...spans.filter((s) => s.screenId !== preferredScreenId)] : [...spans];
   const total = totalDurationMs(spans);
@@ -104,6 +105,17 @@ export function firstFreePlacement(spans: readonly SceneSpan[], overlays: readon
 
 /** Checks one placement against the others on its track, using the scene lengths known right now. Used when a person places or moves an overlay. */
 export function checkPlacement(spans: readonly SceneSpan[], others: readonly OverlayTiming[], candidate: OverlayTiming): TimelineProblem[] {
-  const { problems } = resolveOverlays(spans, [...others.filter((o) => o.id !== candidate.id), candidate]);
-  return problems.filter((p) => p.overlayId === candidate.id || p.otherId === candidate.id);
+  const rest = others.filter((o) => o.id !== candidate.id);
+  const { problems } = resolveOverlays(spans, [...rest, candidate]);
+  const out = problems.filter((p) => p.overlayId === candidate.id || p.otherId === candidate.id);
+  // B-roll covers the whole frame, so two clips cannot play at once even on different lanes. (Only checked for what a person places or
+  // moves: overlays that already overlap across lanes are left as they are until one of them is edited.)
+  if (!out.some((p) => p.code === 'overlap')) {
+    const me = resolveOverlays(spans, [candidate]).resolved[0];
+    if (me) {
+      const clash = resolveOverlays(spans, rest.filter((o) => o.track !== candidate.track)).resolved.find((r) => me.startMs < r.endMs && me.endMs > r.startMs);
+      if (clash) out.push({ code: 'overlap', overlayId: candidate.id, otherId: clash.id, message: 'It overlaps another B-roll. Trim or move the other one first.' });
+    }
+  }
+  return out;
 }

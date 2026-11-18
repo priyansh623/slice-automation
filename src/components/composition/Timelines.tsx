@@ -10,6 +10,8 @@ interface Props {
   onSeek: (ms: number) => void; onSelect: (id: number | null) => void;
   onMove: (id: number, to: { anchorScreenId: number; startOffsetMs: number }) => Promise<unknown> | void;
   onResize: (id: number, durationMs: number) => Promise<unknown> | void;
+  /** Cuts the start of a clip: it now begins later in its own footage, at this place on the timeline. */
+  onTrim: (id: number, to: { anchorScreenId: number; startOffsetMs: number; sourceStartMs: number; durationMs: number }) => Promise<unknown> | void;
   onReplace: (id: number) => void; onRemove: (id: number) => void; onScene: (id: number, screenId: number) => void; onRetry: (id: number) => void;
   onAddGeneric: () => void;
 }
@@ -23,13 +25,13 @@ const tickLabel = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor
 /**
  * The timeline: a ruler with the red playhead, a header per scene (dashed dividers run through every lane), then the lanes Generic B-roll,
  * Character B-roll and Flow scenes. The Flow lane shows frames of each scene. Click a B-roll clip to get its small toolbar (Replace, Remove,
- * Scene); drag it to move it, drag its right edge to change its length.
+ * Scene); drag it to move it, drag its left edge to cut the start, its right edge to cut the end.
  */
-export default function Timelines({ scenes, overlays, totalMs, time, selectedId, atLimit, onSeek, onSelect, onMove, onResize, onReplace, onRemove, onScene, onRetry, onAddGeneric }: Props) {
+export default function Timelines({ scenes, overlays, totalMs, time, selectedId, atLimit, onSeek, onSelect, onMove, onResize, onTrim, onReplace, onRemove, onScene, onRetry, onAddGeneric }: Props) {
   const innerRef = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ id: number; mode: 'move' | 'resize'; startX: number; dx: number } | null>(null);
+  const [drag, setDrag] = useState<{ id: number; mode: 'move' | 'resize' | 'trim'; startX: number; dx: number } | null>(null);
   // The drag lives in a ref as well: pointer moves and the release can arrive faster than React re-renders, and the release must see the LAST position.
-  const dragRef = useRef<{ id: number; mode: 'move' | 'resize'; startX: number; dx: number } | null>(null);
+  const dragRef = useRef<{ id: number; mode: 'move' | 'resize' | 'trim'; startX: number; dx: number } | null>(null);
   // Where a clip was just dropped, kept on screen until the server has answered, so it does not jump back while it saves.
   const [dropped, setDropped] = useState<{ id: number; startMs: number; durationMs: number } | null>(null);
   const [menu, setMenu] = useState(false);
@@ -60,7 +62,9 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [selectedId, onRemove, onSelect]);
 
-  const begin = (e: React.PointerEvent, o: CompOverlay, mode: 'move' | 'resize') => {
+  /** How much of the start is cut (negative = brought back), kept inside the clip's own footage and above the minimum length. */
+  const trimDelta = (o: CompOverlay, deltaMs: number) => snap(Math.min(o.durationMs - MIN_MS, Math.max(-o.sourceStartMs, deltaMs)));
+  const begin = (e: React.PointerEvent, o: CompOverlay, mode: 'move' | 'resize' | 'trim') => {
     e.stopPropagation(); e.preventDefault(); onSelect(o.id);
     if (o.startMs == null) return;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the drag still works without capture */ }
@@ -79,6 +83,13 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
       const sc = scenes.find((x) => x.screenId === target.anchorScreenId);
       setDropped({ id: o.id, startMs: (sc?.startMs ?? 0) + target.startOffsetMs, durationMs: o.durationMs });
       void Promise.resolve(onMove(o.id, target)).finally(done);
+    } else if (d.mode === 'trim') {
+      const cut = trimDelta(o, deltaMs);
+      const target = toAnchor(scenes, snap(o.startMs + cut)); if (!target) return;
+      const sc = scenes.find((x) => x.screenId === target.anchorScreenId);
+      const durationMs = o.durationMs - cut;
+      setDropped({ id: o.id, startMs: (sc?.startMs ?? 0) + target.startOffsetMs, durationMs });
+      void Promise.resolve(onTrim(o.id, { ...target, sourceStartMs: o.sourceStartMs + cut, durationMs })).finally(done);
     } else {
       const durationMs = Math.max(MIN_MS, snap(o.durationMs + deltaMs));
       setDropped({ id: o.id, startMs: o.startMs, durationMs });
@@ -93,8 +104,9 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
   const block = (o: CompOverlay) => {
     const colour = o.kind === 'character' ? ORANGE : C.generic;
     const live = drag?.id === o.id; const held = dropped?.id === o.id && !live ? dropped : null; const startMs = held ? held.startMs : (o.startMs ?? 0);
-    const left = live && drag!.mode === 'move' ? startMs + drag!.dx * msPerPx() : startMs;
-    const width = live && drag!.mode === 'resize' ? Math.max(MIN_MS, o.durationMs + drag!.dx * msPerPx()) : held ? held.durationMs : o.durationMs;
+    const cut = live && drag!.mode === 'trim' ? trimDelta(o, drag!.dx * msPerPx()) : 0;
+    const left = live && drag!.mode === 'move' ? startMs + drag!.dx * msPerPx() : startMs + cut;
+    const width = live && drag!.mode === 'resize' ? Math.max(MIN_MS, o.durationMs + drag!.dx * msPerPx()) : live && drag!.mode === 'trim' ? o.durationMs - cut : held ? held.durationMs : o.durationMs;
     const sel = selectedId === o.id;
     return (
       <div key={o.id} data-testid={`overlay-block-${o.id}`} onPointerDown={(e) => begin(e, o, 'move')} onPointerMove={moveTo} onPointerUp={() => end(o)} onPointerCancel={() => end(o)} onClick={(e) => e.stopPropagation()}
@@ -103,6 +115,7 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
         {o.needsAttention ? <AlertTriangle size={13} /> : o.status === 'preparing' ? <Loader2 size={13} className="spin" /> : null}
         <span aria-label={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed by you'} title={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed or edited by you'} style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: o.placementSource === 'auto' ? 'rgba(255,255,255,.55)' : '#fff', border: o.placementSource === 'auto' ? '1px dashed #fff' : 'none' }} />
         <span style={{ font: '600 12px/1 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.title}</span>
+        {o.startMs != null && <div onPointerDown={(e) => begin(e, o, 'trim')} aria-label="Cut the start" title="Drag to cut the start of the clip" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 9, cursor: 'ew-resize', background: 'rgba(0,0,0,.25)' }} />}
         {o.startMs != null && <div onPointerDown={(e) => begin(e, o, 'resize')} aria-label="Change duration" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 9, cursor: 'ew-resize', background: 'rgba(0,0,0,.25)' }} />}
       </div>
     );

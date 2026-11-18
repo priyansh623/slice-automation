@@ -251,6 +251,17 @@ describe('Character B-roll goes through the existing Generation process, then la
     expect(await overlays(w)).toHaveLength(0);
   });
 
+  it('a library clip and a Character clip in one scene share it one after the other, shortened to fit, never overlapping', async () => {
+    const w = await world();
+    await put(w, { generic: [{ clipId: w.clip, screenId: w.screens[1] }], character: [{ assetId: w.asset, screenId: w.screens[1], action: 'taps card' }] });
+    const itemId = (await start(w, 1)).json.id as number;
+    await finishCharacterClip(w, itemId);
+    expect(await populate(w)).toMatchObject({ created: 2, unplaced: 0 });
+    const os = (await overlays(w)).sort((a, b) => Number(a.startOffsetMs) - Number(b.startOffsetMs));
+    expect(os.map((o) => [o.kind, o.startOffsetMs, o.durationMs])).toEqual([['generic', 0, 2000], ['character', 2000, 2000]]);   // a 4 s scene: 3 s + 5 s clips, 2 s each
+    expect(await populate(w)).toMatchObject({ created: 0, moved: 0 });                                                         // stable
+  });
+
   it('when the video is ready it appears on its selected scene, automatically placed and silent-ready, once', async () => {
     const w = await world();
     await put(w, { character: [{ assetId: w.asset, screenId: w.screens[1], action: 'taps card' }] });
@@ -259,8 +270,8 @@ describe('Character B-roll goes through the existing Generation process, then la
     const jobsBefore = await counts();
     expect(await populate(w)).toMatchObject({ created: 1, waiting: 0 });
     const [o] = await overlays(w);
-    expect(o).toMatchObject({ kind: 'character', anchorScreenId: w.screens[1], characterItemId: itemId, placementSource: 'auto', status: 'ready', durationMs: 5000 });
-    expect(o.startOffsetMs).toBe(0);                                                                              // a 5 s clip is longer than the 4 s scene: starts with it
+    expect(o).toMatchObject({ kind: 'character', anchorScreenId: w.screens[1], characterItemId: itemId, placementSource: 'auto', status: 'ready', durationMs: 4000 });
+    expect(o.startOffsetMs).toBe(0);                                                                              // a 5 s clip is longer than the 4 s scene: shortened to the scene (keeps its start)
     for (let i = 0; i < 3; i++) expect(await populate(w)).toMatchObject({ created: 0, moved: 0 });
     expect(await overlays(w)).toHaveLength(1);
     expect((await counts()).jobs).toBe(jobsBefore.jobs);                                                          // revisiting costs nothing
