@@ -48,7 +48,9 @@ export function useBrollSelection(projectId: string) {
     for (const assetId of assetIds) for (const screenId of screenIds) if (!character.some((c) => c.assetId === assetId && c.screenId === screenId)) character = [...character, { assetId, screenId, action }];
     save({ ...sel, character });
   };
+  /** Remembers the small pictures of images that were just picked, so the landing cards show them at once (no refetch). */
+  const addPreviews = useCallback((m: Record<number, string | null>) => setPreviews((p) => (Object.keys(m).every((k) => p[Number(k)] === m[Number(k)]) ? p : { ...p, ...m })), []);
   const removeClip = (clipId: number, screenId: number) => save({ ...sel, generic: sel.generic.filter((g) => !(g.clipId === clipId && g.screenId === screenId)) });
   const removeAsset = (assetId: number, screenId: number) => save({ ...sel, character: sel.character.filter((c) => !(c.assetId === assetId && c.screenId === screenId)) });
-  return { base, state, name, scenes, sel, previews, saving, message, save, setClipScenes, setAssetScenes, removeClip, removeAsset, reload: load };
+  return { base, state, name, scenes, sel, previews, addPreviews, saving, message, save, setClipScenes, setAssetScenes, removeClip, removeAsset, reload: load };
 }

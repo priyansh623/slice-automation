@@ -304,7 +304,7 @@ export default function ProjectFlow({ projectId: initialId }: { projectId: numbe
                     <button className="stu-ghost" onClick={() => void toggleAll(p.id, items)} disabled={!!busy} style={{ height: 28, padding: '0 10px', borderRadius: 8, background: '#fff', border: '1px solid #E4E4E0', font: '500 12px/1 Satoshi', cursor: 'pointer' }}>{allOn ? 'Clear' : 'Select all'}</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 12 }}>
-                    {items.map((g) => { const on = selectedIds.has(g.id); const c = chipOf(g); return (
+                    {items.map((g) => { const on = selectedIds.has(g.id); const c0 = chipOf(g); const c = c0 && c0.text === 'Needs review' ? null : c0; return (
                       <div key={g.id} className="stu-tile" onClick={() => void toggle(g)} style={{ position: 'relative', aspectRatio: '9/16', borderRadius: 14, background: bg(g.thumbUrl), border: `2px solid ${on ? '#6C47FF' : 'transparent'}`, boxSizing: 'border-box', overflow: 'hidden', cursor: 'pointer' }}>
                         <span style={{ position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 6, background: on ? '#6C47FF' : 'rgba(0,0,0,0.35)', border: `1.5px solid ${on ? '#6C47FF' : 'rgba(255,255,255,0.85)'}`, color: '#fff', font: '700 13px/19px Satoshi', textAlign: 'center', boxSizing: 'border-box' }}>{on ? '✓' : ''}</span>
                         {c && <TileChip text={c.text} bg={c.bg} fg={c.fg} />}
