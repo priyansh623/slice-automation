@@ -72,7 +72,7 @@ const Preview = forwardRef<PreviewHandle, Props>(function Preview({ scenes, over
   useImperativeHandle(ref, () => ({ seek: goTo, toggle, restart: () => { setPlaying(false); goTo(0); } }));
 
   return (
-    <div style={{ position: 'relative', height: 'min(54vh, 600px)', aspectRatio: '9 / 16', background: '#000', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 30px rgba(17,17,19,.12)' }}>
+    <div style={{ position: 'relative', height: '100%', maxWidth: '100%', aspectRatio: '9 / 16', background: '#000', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 30px rgba(17,17,19,.12)' }}>
         {scene?.clipUrl
           ? <video ref={baseRef} key={scene.screenId} src={scene.clipUrl} playsInline preload="auto" onLoadedMetadata={onLoaded} onEnded={onEnded} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#bbb', font: '400 13px/1.4 Satoshi', padding: 16, textAlign: 'center' }}>{scenes.length === 0 ? 'No Flow scenes yet.' : `Scene ${scene?.sceneNumber ?? ''} has no finished clip to preview.`}</div>}

@@ -15,7 +15,6 @@ interface Props {
 }
 const MIN_MS = 500;
 const LABEL_W = 176;
-const PX_PER_SEC_MIN = 30;
 const ORANGE = '#C2410C';
 
 const clock = (ms: number) => { const s = Math.max(0, ms) / 1000; return `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
@@ -85,7 +84,7 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
     return (
       <div key={o.id} data-testid={`overlay-block-${o.id}`} onPointerDown={(e) => begin(e, o, 'move')} onPointerMove={moveTo} onPointerUp={() => end(o)} onClick={(e) => e.stopPropagation()}
         title={o.needsAttention ? o.attentionReason ?? '' : o.title}
-        style={{ position: 'absolute', top: 8, bottom: 8, left: pct(Math.max(0, left)), width: pct(width), minWidth: 10, background: o.needsAttention ? '#FDECEA' : colour, color: o.needsAttention ? C.danger : '#fff', outline: sel ? `2px solid ${C.text}` : 'none', outlineOffset: 1, border: o.needsAttention ? `1px dashed ${C.danger}` : 'none', borderRadius: 10, cursor: 'grab', touchAction: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', overflow: 'hidden', boxSizing: 'border-box', opacity: o.status === 'ready' || o.needsAttention ? 1 : 0.65 }}>
+        style={{ position: 'absolute', top: 6, bottom: 6, left: pct(Math.max(0, left)), width: pct(width), minWidth: 10, background: o.needsAttention ? '#FDECEA' : colour, color: o.needsAttention ? C.danger : '#fff', outline: sel ? `2px solid ${C.text}` : 'none', outlineOffset: 1, border: o.needsAttention ? `1px dashed ${C.danger}` : 'none', borderRadius: 10, cursor: 'grab', touchAction: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', overflow: 'hidden', boxSizing: 'border-box', opacity: o.status === 'ready' || o.needsAttention ? 1 : 0.65 }}>
         {o.needsAttention ? <AlertTriangle size={13} /> : o.status === 'preparing' ? <Loader2 size={13} className="spin" /> : null}
         <span aria-label={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed by you'} title={o.placementSource === 'auto' ? 'Placed automatically' : 'Placed or edited by you'} style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: o.placementSource === 'auto' ? 'rgba(255,255,255,.55)' : '#fff', border: o.placementSource === 'auto' ? '1px dashed #fff' : 'none' }} />
         <span style={{ font: '600 12px/1 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.title}</span>
@@ -102,18 +101,18 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
   );
 
   return (
-    <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflowX: 'auto', overflowY: 'hidden' }} data-testid="timeline">
-      <div style={{ minWidth: LABEL_W + (total / 1000) * PX_PER_SEC_MIN }}>
+    <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }} data-testid="timeline">
+      <div>
         {/* ruler + scene headers */}
         <div style={{ display: 'grid', gridTemplateColumns: `${LABEL_W}px 1fr` }}>
           <div style={{ position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `1px solid ${C.border}` }} />
           <div style={{ position: 'relative' }}>
-            <div onClick={seekFromClick} style={{ position: 'relative', height: 30, cursor: 'pointer' }} data-testid="ruler">
-              {ticks.map((t) => <span key={t} style={{ position: 'absolute', left: pct(t), top: 0, bottom: 0, borderLeft: `1px solid ${C.border}`, paddingLeft: 6, font: '500 12px/30px Satoshi', color: C.muted }}>{tickLabel(t)}</span>)}
+            <div onClick={seekFromClick} style={{ position: 'relative', height: 26, cursor: 'pointer' }} data-testid="ruler">
+              {ticks.map((t) => <span key={t} style={{ position: 'absolute', left: pct(t), top: 0, bottom: 0, borderLeft: `1px solid ${C.border}`, paddingLeft: 6, font: '500 12px/26px Satoshi', color: C.muted }}>{tickLabel(t)}</span>)}
               <span style={{ position: 'absolute', left: pct(Math.min(time, total)), top: 0, bottom: 0, width: 2, background: '#E11D2E', pointerEvents: 'none' }} />
             </div>
-            <div onClick={seekFromClick} style={{ position: 'relative', height: 28, cursor: 'pointer' }}>
-              {scenes.map((s) => <span key={s.screenId} style={{ position: 'absolute', left: pct(s.startMs), paddingLeft: 6, font: '600 13px/28px Satoshi', color: C.primary, whiteSpace: 'nowrap' }}>Scene {s.sceneNumber}</span>)}
+            <div onClick={seekFromClick} style={{ position: 'relative', height: 24, cursor: 'pointer' }}>
+              {scenes.map((s) => <span key={s.screenId} style={{ position: 'absolute', left: pct(s.startMs), paddingLeft: 6, font: '600 13px/24px Satoshi', color: C.primary, whiteSpace: 'nowrap' }}>Scene {s.sceneNumber}</span>)}
               <span style={{ position: 'absolute', left: pct(Math.min(time, total)), top: 0, bottom: 0, width: 2, background: '#E11D2E', pointerEvents: 'none' }} />
             </div>
           </div>
@@ -125,17 +124,17 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
             {scenes.map((s, i) => i > 0 && <span key={s.screenId} style={{ position: 'absolute', left: pct(s.startMs), top: 0, bottom: 0, borderLeft: '1px dashed #D9D6E4' }} />)}
             <span data-testid="playhead" style={{ position: 'absolute', left: pct(Math.min(time, total)), top: 0, bottom: 0, width: 2, background: '#E11D2E', zIndex: 4 }} />
           </div>
-          {lane('generic', 'Generic B-roll', <Film size={16} />, 64,
+          {lane('generic', 'Generic B-roll', <Film size={16} />, 50,
             <div onClick={(e) => { onSelect(null); seekFromClick(e); }} style={{ position: 'absolute', inset: 0, cursor: 'pointer' }} data-testid="generic-lane">{overlays.filter((o) => o.kind === 'generic').map(block)}</div>,
             <button aria-label="Add a library clip" title={atLimit ? 'The B-roll limit is reached' : 'Add a library clip'} disabled={atLimit} onClick={onAddGeneric} style={{ width: 24, height: 24, borderRadius: 7, border: `1px solid ${C.borderStrong}`, background: '#fff', display: 'grid', placeItems: 'center', cursor: atLimit ? 'not-allowed' : 'pointer', opacity: atLimit ? 0.4 : 1 }}><Plus size={14} /></button>)}
-          {lane('character', 'Character B-roll', <UserRound size={16} color={ORANGE} />, 64,
+          {lane('character', 'Character B-roll', <UserRound size={16} color={ORANGE} />, 50,
             <div onClick={(e) => { onSelect(null); seekFromClick(e); }} style={{ position: 'absolute', inset: 0, cursor: 'pointer' }} data-testid="character-lane">{overlays.filter((o) => o.kind === 'character').map(block)}</div>)}
-          {lane('flow', 'Flow scenes', <Clapperboard size={16} />, 92,
+          {lane('flow', 'Flow scenes', <Clapperboard size={16} />, 76,
             <div onClick={seekFromClick} style={{ position: 'absolute', inset: 0, cursor: 'pointer' }} data-testid="flow-track">
               {scenes.map((s) => {
                 const n = Math.max(2, Math.min(6, Math.round(s.durationMs / 1500)));
                 return (
-                  <div key={s.screenId} title={s.dialogue} style={{ position: 'absolute', left: pct(s.startMs), width: pct(s.durationMs), top: 8, bottom: 8, boxSizing: 'border-box', padding: '0 1px', pointerEvents: 'none' }}>
+                  <div key={s.screenId} title={s.dialogue} style={{ position: 'absolute', left: pct(s.startMs), width: pct(s.durationMs), top: 6, bottom: 6, boxSizing: 'border-box', padding: '0 1px', pointerEvents: 'none' }}>
                     <div style={{ position: 'relative', height: '100%', borderRadius: 10, overflow: 'hidden', background: s.clipUrl ? '#1B1B22' : '#EFEFEC', display: 'flex', border: `2px solid ${s.approved ? '#C9C2EA' : '#E4E4E0'}`, boxSizing: 'border-box' }}>
                       {s.clipUrl && Array.from({ length: n }).map((_, i) => <video key={i} src={`${s.clipUrl}#t=${(((i + 0.5) / n) * (s.durationMs / 1000)).toFixed(1)}`} muted playsInline preload="metadata" style={{ flex: 1, minWidth: 0, height: '100%', objectFit: 'cover', display: 'block' }} />)}
                       <span style={{ position: 'absolute', left: 8, top: 8, padding: '3px 8px', borderRadius: 7, background: 'rgba(17,17,19,.72)', color: '#fff', font: '600 12px/1 Satoshi' }}>Scene {s.sceneNumber} · {Math.round(s.durationMs / 1000)}s{s.lengthKnown ? '' : ' (est.)'}</span>
