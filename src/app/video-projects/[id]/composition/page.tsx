@@ -10,6 +10,7 @@ import Preview, { type PreviewHandle } from '@/components/composition/Preview';
 import Timelines, { clock } from '@/components/composition/Timelines';
 import LibraryPicker from '@/components/composition/LibraryPicker';
 import { api, C, patch, post, type Composition, type FillResult } from '@/components/composition/types';
+import { makeUrlStabiliser } from '@/lib/overlays/ui-math';
 import { AlertTriangle, ChevronRight, Pause, Play, SkipBack } from 'lucide-react';
 
 /**
@@ -34,6 +35,8 @@ export default function CompositionPage() {
   const [fill, setFill] = useState<FillResult | null>(null);
   // Only the newest answer is shown: a slower, older read (the 4 second refresh) can never put a clip back where it was before a move.
   const loadSeq = useRef(0);
+  // The same file keeps the same link across refreshes, so an edit does not make every video download again.
+  const stableUrl = useRef(makeUrlStabiliser());
   const load = useCallback(async (populate = false) => {
     const seq = ++loadSeq.current;
     if (populate) { const f = await api<FillResult>(`${base}/overlays/populate`, { method: 'POST' }); if (f.ok && seq === loadSeq.current) setFill(f.data as FillResult); }
@@ -41,7 +44,14 @@ export default function CompositionPage() {
     if (seq !== loadSeq.current) return;
     if (r.status === 404) { setState('off'); return; }
     if (!r.ok) { setState('error'); return; }
-    setData(r.data as unknown as Composition); setState('ready');
+    const next = r.data as unknown as Composition;
+    const stable = stableUrl.current;
+    setData({
+      ...next,
+      scenes: next.scenes.map((sc) => ({ ...sc, clipUrl: stable(`scene:${sc.screenId}:${sc.generationId}`, sc.clipUrl) })),
+      overlays: next.overlays.map((o) => ({ ...o, assetUrl: stable(`overlay:${o.id}:${(o as unknown as { assetStoragePath?: string | null }).assetStoragePath ?? ''}`, o.assetUrl) })),
+    });
+    setState('ready');
   }, [base]);
   useEffect(() => { void load(true); }, [load]);
 

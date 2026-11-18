@@ -30,3 +30,19 @@ export function toAnchor(scenes: readonly UiScene[], globalMs: number): { anchor
   if (!at) return null;
   return { anchorScreenId: at.scene.screenId, startOffsetMs: Math.min(at.offsetMs, Math.max(0, at.scene.durationMs - SNAP_MS)) };
 }
+
+/**
+ * Keeps a file's link the same across refreshes. The server signs a NEW link every time the page reads the composition, and a video whose link
+ * changes is downloaded again, so every edit made the preview and the Flow frames reload. A link is reused for the same file until it is
+ * nearly out of date (the server's links last an hour), then a fresh one is taken. A different file (a new key) always gets its own link.
+ */
+export function makeUrlStabiliser(maxAgeMs = 50 * 60_000, now: () => number = Date.now) {
+  const seen = new Map<string, { url: string; at: number }>();
+  return (key: string, url: string | null): string | null => {
+    if (!url) return url;
+    const hit = seen.get(key);
+    if (hit && now() - hit.at < maxAgeMs) return hit.url;
+    seen.set(key, { url, at: now() });
+    return url;
+  };
+}
