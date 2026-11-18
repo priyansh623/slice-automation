@@ -14,7 +14,7 @@
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { brollClips, characterBrollItems, studioAssets, videoOverlays, videoProjects, videoScreens } from '@/db/schema.pg';
+import { brollClips, characterBrollItems, studioAssets, videoCompilationOverlays, videoOverlays, videoProjects, videoScreens } from '@/db/schema.pg';
 import { arrangeAuto } from './arrange';
 import { createCharacterItem, CLIP_SECONDS, type ItemRow } from './character';
 import { DEFAULT_OVERLAY_MS, MIN_OVERLAY_MS, OverlayError, overlayLimit, planningSpans } from './service';
@@ -148,6 +148,30 @@ export async function startCharacterPick(projectId: number, userId: string, ref:
     if (pick) { pick.itemId = item.id; delete pick.startingAt; await write(tx, projectId, sel); }
   });
   return { item };
+}
+
+/**
+ * Takes one Character pick off the project, from the Generation screen. The pick and its overlay on the timeline are removed (a compilation that
+ * already used the overlay keeps its frozen copy). The item itself is kept on record: if its image or video was already made, that was already
+ * charged and is simply not used any more. Nothing is started or charged here.
+ */
+export async function removeCharacterPick(projectId: number, ref: { assetId: number; screenId: number }): Promise<{ removed: true; hadItem: boolean; overlaysRemoved: number }> {
+  return db.transaction(async (tx) => {
+    await lockProject(tx, projectId);
+    const sel = await read(tx, projectId);
+    const idx = sel.character.findIndex((c) => c.assetId === ref.assetId && c.screenId === ref.screenId);
+    if (idx < 0) throw err(404, 'not_selected', 'That image is not selected for this scene.');
+    const [pick] = sel.character.splice(idx, 1);
+    const ids = new Set<number>(); if (pick.overlayId !== undefined) ids.add(pick.overlayId);
+    if (pick.itemId !== undefined) for (const o of await tx.select({ id: videoOverlays.id }).from(videoOverlays).where(and(eq(videoOverlays.videoProjectId, projectId), eq(videoOverlays.characterItemId, pick.itemId)))) ids.add(o.id);
+    const list = [...ids];
+    if (list.length) {
+      await tx.update(videoCompilationOverlays).set({ overlayId: null }).where(inArray(videoCompilationOverlays.overlayId, list));
+      await tx.delete(videoOverlays).where(and(eq(videoOverlays.videoProjectId, projectId), inArray(videoOverlays.id, list)));
+    }
+    await write(tx, projectId, sel);
+    return { removed: true as const, hadItem: pick.itemId !== undefined, overlaysRemoved: list.length };
+  });
 }
 
 export interface PopulateResult { created: number; moved: number; /** picks that are usable but could not be placed inside their scene without overlapping something */ unplaced: number; /** picks whose scene no longer exists (never re-attached to another scene) */ sceneMissing: number; /** Character picks still going through personalise / approve / video */ waiting: number }

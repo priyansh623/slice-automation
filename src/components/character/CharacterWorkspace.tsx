@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Loader2, Play, RefreshCw, Sparkles, UserRound } from 'lucide-react';
+import { Check, Layers, Loader2, Play, RefreshCw, Sparkles, Trash2, UserRound } from 'lucide-react';
 import { C, post, type CompItem } from '@/components/composition/types';
 import { ReviewImage, type ImageState } from '@/components/ReviewImage';
 import type { CharRow, CharacterProduction } from './useCharacterProduction';
@@ -27,9 +27,34 @@ export function statusOf(r: CharRow, imageReady: boolean): { text: string; color
   return { text: 'Image failed', color: C.danger };
 }
 
-/** The "Character B-roll" section of the left list, styled like the scene rows. */
-export function CharacterRail({ rows, imageReady, selectedKey, onSelect }: { rows: CharRow[]; imageReady: boolean; selectedKey: string | null; onSelect: (key: string) => void }) {
+/** A small confirm dialog in the same style as the scene dialogs. */
+function Confirm({ title, children, confirmLabel, danger, busy, onConfirm, onClose }: { title: string; children: React.ReactNode; confirmLabel: string; danger?: boolean; busy: boolean; onConfirm: () => void; onClose: () => void }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: '26px 26px 22px', width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
+        <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>{title}</div>
+        <div style={{ font: '400 14px/1.55 Satoshi', color: '#5E5E65', marginBottom: 22 }}>{children}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} disabled={busy} style={{ height: 38, padding: '0 16px', borderRadius: 9, background: '#fff', border: '1px solid #E4E4E0', font: '500 14px/1 Satoshi', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={busy} style={{ height: 38, padding: '0 16px', borderRadius: 9, background: busy ? '#E4E4E0' : danger ? '#C0392B' : '#6C47FF', color: busy ? '#A3A3A9' : '#fff', border: 'none', font: '700 14px/1 Satoshi', cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Working…' : confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The "Character B-roll" section of the left list, styled like the scene list: a Generate all button, then one row per image with its status and a
+ * delete icon. Generate all starts every image never started and every video whose image is approved and prompt written, after a confirmation
+ * that says how many (each is a paid step). Deleting takes the image off the project; work already made was already charged and is simply not used.
+ */
+export function CharacterRail({ prod, selectedKey, onSelect, onRemoved }: { prod: CharacterProduction; selectedKey: string | null; onSelect: (key: string) => void; onRemoved: (row: CharRow) => void }) {
+  const { rows, imageReady } = prod;
+  const [confirm, setConfirm] = useState<null | { kind: 'all' } | { kind: 'remove'; row: CharRow }>(null);
+  const [working, setWorking] = useState(false);
   if (rows.length === 0) return null;
+  const todo = prod.pending(rows); const nImages = todo.images.length; const nVideos = todo.videos.length; const nAll = nImages + nVideos;
+  const label = nAll === 0 ? 'Generate all B-roll' : `Generate all B-roll (${nAll})`;
   return (
     <div style={{ borderTop: '1px solid #ECECE8', marginTop: 8 }} data-testid="character-rail">
       <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -37,19 +62,39 @@ export function CharacterRail({ rows, imageReady, selectedKey, onSelect }: { row
         <span style={{ font: '600 13px/1 Satoshi', color: '#111113' }}>Character B-roll</span>
         <span style={{ font: '500 12px/1 Satoshi', color: '#75757C', marginLeft: 'auto' }}>{rows.filter((r) => r.item?.clipStatus === 'ready').length} of {rows.length} ready</span>
       </div>
+      <div style={{ padding: '4px 16px 8px' }}>
+        <button onClick={() => setConfirm({ kind: 'all' })} disabled={nAll === 0 || !!prod.busy} title={nAll === 0 ? (imageReady ? 'Nothing is waiting to be generated' : 'Image generation is not available right now') : undefined}
+          style={{ width: '100%', height: 32, border: '1px solid #E4E4E0', borderRadius: 8, background: '#fff', font: '500 12px/1 Satoshi', color: '#5E5E65', cursor: nAll === 0 || prod.busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: nAll === 0 || prod.busy ? 0.5 : 1 }}>
+          <Layers size={14} /> {prod.busy === 'all' ? 'Starting…' : label}
+        </button>
+      </div>
       {rows.map((r) => {
         const st = statusOf(r, imageReady); const on = selectedKey === r.key;
         return (
-          <button key={r.key} onClick={() => onSelect(r.key)} aria-current={on} data-testid={`character-row-${r.key}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 16px', border: 'none', borderLeft: `3px solid ${on ? '#6C47FF' : 'transparent'}`, background: on ? '#F5F3FF' : 'transparent', cursor: 'pointer' }}>
-            <span style={{ width: 30, height: 42, borderRadius: 6, background: '#E4E4E0', overflow: 'hidden', flexShrink: 0 }}>{(r.item?.imageUrl ?? r.thumb) && <img src={(r.item?.imageUrl ?? r.thumb)!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', font: '600 13px/1.3 Satoshi', color: '#111113' }}>Scene {r.sceneNumber} · Character</span>
-              <span style={{ display: 'block', font: '500 12px/1.3 Satoshi', color: st.color }}>{st.text}</span>
-            </span>
-          </button>
+          <div key={r.key} style={{ display: 'flex', alignItems: 'center', borderLeft: `3px solid ${on ? '#6C47FF' : 'transparent'}`, background: on ? '#F5F3FF' : 'transparent' }}>
+            <button onClick={() => onSelect(r.key)} aria-current={on} data-testid={`character-row-${r.key}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textAlign: 'left', padding: '9px 0 9px 13px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+              <span style={{ width: 30, height: 42, borderRadius: 6, background: '#E4E4E0', overflow: 'hidden', flexShrink: 0 }}>{(r.item?.imageUrl ?? r.thumb) && <img src={(r.item?.imageUrl ?? r.thumb)!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', font: '600 13px/1.3 Satoshi', color: '#111113' }}>Scene {r.sceneNumber} · Character</span>
+                <span style={{ display: 'block', font: '500 12px/1.3 Satoshi', color: st.color }}>{st.text}</span>
+              </span>
+            </button>
+            <button aria-label={`Delete the Character B-roll of Scene ${r.sceneNumber}`} title="Delete" onClick={() => setConfirm({ kind: 'remove', row: r })} style={{ width: 32, height: 32, margin: '0 10px 0 4px', border: 'none', background: 'transparent', color: '#9A9AA0', cursor: 'pointer', display: 'grid', placeItems: 'center', borderRadius: 8, flexShrink: 0 }}><Trash2 size={15} /></button>
+          </div>
         );
       })}
+      {confirm?.kind === 'all' && (
+        <Confirm title="Generate all Character B-roll?" confirmLabel="Generate" busy={working} onClose={() => setConfirm(null)} onConfirm={async () => { setWorking(true); await prod.startAll(); setWorking(false); setConfirm(null); }}>
+          This starts {nImages > 0 ? `${nImages} personalised image${nImages === 1 ? '' : 's'}` : ''}{nImages > 0 && nVideos > 0 ? ' and ' : ''}{nVideos > 0 ? `${nVideos} 5-second video${nVideos === 1 ? '' : 's'}` : ''}. Each one is a paid step. Images still wait for your approval before any video is made, and nothing is started twice.
+        </Confirm>
+      )}
+      {confirm?.kind === 'remove' && (
+        <Confirm title={`Delete the Character B-roll of Scene ${confirm.row.sceneNumber}?`} confirmLabel="Delete" danger busy={working} onClose={() => setConfirm(null)}
+          onConfirm={async () => { setWorking(true); const row = confirm.row; const ok = await prod.removeOne(row); setWorking(false); setConfirm(null); if (ok) onRemoved(row); }}>
+          It is taken off the video and the timeline. {confirm.row.item ? 'The image or video that was already made was already charged and will not be used.' : 'Nothing was started for it, so nothing was charged.'}
+        </Confirm>
+      )}
     </div>
   );
 }
