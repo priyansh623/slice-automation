@@ -87,11 +87,11 @@ export default function NewVideoProjectPage() {
       <ProjectHeader projectId="new" projectName={name.trim() || 'Untitled project'} steps={workflowSteps('Script')} />
       <form id="new-project-form" onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <div style={{ maxWidth: 1320, margin: '0 auto', padding: '44px 36px 36px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(0, 1fr)', gap: 64, alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 22, minWidth: 0 }}>
+          <div style={{ maxWidth: 1320, height: '100%', minHeight: 560, margin: '0 auto', padding: '28px 36px 24px', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) max(220px, calc((100vh - 250px) * 9 / 16))', gap: 56, alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, minHeight: 0 }}>
               <div>
-                <h1 style={{ margin: 0, font: '700 40px/1.1 Satoshi', letterSpacing: '-0.025em' }}>New video project</h1>
-                <p style={{ margin: '10px 0 0', font: '400 17px/1.5 Satoshi', color: '#75757C' }}>Add the script and your character. Everything after this follows from here.</p>
+                <h1 style={{ margin: 0, font: '700 34px/1.1 Satoshi', letterSpacing: '-0.025em' }}>New video project</h1>
+                <p style={{ margin: '6px 0 0', font: '400 16px/1.4 Satoshi', color: '#75757C' }}>Add the script and your character. Everything after this follows from here.</p>
               </div>
 
               {error && <div role="alert" style={{ padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, font: '400 13px/1.4 Satoshi', color: '#991B1B' }}>{error}</div>}
@@ -101,24 +101,24 @@ export default function NewVideoProjectPage() {
                 <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Super Slicer: Card Launch" style={{ ...field, height: 52, padding: '0 18px', font: '500 16px/1 Satoshi' }} onFocus={focus} onBlur={blur} />
               </label>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <label htmlFor="np-script" style={label}>Script</label>
                   <button type="button" onClick={() => setOriginalScript(SAMPLE_SCRIPT)} style={{ background: 'none', border: 'none', cursor: 'pointer', font: '500 15px/1 Satoshi', color: '#6C47FF', padding: 0 }}>Use sample script</button>
                 </div>
-                <textarea id="np-script" value={originalScript} onChange={(e) => setOriginalScript(e.target.value)} required placeholder="Paste the full voiceover script" style={{ ...field, minHeight: 300, padding: '18px 20px', font: '400 16px/1.65 Satoshi', resize: 'vertical' }} onFocus={focus} onBlur={blur} />
+                <textarea id="np-script" value={originalScript} onChange={(e) => setOriginalScript(e.target.value)} required placeholder="Paste the full voiceover script" style={{ ...field, flex: 1, minHeight: 120, padding: '16px 20px', font: '400 16px/1.6 Satoshi', resize: 'none' }} onFocus={focus} onBlur={blur} />
                 <span style={{ font: '400 14px/1 Satoshi', color: '#75757C' }}>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
               </div>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={label}>Character description</span>
-                <textarea value={creatorDescription} onChange={(e) => setCreatorDescription(e.target.value)} placeholder="Age, hair, clothing, anything that must stay consistent across scenes" style={{ ...field, minHeight: 130, padding: '16px 20px', font: '400 16px/1.6 Satoshi', resize: 'vertical' }} onFocus={focus} onBlur={blur} />
+                <textarea value={creatorDescription} onChange={(e) => setCreatorDescription(e.target.value)} placeholder="Age, hair, clothing, anything that must stay consistent across scenes" style={{ ...field, height: 92, padding: '14px 20px', font: '400 16px/1.5 Satoshi', resize: 'none' }} onFocus={focus} onBlur={blur} />
               </label>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
-              <span style={label}>Master character image</span>
-              <div style={{ height: 'min(560px, 62vh)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+              <span style={label}>Master character image <span style={{ font: '500 13px/1 Satoshi', color: '#75757C' }}>9:16</span></span>
+              <div style={{ width: '100%', aspectRatio: '9 / 16' }}>
                 <ImageUpload variant="tall" label="" value={baseImage} onChange={setBaseImage} />
               </div>
             </div>
