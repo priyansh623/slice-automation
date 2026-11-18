@@ -60,8 +60,36 @@ export function useCharacterProduction(projectId: string) {
     return r;
   }, [load]);
 
+  const imageReadyNow = comp?.imageGeneration.ready ?? false; const videoReady = comp?.videoGeneration.ready ?? false;
+  const rowsRef = useRef(rows); rowsRef.current = rows;
+  /** Takes one pick off the project (its overlay too). Nothing is started or charged. */
+  const removeOne = useCallback(async (r: Pick<CharRow, 'assetId' | 'screenId'>) => {
+    setError('');
+    const res = await post(`${base}/broll-selection/character-remove`, { assetId: r.assetId, screenId: r.screenId });
+    if (!res.ok) setError(res.data.error ?? 'Could not remove it.');
+    await load();
+    return res.ok;
+  }, [base, load]);
+  /** What "Generate all" would start: the images never started, and the videos whose image is approved and prompt written. */
+  const pending = (list: CharRow[]) => ({
+    images: imageReadyNow ? list.filter((x) => !x.item && !x.starting) : [],
+    videos: videoReady ? list.filter((x) => x.item?.imageStatus === 'approved' && x.item.clipStatus === 'not_started' && !!x.item.motionPrompt?.trim()) : [],
+  });
+  const startAll = useCallback(async () => {
+    setBusy('all'); setError('');
+    const first = pending(rowsRef.current);
+    for (const r of first.images) await startOne(r);
+    const fresh = await load();
+    for (const r of pending(fresh?.rows ?? rowsRef.current).videos) {
+      const res = await post(`${base}/character-broll/${r.item!.id}/generate`, {});
+      if (!res.ok) setError(res.data.error ?? 'Could not start a video.');
+    }
+    setBusy(null); await load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, load, startOne, imageReadyNow, videoReady]);
+
   const withState = rows.map((r) => ({ ...r, starting: starting.has(r.key), startError: startErrors[r.key] }));
   const imageReady = comp?.imageGeneration.ready ?? false;
-  return { base, enabled, loaded, rows: withState, comp, imageReady, busy, error, setError, run, reload: load, startOne };
+  return { base, enabled, loaded, rows: withState, comp, imageReady, videoReady, busy, error, setError, run, reload: load, startOne, removeOne, startAll, pending };
 }
 export type CharacterProduction = ReturnType<typeof useCharacterProduction>;

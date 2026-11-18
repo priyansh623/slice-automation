@@ -22,6 +22,7 @@ vi.mock('@/lib/object-store', async (orig) => ({ ...(await orig<typeof import('@
 
 import { GET as selectionGet, PUT as selectionPut } from '@/app/api/v1/video-projects/[id]/broll-selection/route';
 import { POST as characterStart } from '@/app/api/v1/video-projects/[id]/broll-selection/character-start/route';
+import { POST as characterRemove } from '@/app/api/v1/video-projects/[id]/broll-selection/character-remove/route';
 import { POST as populatePost } from '@/app/api/v1/video-projects/[id]/overlays/populate/route';
 import { GET as overlaysGet } from '@/app/api/v1/video-projects/[id]/overlays/route';
 import { PATCH as overlayPatch, DELETE as overlayDelete } from '@/app/api/v1/video-projects/[id]/overlays/[oid]/route';
@@ -275,6 +276,41 @@ describe('Character B-roll goes through the existing Generation process, then la
     expect({ jobs: after.jobs, items: after.items }).toEqual({ jobs: before.jobs, items: before.items });
     expect((await q<{ n: number }>(`select count(*)::int as n from studio_budget_usage`))[0].n).toBe(0);
   });
+});
+
+describe('deleting a Character B-roll from the Generation screen', () => {
+  const remove = (w: W, screen = 0) => call(characterRemove, { method: 'POST', params: w.params, body: { assetId: w.asset, screenId: w.screens[screen] } });
+  it('takes a pick that was never started off the project, starts and charges nothing, and a second delete is a 404', async () => {
+    const w = await world();
+    await put(w, { character: [{ assetId: w.asset, screenId: w.screens[0], action: '' }] });
+    const r = await remove(w);
+    expect(r.status).toBe(200); expect(r.json).toMatchObject({ removed: true, hadItem: false, overlaysRemoved: 0 });
+    expect((await get(w)).selection.character).toEqual([]);
+    expect(await counts()).toEqual({ jobs: 0, items: 0, overlays: 0 });
+    expect((await remove(w)).status).toBe(404);
+    expect((await call(characterRemove, { method: 'POST', params: w.params, body: {} })).status).toBe(400);
+  });
+
+  it('removes a started pick and its timeline clip, keeps the item on record, never touches a compilation that used it, and can be picked again', async () => {
+    const w = await world();
+    await put(w, { character: [{ assetId: w.asset, screenId: w.screens[1], action: '' }] });
+    const itemId = (await call(characterStart, { method: 'POST', params: w.params, body: { assetId: w.asset, screenId: w.screens[1] } })).json.id as number;
+    await finishCharacterClip(w, itemId); await populate(w);
+    expect(await overlays(w)).toHaveLength(1);
+    const scenes = w.screens.map((s, i) => ({ videoScreenId: s, videoGenerationId: w.gens[i] }));
+    const comp1 = await call(compilePost, { method: 'POST', params: w.params, body: { scenes } });
+    expect(comp1.json.overlayCount).toBe(1);
+    const jobsBefore = (await counts()).jobs;
+    const r = await remove(w, 1);
+    expect(r.json).toMatchObject({ removed: true, hadItem: true, overlaysRemoved: 1 });
+    expect(await overlays(w)).toHaveLength(0);
+    expect((await get(w)).selection.character).toEqual([]);
+    expect((await q<{ n: number }>(`select count(*)::int as n from character_broll_items where id = $1`, [itemId]))[0].n).toBe(1);          // the record is kept
+    const frozen = await q<{ overlay_id: number | null }>(`select overlay_id from video_compilation_overlays where compilation_id = $1`, [comp1.json.id]);
+    expect(frozen).toHaveLength(1); expect(frozen[0].overlay_id).toBeNull();                                                                 // the earlier version keeps its copy
+    expect((await counts()).jobs).toBe(jobsBefore);                                                                                          // nothing was started
+    expect((await put(w, { character: [{ assetId: w.asset, screenId: w.screens[1], action: '' }] })).status).toBe(200);                       // and it can be picked again
+  }, 240_000);
 });
 
 describe('library and Character clips have their own lanes', () => {

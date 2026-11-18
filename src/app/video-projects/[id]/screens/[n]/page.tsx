@@ -669,7 +669,7 @@ export default function ScreenPage() {
             {project.screens.length === 0 && (
               <div style={{ padding: '20px 16px', font: '400 13px/1.5 Satoshi', color: '#75757C' }}>No scenes yet. Use Add scene to create one.</div>
             )}
-            <CharacterRail rows={prod.rows} imageReady={prod.imageReady} selectedKey={selectedRow?.key ?? null} onSelect={(k) => router.push(`/video-projects/${id}/screens/${currentScreenNum}?cb=${k}`)} />
+            <CharacterRail prod={prod} selectedKey={selectedRow?.key ?? null} onSelect={(k) => router.push(`/video-projects/${id}/screens/${currentScreenNum}?cb=${k}`)} onRemoved={(r) => { if (r.key === selectedRow?.key) router.push(`/video-projects/${id}/screens/${currentScreenNum}`); }} />
             {deletedScenes.length > 0 && (
               <div style={{ borderTop: '1px solid #ECECE8', marginTop: 8 }}>
                 <button
