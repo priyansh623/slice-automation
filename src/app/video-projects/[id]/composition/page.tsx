@@ -32,9 +32,13 @@ export default function CompositionPage() {
   // The timeline is filled in from the B-roll selection (library clips, and Character clips that finished on the Generation screen). Safe to
   // repeat: it makes nothing twice, never brings back a clip you removed and never moves a clip you placed or edited.
   const [fill, setFill] = useState<FillResult | null>(null);
+  // Only the newest answer is shown: a slower, older read (the 4 second refresh) can never put a clip back where it was before a move.
+  const loadSeq = useRef(0);
   const load = useCallback(async (populate = false) => {
-    if (populate) { const f = await api<FillResult>(`${base}/overlays/populate`, { method: 'POST' }); if (f.ok) setFill(f.data as FillResult); }
+    const seq = ++loadSeq.current;
+    if (populate) { const f = await api<FillResult>(`${base}/overlays/populate`, { method: 'POST' }); if (f.ok && seq === loadSeq.current) setFill(f.data as FillResult); }
     const r = await api<Composition>(`${base}/composition`);
+    if (seq !== loadSeq.current) return;
     if (r.status === 404) { setState('off'); return; }
     if (!r.ok) { setState('error'); return; }
     setData(r.data as unknown as Composition); setState('ready');
@@ -102,8 +106,8 @@ export default function CompositionPage() {
           </div>
           <Timelines scenes={data.scenes} overlays={data.overlays} totalMs={data.totalMs} time={time} selectedId={selectedId} atLimit={atLimit}
             onSeek={(ms) => preview.current?.seek(ms)} onSelect={setSelectedId}
-            onMove={(oid, to) => void run(() => patch(`${base}/overlays/${oid}`, to))}
-            onResize={(oid, durationMs) => void run(() => patch(`${base}/overlays/${oid}`, { durationMs }))}
+            onMove={(oid, to) => run(() => patch(`${base}/overlays/${oid}`, to))}
+            onResize={(oid, durationMs) => run(() => patch(`${base}/overlays/${oid}`, { durationMs }))}
             onReplace={(oid) => setPicker({ mode: 'replace', id: oid })} onRemove={removeClip}
             onScene={(oid, screenId) => { const sc = data.scenes.find((x) => x.screenId === screenId); const ov = data.overlays.find((x) => x.id === oid); const off = sc && ov ? Math.max(0, Math.round((sc.durationMs - ov.durationMs) / 2 / 100) * 100) : 0; void run(() => patch(`${base}/overlays/${oid}`, { anchorScreenId: screenId, startOffsetMs: off })); }}
             onRetry={(oid) => void run(() => post(`${base}/overlays/${oid}/retry`))}

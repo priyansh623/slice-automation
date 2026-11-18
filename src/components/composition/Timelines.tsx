@@ -8,8 +8,8 @@ import { C, type CompOverlay, type CompScene } from './types';
 interface Props {
   scenes: CompScene[]; overlays: CompOverlay[]; totalMs: number; time: number; selectedId: number | null; atLimit: boolean;
   onSeek: (ms: number) => void; onSelect: (id: number | null) => void;
-  onMove: (id: number, to: { anchorScreenId: number; startOffsetMs: number }) => void;
-  onResize: (id: number, durationMs: number) => void;
+  onMove: (id: number, to: { anchorScreenId: number; startOffsetMs: number }) => Promise<unknown> | void;
+  onResize: (id: number, durationMs: number) => Promise<unknown> | void;
   onReplace: (id: number) => void; onRemove: (id: number) => void; onScene: (id: number, screenId: number) => void; onRetry: (id: number) => void;
   onAddGeneric: () => void;
 }
@@ -28,6 +28,10 @@ const tickLabel = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor
 export default function Timelines({ scenes, overlays, totalMs, time, selectedId, atLimit, onSeek, onSelect, onMove, onResize, onReplace, onRemove, onScene, onRetry, onAddGeneric }: Props) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: number; mode: 'move' | 'resize'; startX: number; dx: number } | null>(null);
+  // The drag lives in a ref as well: pointer moves and the release can arrive faster than React re-renders, and the release must see the LAST position.
+  const dragRef = useRef<{ id: number; mode: 'move' | 'resize'; startX: number; dx: number } | null>(null);
+  // Where a clip was just dropped, kept on screen until the server has answered, so it does not jump back while it saves.
+  const [dropped, setDropped] = useState<{ id: number; startMs: number; durationMs: number } | null>(null);
   const [menu, setMenu] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const total = Math.max(1, totalMs);
@@ -59,16 +63,27 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
   const begin = (e: React.PointerEvent, o: CompOverlay, mode: 'move' | 'resize') => {
     e.stopPropagation(); e.preventDefault(); onSelect(o.id);
     if (o.startMs == null) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ id: o.id, mode, startX: e.clientX, dx: 0 });
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* the drag still works without capture */ }
+    dragRef.current = { id: o.id, mode, startX: e.clientX, dx: 0 }; setDrag(dragRef.current);
   };
-  const moveTo = (e: React.PointerEvent) => { if (drag) setDrag({ ...drag, dx: e.clientX - drag.startX }); };
+  const moveTo = (e: React.PointerEvent) => { if (dragRef.current) { dragRef.current = { ...dragRef.current, dx: e.clientX - dragRef.current.startX }; setDrag(dragRef.current); } };
   const end = (o: CompOverlay) => {
-    if (!drag || drag.id !== o.id) return;
-    const deltaMs = drag.dx * msPerPx(); const d = drag; setDrag(null);
+    const d = dragRef.current;
+    if (!d || d.id !== o.id) return;
+    dragRef.current = null; setDrag(null);
     if (Math.abs(d.dx) < 3 || o.startMs == null) return;
-    if (d.mode === 'move') { const target = toAnchor(scenes, snap(o.startMs + deltaMs)); if (target) onMove(o.id, target); }
-    else onResize(o.id, Math.max(MIN_MS, snap(o.durationMs + deltaMs)));
+    const deltaMs = d.dx * msPerPx();
+    const done = () => setDropped(null);
+    if (d.mode === 'move') {
+      const target = toAnchor(scenes, snap(o.startMs + deltaMs)); if (!target) return;
+      const sc = scenes.find((x) => x.screenId === target.anchorScreenId);
+      setDropped({ id: o.id, startMs: (sc?.startMs ?? 0) + target.startOffsetMs, durationMs: o.durationMs });
+      void Promise.resolve(onMove(o.id, target)).finally(done);
+    } else {
+      const durationMs = Math.max(MIN_MS, snap(o.durationMs + deltaMs));
+      setDropped({ id: o.id, startMs: o.startMs, durationMs });
+      void Promise.resolve(onResize(o.id, durationMs)).finally(done);
+    }
   };
   const seekFromClick = (e: React.MouseEvent) => {
     const r = innerRef.current?.getBoundingClientRect(); if (!r) return;
@@ -77,12 +92,12 @@ export default function Timelines({ scenes, overlays, totalMs, time, selectedId,
 
   const block = (o: CompOverlay) => {
     const colour = o.kind === 'character' ? ORANGE : C.generic;
-    const live = drag?.id === o.id; const startMs = o.startMs ?? 0;
+    const live = drag?.id === o.id; const held = dropped?.id === o.id && !live ? dropped : null; const startMs = held ? held.startMs : (o.startMs ?? 0);
     const left = live && drag!.mode === 'move' ? startMs + drag!.dx * msPerPx() : startMs;
-    const width = live && drag!.mode === 'resize' ? Math.max(MIN_MS, o.durationMs + drag!.dx * msPerPx()) : o.durationMs;
+    const width = live && drag!.mode === 'resize' ? Math.max(MIN_MS, o.durationMs + drag!.dx * msPerPx()) : held ? held.durationMs : o.durationMs;
     const sel = selectedId === o.id;
     return (
-      <div key={o.id} data-testid={`overlay-block-${o.id}`} onPointerDown={(e) => begin(e, o, 'move')} onPointerMove={moveTo} onPointerUp={() => end(o)} onClick={(e) => e.stopPropagation()}
+      <div key={o.id} data-testid={`overlay-block-${o.id}`} onPointerDown={(e) => begin(e, o, 'move')} onPointerMove={moveTo} onPointerUp={() => end(o)} onPointerCancel={() => end(o)} onClick={(e) => e.stopPropagation()}
         title={o.needsAttention ? o.attentionReason ?? '' : o.title}
         style={{ position: 'absolute', top: 6, bottom: 6, left: pct(Math.max(0, left)), width: pct(width), minWidth: 10, background: o.needsAttention ? '#FDECEA' : colour, color: o.needsAttention ? C.danger : '#fff', outline: sel ? `2px solid ${C.text}` : 'none', outlineOffset: 1, border: o.needsAttention ? `1px dashed ${C.danger}` : 'none', borderRadius: 10, cursor: 'grab', touchAction: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', overflow: 'hidden', boxSizing: 'border-box', opacity: o.status === 'ready' || o.needsAttention ? 1 : 0.65 }}>
         {o.needsAttention ? <AlertTriangle size={13} /> : o.status === 'preparing' ? <Loader2 size={13} className="spin" /> : null}
