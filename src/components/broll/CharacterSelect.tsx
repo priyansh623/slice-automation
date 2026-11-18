@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { post } from '@/components/composition/types';
 import { CodeChip, TileChip, smallBtn } from '@/components/studio/ui/ds';
@@ -18,7 +18,7 @@ const bg = (url: string | null | undefined) => (url ? `#E4E4E0 url("${url}") cen
  * Recommended badge), then every other pack. Ticking an image asks which scene it is for. Nothing is generated here.
  */
 export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof useBrollSelection>; onDone: () => void }) {
-  const { base, scenes, sel, saving, message, save, setAssetScenes, removeAsset } = b;
+  const { base, scenes, sel, saving, message, save, setAssetScenes, removeAsset, addPreviews } = b;
   const [packs, setPacks] = useState<StudioPack[]>([]); const [assets, setAssets] = useState<Record<number, StudioAsset[]>>({});
   const [recs, setRecs] = useState<Rec[] | null>(null); const [recState, setRecState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [focus, setFocus] = useState<number | null>(null);
@@ -26,46 +26,55 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
   const [error, setError] = useState('');
 
   const [loadingPacks, setLoadingPacks] = useState<Set<number>>(new Set());
-  // Every pack is shown at once and each fills in as its own images arrive (a big pack no longer holds the others back).
+  // 1) The list of packs, and what the script points to, are fetched together.
   useEffect(() => {
-    void (async () => {
-      try {
-        const list = (await studioApi<{ packs: StudioPack[] }>('/api/v1/studio/packs')).packs.filter((p) => !p.archivedAt);
-        setPacks(list); setLoadingPacks(new Set(list.map((p) => p.id)));
-        await Promise.all(list.map(async (p) => {
-          try {
-            const all: StudioAsset[] = []; let after: number | null = null;
-            do {
-              const q = new URLSearchParams({ limit: '200' }); if (after) q.set('after', String(after));
-              const r: { assets: StudioAsset[]; nextCursor: number | null } = await studioApi(`/api/v1/studio/packs/${p.id}/assets?${q}`);
-              all.push(...r.assets.filter((a) => !a.archived)); after = r.nextCursor;
-              setAssets((prev) => ({ ...prev, [p.id]: [...all] }));
-            } while (after);
-          } catch (e) { setError(`Could not load the images of ${p.name}: ${(e as Error).message}`); }
-          setLoadingPacks((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
-        }));
-      } catch (e) { setError((e as Error).message); }
-    })();
+    void studioApi<{ packs: StudioPack[] }>('/api/v1/studio/packs').then((r) => { const list = r.packs.filter((p) => !p.archivedAt); setPacks(list); }).catch((e) => setError((e as Error).message));
   }, []);
-  // The script is read once (the existing Studio recommender; the stored answer is reused while the script is unchanged).
   useEffect(() => {
     void post(`${base}/broll-selection/recommendations`).then((r) => { if (r.ok) { setRecs((r.data as { recommendations: Rec[] }).recommendations); setRecState('ready'); } else setRecState('unavailable'); }).catch(() => setRecState('unavailable'));
   }, [base]);
+  // 2) The images: the packs the script points to first, then the rest a few at a time, so the recommended ones are never waiting behind the library.
+  const started_ = useRef(false);
+  useEffect(() => {
+    if (recState === 'loading' || packs.length === 0 || started_.current) return;
+    started_.current = true;
+    const recIds = (recs ?? []).map((r) => r.packId);
+    const order = [...packs].sort((a, b2) => (recIds.indexOf(a.id) === -1 ? 999 : recIds.indexOf(a.id)) - (recIds.indexOf(b2.id) === -1 ? 999 : recIds.indexOf(b2.id)));
+    setLoadingPacks(new Set(order.map((p) => p.id)));
+    const loadPack = async (p: StudioPack) => {
+      try {
+        const all: StudioAsset[] = []; let after: number | null = null;
+        do {
+          const q = new URLSearchParams({ limit: '200' }); if (after) q.set('after', String(after));
+          const r: { assets: StudioAsset[]; nextCursor: number | null } = await studioApi(`/api/v1/studio/packs/${p.id}/assets?${q}`);
+          all.push(...r.assets.filter((a) => !a.archived)); after = r.nextCursor;
+          setAssets((prev) => ({ ...prev, [p.id]: [...all] }));
+        } while (after);
+      } catch (e) { setError(`Could not load the images of ${p.name}: ${(e as Error).message}`); }
+      setLoadingPacks((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
+    };
+    let next = 0;
+    const worker = async () => { while (next < order.length) { const p = order[next++]; await loadPack(p); } };
+    void Promise.all([worker(), worker(), worker()]);
+  }, [recState, packs, recs]);
 
   const focusScene = scenes.find((s) => s.screenId === focus) ?? null;
   const fits = (r: Rec, dialogue: string) => { const w = words(dialogue); return r.moments.some((m) => [...words(m)].some((x) => w.has(x))); };
   const suggestedScenes = (packId: number): number[] => { const r = recs?.find((x) => x.packId === packId); return r ? scenes.filter((s) => fits(r, s.dialogue)).map((s) => s.screenId) : []; };
   const sections = useMemo(() => {
+    if (recState === 'loading') return [];
     const recIds = new Set((recs ?? []).map((r) => r.packId));
     const hot = (recs ?? []).filter((r) => packs.some((p) => p.id === r.packId)).sort((a, b) => (focusScene ? Number(fits(b, focusScene.dialogue)) - Number(fits(a, focusScene.dialogue)) : 0) || b.score - a.score);
     return [...hot.map((r) => ({ pack: packs.find((p) => p.id === r.packId)!, rec: r })), ...packs.filter((p) => !recIds.has(p.id)).map((p) => ({ pack: p, rec: null as Rec | null }))];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packs, recs, focus]);
+  }, [packs, recs, focus, recState]);
   const firstOther = sections.findIndex((s) => !s.rec);
   const byId = useMemo(() => new Map(Object.values(assets).flat().map((a) => [a.id, a])), [assets]);
+  // The picture of every picked image is handed to the landing cards right away.
+  useEffect(() => { const m: Record<number, string | null> = {}; for (const c of sel.character) { const u = byId.get(c.assetId)?.thumbUrl; if (u) m[c.assetId] = u; } if (Object.keys(m).length) addPreviews(m); }, [sel.character, byId, addPreviews]);
   const counts: Record<number, number> = {}; for (const c of sel.character) counts[c.screenId] = (counts[c.screenId] ?? 0) + 1;
   const sceneNo = (sid: number) => scenes.find((s) => s.screenId === sid)?.sceneNumber ?? '?';
-  const tray: TrayItem[] = sel.character.map((c) => ({ key: `${c.assetId}:${c.screenId}`, url: byId.get(c.assetId)?.thumbUrl ?? null, kind: 'image', sceneNumber: sceneNo(c.screenId), onRemove: () => removeAsset(c.assetId, c.screenId) }));
+  const tray: TrayItem[] = sel.character.map((c) => ({ key: `${c.assetId}:${c.screenId}`, url: byId.get(c.assetId)?.thumbUrl ?? b.previews[c.assetId] ?? null, kind: 'image', sceneNumber: sceneNo(c.screenId), onRemove: () => removeAsset(c.assetId, c.screenId) }));
   const started = (assetId: number, screenId: number) => sel.character.find((c) => c.assetId === assetId && c.screenId === screenId)?.itemId !== undefined;
 
   const open = (a: StudioAsset, packId: number) => setPicker({ assetIds: [a.id], title: codeOf(a), subtitle: a.originalFilename ?? undefined, thumb: a.thumbUrl, packId });
@@ -85,13 +94,13 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
           </div>
           {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', font: '500 13px/1.4 Satoshi', marginBottom: 12 }}>{error}</div>}
           {message && <div role="alert" style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', font: '500 13px/1.4 Satoshi', marginBottom: 12 }}>{message}</div>}
-          {packs.length === 0 && !error && <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C' }}>Loading…</div>}
+          {(packs.length === 0 || recState === 'loading') && !error && <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C' }}>Loading…</div>}
           {sections.map(({ pack, rec }, idx) => {
             const items = assets[pack.id] ?? [];
             const hl = !!(rec && focusScene && fits(rec, focusScene.dialogue));
             return (
               <div key={pack.id} style={{ marginBottom: 12, background: hl ? '#F5F3FF' : 'transparent', borderRadius: 14, padding: 12 }}>
-                {idx === firstOther && idx > 0 && <div style={{ font: '600 11px/1 Satoshi', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9A9AA0', margin: '4px 0 18px' }}>Other packs</div>}
+                {idx === firstOther && idx > 0 && <div style={{ font: '600 11px/1 Satoshi', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9A9AA0', margin: '4px 0 18px' }}>All packs</div>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <div style={{ font: '700 16px/1.3 Satoshi', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{pack.name}</div>
                   {rec && <span title={rec.reasons.join(' ')} style={{ height: 20, padding: '0 8px', borderRadius: 999, background: '#EFEBFF', color: '#6C47FF', font: '500 11px/20px Satoshi', whiteSpace: 'nowrap' }}>Recommended</span>}
@@ -101,7 +110,7 @@ export default function CharacterSelect({ b, onDone }: { b: ReturnType<typeof us
                 {items.length === 0 && <div style={{ font: '400 13px/1.5 Satoshi', color: '#75757C', padding: '4px 0 8px' }}>{loadingPacks.has(pack.id) ? <><Loader2 size={13} className="spin" style={{ verticalAlign: -2 }} /> Loading images…</> : 'No images in this pack.'}</div>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 12 }}>
                   {items.map((g) => {
-                    const mine = sel.character.filter((c) => c.assetId === g.id); const on = mine.length > 0; const c = chipOf(g);
+                    const mine = sel.character.filter((c) => c.assetId === g.id); const on = mine.length > 0; const c0 = chipOf(g); const c = c0 && c0.text === 'Needs review' ? null : c0;
                     return (
                       <div key={g.id} role="button" tabIndex={0} aria-pressed={on} aria-label={`${on ? 'Change' : 'Choose'} ${codeOf(g)}`} onClick={() => open(g, pack.id)} onKeyDown={(e) => { if (e.key === 'Enter') open(g, pack.id); }}
                         style={{ position: 'relative', aspectRatio: '9/16', borderRadius: 14, background: bg(g.thumbUrl), border: `2px solid ${on ? '#6C47FF' : 'transparent'}`, boxSizing: 'border-box', overflow: 'hidden', cursor: 'pointer' }}>

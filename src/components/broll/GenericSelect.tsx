@@ -107,13 +107,16 @@ const Grid = ({ children }: { children: React.ReactNode }) => <div style={{ disp
 /** A library card (plays on hover), with a tick and the scene(s) it is chosen for. Clicking it asks which scene. */
 function ClipCard({ clip, note, scenes, sceneNo, onOpen }: { clip: Clip; note?: string; scenes: number[]; sceneNo: (id: number) => number | string; onOpen: () => void }) {
   const v = useRef<HTMLVideoElement>(null); const on = scenes.length > 0;
+  // A card only loads its video once it is near the screen: the whole library is no longer fetched at once.
+  const box = useRef<HTMLDivElement>(null); const [near, setNear] = useState(false);
+  useEffect(() => { const el = box.current; if (!el || near) return; if (typeof IntersectionObserver === 'undefined') { setNear(true); return; } const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) { setNear(true); io.disconnect(); } }, { rootMargin: '400px' }); io.observe(el); return () => io.disconnect(); }, [near]);
   const tags = tagsOf(clip.userTags).slice(0, 3);
   return (
     <div role="button" tabIndex={0} aria-pressed={on} aria-label={`${on ? 'Change' : 'Choose'} ${clip.title}`} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
       onMouseEnter={() => { v.current?.play().catch(() => {}); }} onMouseLeave={() => { if (v.current) { v.current.pause(); v.current.currentTime = 0; } }}
       style={{ background: '#fff', border: on ? '2px solid #6C47FF' : '1px solid #ECECE8', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', boxSizing: 'border-box' }}>
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '9/16', background: '#111113' }}>
-        {clip.signedUrl && <video ref={v} src={clip.signedUrl} muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+      <div ref={box} style={{ position: 'relative', width: '100%', aspectRatio: '9/16', background: '#111113' }}>
+        {clip.signedUrl && near && <video ref={v} src={clip.signedUrl} muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
         <span style={{ position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 6, background: on ? '#6C47FF' : 'rgba(0,0,0,0.35)', border: `1.5px solid ${on ? '#6C47FF' : 'rgba(255,255,255,0.85)'}`, color: '#fff', display: 'grid', placeItems: 'center' }}>{on && <Check size={14} />}</span>
         {clip.durationSeconds ? <span style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,.55)', color: '#fff', font: '500 11px/1 Satoshi', padding: '4px 7px', borderRadius: 6 }}>{dur(clip.durationSeconds)}</span> : null}
         {on && <span style={{ position: 'absolute', bottom: 8, left: 8, background: '#6C47FF', color: '#fff', font: '600 10px/1 Satoshi', padding: '4px 6px', borderRadius: 6 }}>{scenes.length === 1 ? `Scene ${sceneNo(scenes[0])}` : `${scenes.length} scenes`}</span>}
