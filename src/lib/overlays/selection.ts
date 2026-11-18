@@ -29,6 +29,9 @@ type Tx = Pick<typeof db, 'select' | 'insert' | 'update' | 'delete'>;
 const err = (status: number, code: string, message: string) => new OverlayError(status, code, message);
 const lockProject = (tx: Tx, id: number) => tx.select({ id: videoProjects.id }).from(videoProjects).where(eq(videoProjects.id, id)).for('update');
 const STARTING_STALE_MS = 2 * 60_000;
+/** Library clips and Character clips sit on their own tracks (their own lanes on the timeline), so one of each can play over the same scene. */
+export const GENERIC_TRACK = 0;
+export const CHARACTER_TRACK = 1;
 
 export const emptySelection = (): BrollSelection => ({ version: 1, generic: [], character: [] });
 
@@ -170,7 +173,7 @@ export async function populateComposition(projectId: number, userId: string): Pr
     const clips = new Map<number, typeof brollClips.$inferSelect>();
     if (clipIds.length) for (const c of await tx.select().from(brollClips).where(inArray(brollClips.id, clipIds))) clips.set(c.id, c);
 
-    type Cand = { tempId: number; apply: (offset: number) => Promise<number>; durationMs: number; assetMs: number | null; screenId: number; done: (overlayId: number) => void };
+    type Cand = { tempId: number; track: number; apply: (offset: number) => Promise<number>; durationMs: number; assetMs: number | null; screenId: number; done: (overlayId: number) => void };
     const cands: Cand[] = []; let temp = -1; const now = Date.now();
     const room = Math.max(0, overlayLimit() - existing.length);
 
@@ -183,8 +186,8 @@ export async function populateComposition(projectId: number, userId: string): Pr
       const assetMs = clip.durationSeconds != null ? clip.durationSeconds * 1000 : null;
       const duration = Math.min(DEFAULT_OVERLAY_MS, assetMs ?? DEFAULT_OVERLAY_MS);
       if (duration < MIN_OVERLAY_MS) continue;
-      cands.push({ tempId: temp--, durationMs: duration, assetMs, screenId: g.screenId, done: (id) => { g.overlayId = id; },
-        apply: async (offset) => (await tx.insert(videoOverlays).values({ videoProjectId: projectId, kind: 'generic', track: 0, anchorScreenId: g.screenId, startOffsetMs: offset, durationMs: duration, sourceStartMs: 0, assetDurationMs: assetMs, brollClipId: clip.id, status: 'preparing', placementSource: 'auto', createdBy: userId, createdAt: now, updatedAt: now }).returning({ id: videoOverlays.id }))[0].id });
+      cands.push({ tempId: temp--, track: GENERIC_TRACK, durationMs: duration, assetMs, screenId: g.screenId, done: (id) => { g.overlayId = id; },
+        apply: async (offset) => (await tx.insert(videoOverlays).values({ videoProjectId: projectId, kind: 'generic', track: GENERIC_TRACK, anchorScreenId: g.screenId, startOffsetMs: offset, durationMs: duration, sourceStartMs: 0, assetDurationMs: assetMs, brollClipId: clip.id, status: 'preparing', placementSource: 'auto', createdBy: userId, createdAt: now, updatedAt: now }).returning({ id: videoOverlays.id }))[0].id });
     }
     for (const c of sel.character) {
       if (c.overlayId !== undefined) continue;
@@ -196,14 +199,14 @@ export async function populateComposition(projectId: number, userId: string): Pr
       if (adopt) { c.overlayId = adopt.id; continue; }
       const clipMs = it.clipDurationMs ?? CLIP_SECONDS * 1000;
       const duration = Math.min(clipMs, CLIP_SECONDS * 1000);
-      cands.push({ tempId: temp--, durationMs: duration, assetMs: clipMs, screenId: c.screenId, done: (id) => { c.overlayId = id; },
-        apply: async (offset) => (await tx.insert(videoOverlays).values({ videoProjectId: projectId, kind: 'character', track: 0, anchorScreenId: c.screenId, startOffsetMs: offset, durationMs: duration, sourceStartMs: 0, assetStoragePath: it.clipStoragePath, assetWidth: it.clipWidth, assetHeight: it.clipHeight, assetDurationMs: clipMs, characterItemId: it.id, status: 'ready', placementSource: 'auto', createdBy: userId, createdAt: now, updatedAt: now }).returning({ id: videoOverlays.id }))[0].id });
+      cands.push({ tempId: temp--, track: CHARACTER_TRACK, durationMs: duration, assetMs: clipMs, screenId: c.screenId, done: (id) => { c.overlayId = id; },
+        apply: async (offset) => (await tx.insert(videoOverlays).values({ videoProjectId: projectId, kind: 'character', track: CHARACTER_TRACK, anchorScreenId: c.screenId, startOffsetMs: offset, durationMs: duration, sourceStartMs: 0, assetStoragePath: it.clipStoragePath, assetWidth: it.clipWidth, assetHeight: it.clipHeight, assetDurationMs: clipMs, characterItemId: it.id, status: 'ready', placementSource: 'auto', createdBy: userId, createdAt: now, updatedAt: now }).returning({ id: videoOverlays.id }))[0].id });
     }
 
     const usable = cands.slice(0, room);
     const arranged = arrangeAuto(spans, [
       ...existing.map((o) => ({ ...timingOf(o), placementSource: o.placementSource === 'auto' ? 'auto' as const : 'manual' as const })),
-      ...usable.map((c) => ({ id: c.tempId, track: 0, anchorScreenId: c.screenId, startOffsetMs: 0, durationMs: c.durationMs, sourceStartMs: 0, assetDurationMs: c.assetMs, placementSource: 'auto' as const })),
+      ...usable.map((c) => ({ id: c.tempId, track: c.track, anchorScreenId: c.screenId, startOffsetMs: 0, durationMs: c.durationMs, sourceStartMs: 0, assetDurationMs: c.assetMs, placementSource: 'auto' as const })),
     ]);
     const unplaced = new Set(arranged.unplaced);
     for (const c of usable) {
