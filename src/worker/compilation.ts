@@ -12,6 +12,12 @@
  * 2–10 clips are supported.
  */
 
+import { isVideoProjectDeleted, PROJECT_DELETED_MESSAGE } from '../lib/project-deletion';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { decodeConcatAnswer } from './concat-stream';
+import { CompilationError } from './compilation-error';
 import { getStorage } from '../lib/object-store';
 import { db } from '../db';
 import {
@@ -38,6 +44,18 @@ function authHeaders(): Record<string, string> {
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
+export { CompilationError };
+
+/** Successful joins take about 45 s (production median 44 s); four minutes is far beyond normal, and a call that never answers must not hang for ever. */
+export const CONCAT_TIMEOUT_MS = 4 * 60_000;
+export interface CompilationOptions { concatTimeoutMs?: number; retryDelayMs?: number; uploadTimeoutMs?: number }
+
+/** What is being compiled right now (for the crash report). */
+export let activeCompilationId: number | null = null;
+
+/** A storage write that has not finished after this long is not going to; the compilation fails instead of holding the compile loop for ever. */
+export const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
 export const INTERRUPTED_COMPILATION_MESSAGE = 'The worker restarted while this compilation was running. Please compile again.';
 
 /**
@@ -58,7 +76,7 @@ export async function recoverStaleCompilations(): Promise<number> {
   return rows.length;
 }
 
-export async function processPendingCompilation(): Promise<boolean> {
+export async function processPendingCompilation(options: CompilationOptions = {}): Promise<boolean> {
   const rows = await db
     .select()
     .from(videoCompilations)
@@ -78,26 +96,33 @@ export async function processPendingCompilation(): Promise<boolean> {
     .returning({ id: videoCompilations.id });
   if (claimed.length === 0) return true;
   const compilation = candidate;
+  const startedAt = Date.now();
+  console.log(`[compilation] Job ${compilation.id} (project ${compilation.videoProjectId}) started, rss=${Math.round(process.memoryUsage().rss / 1048576)}MB`);
   const memoryProbe = safely(startMemoryProbe); // measurement only, immediately before the work: can never throw into the job or change what it does
 
+  activeCompilationId = compilation.id;
   try {
-    const { outputStoragePath, method } = await runCompilation(compilation.videoProjectId, compilation.id);
+    if (await isVideoProjectDeleted(compilation.videoProjectId)) throw new CompilationError(PROJECT_DELETED_MESSAGE);
+    const { outputStoragePath, method } = await runCompilation(compilation.videoProjectId, compilation.id, options);
     safely(() => memoryProbe?.finish(compilation.id, 'completed')); // immediately after the work, before any database write
     const version = await markCompleted(compilation.videoProjectId, compilation.id, outputStoragePath, method);
-    console.log(`[compilation] Job ${compilation.id} completed as version ${version} (${method}) → ${outputStoragePath}`);
+    console.log(`[compilation] Job ${compilation.id} completed as version ${version} (${method}) in ${Math.round((Date.now() - startedAt) / 1000)} s → ${outputStoragePath}`);
   } catch (err: unknown) {
     safely(() => memoryProbe?.finish(compilation.id, 'failed')); // first thing: before the failure is written to the database
     // Only this row changes. Earlier successful compilations keep their files, versions and availability.
+    // The person sees a plain message; the full technical error is in the worker log below.
     await db
       .update(videoCompilations)
       .set({
         status: 'failed',
         claimedAt: null,
-        errorMessage: (err instanceof Error ? err.message : String(err)),
+        errorMessage: err instanceof CompilationError ? err.message : `The video could not be compiled. Please try again. If it keeps failing, report compilation ${compilation.id}.`,
         updatedAt: Date.now(),
       })
       .where(and(eq(videoCompilations.id, compilation.id), eq(videoCompilations.status, 'processing')));
-    console.error(`[compilation] Job ${compilation.id} failed:`, err);
+    console.error(`[compilation] Job ${compilation.id} failed after ${Math.round((Date.now() - startedAt) / 1000)} s, rss=${Math.round(process.memoryUsage().rss / 1048576)}MB:`, err);
+  } finally {
+    activeCompilationId = null;
   }
 
   return true;
@@ -147,7 +172,7 @@ export async function markCompleted(projectId: number, compilationId: number, ou
 
 // ── Internal implementation ───────────────────────────────────────────────────
 
-async function runCompilation(projectId: number, compilationId: number): Promise<{ outputStoragePath: string; method: CompilationMethod }> {
+async function runCompilation(projectId: number, compilationId: number, options: CompilationOptions = {}): Promise<{ outputStoragePath: string; method: CompilationMethod }> {
   // Fetch scene selections ordered by screen position
   const selections = await db
     .select({
@@ -182,14 +207,11 @@ async function runCompilation(projectId: number, compilationId: number): Promise
 
   const outputStoragePath = `compilations/${projectId}/${Date.now()}-compilation-${compilationId}.mp4`;
 
-  // Any clip without a media ID (an older generation) means the concatenate endpoint cannot take the whole set, so the
-  // stored files are joined with FFmpeg instead. Newer and older clips can be mixed this way.
-  if (clips.some((c) => !c.mediaGenerationId)) {
+  const joinStoredFiles = async (): Promise<{ outputStoragePath: string; method: CompilationMethod }> => {
     // Safety net behind the API check (a job created before the limit existed, or by another path): fail before any download.
-    if (clips.length > MAX_FFMPEG_COMPILATION_CLIPS) throw new Error(ffmpegClipLimitMessage(clips.length));
+    if (clips.length > MAX_FFMPEG_COMPILATION_CLIPS) throw new CompilationError(ffmpegClipLimitMessage(clips.length));
     const missing = clips.find((c) => !c.videoStoragePath);
-    if (missing) throw new Error(`Scene ${missing.sceneNumber} clip has no stored video file, so it cannot be compiled.`);
-    console.log(`[compilation] Job ${compilationId}: ${clips.filter((c) => !c.mediaGenerationId).length} of ${clips.length} clips have no media ID; joining stored files with FFmpeg`);
+    if (missing) throw new CompilationError(`Scene ${missing.sceneNumber} clip has no stored video file, so it cannot be compiled.`);
     const settings = await db.select({ crf: adminSettings.compilationCrf }).from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
     const crf = settings[0]?.crf ?? 23;
     const video = await compileWithFfmpeg(
@@ -197,49 +219,74 @@ async function runCompilation(projectId: number, compilationId: number): Promise
       crf,
       { download: (p) => getStorage().download('videos', p) },
     );
-    await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, video, crf));
+    await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, video, crf), options.uploadTimeoutMs);
     return { outputStoragePath, method: 'ffmpeg' };
+  };
+
+  // Any clip without a media ID (an older generation) means the concatenate endpoint cannot take the whole set, so the
+  // stored files are joined with FFmpeg instead. Newer and older clips can be mixed this way.
+  if (clips.some((c) => !c.mediaGenerationId)) {
+    console.log(`[compilation] Job ${compilationId}: ${clips.filter((c) => !c.mediaGenerationId).length} of ${clips.length} clips have no media ID; joining stored files with FFmpeg`);
+    return joinStoredFiles();
   }
-
-  const mediaGenerationIds = clips.map((c) => c.mediaGenerationId!);
-
-  // Call useapi.net concatenate endpoint (synchronous, ~15-25s)
-  console.log(`[compilation] Calling concatenate for job ${compilationId} with ${mediaGenerationIds.length} clips`);
-  const res = await fetch(CONCATENATE_URL, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ media: mediaGenerationIds.map((id) => ({ mediaGenerationId: id })) }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Concatenate API error ${res.status}: ${text}`);
-  }
-
-  const json = (await res.json()) as Record<string, unknown>;
-  console.log('[compilation] concatenate response keys:', Object.keys(json));
-
-  // Extract the base64-encoded MP4 from the response
-  // useapi.net returns the video as a base64 string in a `video` or `videoBase64` field,
-  // or possibly as a `videoUrl` for a hosted file.
-  const videoBase64 = (json.encodedVideo ?? json.video ?? json.videoBase64) as string | undefined;
-  const videoUrl = json.videoUrl as string | undefined;
 
   let videoBuffer: Buffer;
-  if (videoBase64) {
-    videoBuffer = Buffer.from(videoBase64, 'base64');
-  } else if (videoUrl) {
-    // Some versions return a URL instead of base64
-    const dlRes = await fetch(videoUrl);
-    if (!dlRes.ok) throw new Error(`Failed to download concatenated video: ${dlRes.status}`);
-    videoBuffer = Buffer.from(await dlRes.arrayBuffer());
-  } else {
-    throw new Error(`Concatenate response missing video data. Keys: ${Object.keys(json).join(', ')}`);
+  try {
+    videoBuffer = await concatenateWithFlow(compilationId, clips.map((c) => c.mediaGenerationId!), options);
+  } catch (err) {
+    // The provider could not join them. The stored files can be joined here instead, at no cost, when the set is within what this worker can take.
+    const canFallBack = clips.length <= MAX_FFMPEG_COMPILATION_CLIPS && clips.every((c) => !!c.videoStoragePath);
+    console.warn(`[compilation] Job ${compilationId}: concatenate failed (${(err as Error).message}); ${canFallBack ? 'joining the stored files with FFmpeg' : 'no fallback for this set'}`);
+    if (!canFallBack) throw err;
+    return joinStoredFiles();
   }
 
   const settings = await db.select({ crf: adminSettings.compilationCrf }).from(adminSettings).where(eq(adminSettings.id, 1)).limit(1);
-  await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, videoBuffer, settings[0]?.crf ?? 23));
+  await uploadResult(outputStoragePath, await withOverlays(compilationId, compiledScenes, videoBuffer, settings[0]?.crf ?? 23), options.uploadTimeoutMs);
   return { outputStoragePath, method: 'useapi' };
+}
+
+/**
+ * Asks Google Flow to join the clips. One retry, and only when the provider said it did NOT take the request (busy, unavailable or session being
+ * re-verified); after a timeout or a lost connection the request may have run, so it is not repeated.
+ */
+async function concatenateWithFlow(compilationId: number, mediaGenerationIds: string[], options: CompilationOptions): Promise<Buffer> {
+  const timeoutMs = options.concatTimeoutMs ?? CONCAT_TIMEOUT_MS;
+  for (let attempt = 1; ; attempt++) {
+    console.log(`[compilation] Calling concatenate for job ${compilationId} with ${mediaGenerationIds.length} clips (attempt ${attempt})`);
+    const res = await fetch(CONCATENATE_URL, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ media: mediaGenerationIds.map((id) => ({ mediaGenerationId: id })) }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if ([429, 503, 596].includes(res.status) && attempt === 1) {
+      await res.text().catch(() => '');
+      console.warn(`[compilation] Job ${compilationId}: provider busy (${res.status}), retrying once`);
+      await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs ?? 30_000));
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Concatenate API error ${res.status}: ${text.slice(0, 500)}`);
+    }
+    if (!res.body) throw new Error('Concatenate response was empty');
+
+    const tmp = path.join(os.tmpdir(), `soma-concat-${compilationId}-${Date.now()}.mp4`);
+    try {
+      const decoded = await decodeConcatAnswer(res.body, tmp);
+      if (decoded.bytes > 0) return await fs.readFile(tmp);
+      let videoUrl: string | undefined;
+      try { videoUrl = (JSON.parse(decoded.rest) as { videoUrl?: string }).videoUrl; } catch { /* not JSON */ }
+      if (!videoUrl) throw new Error(`Concatenate response missing video data: ${decoded.rest.slice(0, 200)}`);
+      const dlRes = await fetch(videoUrl, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!dlRes.ok) throw new Error(`Failed to download concatenated video: ${dlRes.status}`);
+      return Buffer.from(await dlRes.arrayBuffer());
+    } finally {
+      await fs.rm(tmp, { force: true });
+    }
+  }
 }
 
 /** A compilation with no overlays returns its video untouched (one cheap query); only one with overlays runs the compositing pass. */
@@ -249,11 +296,16 @@ async function withOverlays(compilationId: number, scenes: CompiledScene[], vide
   return out.video;
 }
 
-async function uploadResult(outputStoragePath: string, video: Buffer): Promise<void> {
+async function uploadResult(outputStoragePath: string, video: Buffer, timeoutMs = UPLOAD_TIMEOUT_MS): Promise<void> {
   // Store the compilation (Supabase Storage today; R2 once configured)
   try {
-    await getStorage().put('videos', outputStoragePath, video, { contentType: 'video/mp4' });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      getStorage().put('videos', outputStoragePath, video, { contentType: 'video/mp4' }),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('upload timed out')), timeoutMs); }),
+    ]).finally(() => clearTimeout(timer));
   } catch (uploadErr) {
-    throw new Error(`Upload failed: ${(uploadErr as Error).message}`);
+    console.error('[compilation] Upload failed:', uploadErr);
+    throw new CompilationError('Upload failed: the video was made but could not be saved. Please compile again.');
   }
 }
