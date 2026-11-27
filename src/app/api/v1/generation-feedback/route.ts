@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { db } from '@/db';
 import { generationFeedback, videoGenerations, videoScreens, videoProjects } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
@@ -55,11 +56,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const projectId = screenRows[0].videoProjectId;
 
   const projectRows = await db
-    .select({ id: videoProjects.id })
+    .select({ id: videoProjects.id, archivedAt: videoProjects.archivedAt })
     .from(videoProjects)
     .where(eq(videoProjects.id, projectId))
     .limit(1);
-  if (!projectRows[0]) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  if (!projectRows[0] || isDeletedProject(projectRows[0])) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   const now = Date.now();
 

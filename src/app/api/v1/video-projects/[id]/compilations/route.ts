@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isVideoProjectDeleted } from '@/lib/project-deletion';
 import { db } from '@/db';
 import {
   videoCompilations,
@@ -175,6 +176,8 @@ export async function POST(
     // (one waiting/running compilation per project) backs this up.
     const compilation = await db.transaction(async (tx) => {
       await tx.select({ id: videoProjects.id }).from(videoProjects).where(eq(videoProjects.id, projectId)).for('update');
+      // Deleted while this request was on its way (delete takes the same lock).
+      if (await isVideoProjectDeleted(projectId, tx)) return { stale: 'This project was deleted.' } as const;
 
       // The same lock is taken when a scene is added or deleted, so this is the sequence as it is right now.
       // A scene that has been deleted can never be compiled. Compiling a chosen subset of scenes stays supported (the

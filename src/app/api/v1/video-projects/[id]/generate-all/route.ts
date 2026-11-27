@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { videoProjects, videoScreens, screenPromptVersions, promptGenerationTasks } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq, gt, inArray, ne } from 'drizzle-orm';
@@ -20,7 +21,7 @@ export async function POST(
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // Queue video generations for screens that already have prompts
   const genResult = await enqueueAllSceneGenerations(projectId);

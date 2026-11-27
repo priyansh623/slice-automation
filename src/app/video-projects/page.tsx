@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchJson, RequestError } from '@/lib/client/fetch-json';
 import AppShell from '@/components/AppShell';
 import { Plus, Clapperboard, Search, ChevronRight, Trash2 } from 'lucide-react';
 
@@ -72,12 +73,27 @@ export default function VideoProjectsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
+  const [loadError, setLoadError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
-    fetch('/api/v1/video-projects')
-      .then((r) => r.json())
-      .then((data) => { setProjects(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
+    const abort = new AbortController();
+    setLoading(true);
+    setLoadError('');
+    fetchJson<VideoProject[]>('/api/v1/video-projects', { signal: abort.signal })
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error('Unexpected answer from the server.');
+        setProjects(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (abort.signal.aborted) return;
+        if (err instanceof RequestError && err.status === 401) { router.replace('/login'); return; }
+        setLoadError((err as Error).message);
+        setLoading(false);
+      });
+    return () => abort.abort();
+  }, [attempt, router]);
 
   const filtered = projects.filter((p) => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.ownerEmail || '').toLowerCase().includes(search.toLowerCase());
@@ -138,6 +154,19 @@ export default function VideoProjectsPage() {
                   <div style={{ height: 10, width: 70, borderRadius: 4, background: '#F3F3F1' }} />
                 </div>
               ))}
+            </div>
+          ) : loadError ? (
+            <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '72px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <h2 style={{ margin: 0, font: '700 20px/1.3 Satoshi' }}>Your projects could not be loaded</h2>
+              <p style={{ margin: '8px 0 28px', maxWidth: 440, color: '#75757C', font: '400 14px/1.55 Satoshi' }}>
+                {loadError} Nothing has been lost.
+              </p>
+              <button
+                onClick={() => setAttempt((n) => n + 1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 9, background: '#6C47FF', color: '#fff', border: 'none', font: '500 14px/1 Satoshi', cursor: 'pointer' }}
+              >
+                Retry
+              </button>
             </div>
           ) : projects.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid #ECECE8', borderRadius: 14, padding: '72px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
@@ -247,6 +276,7 @@ export default function VideoProjectsPage() {
                                 src={p.baseImagePreviewUrl}
                                 alt=""
                                 loading="lazy"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                               />
                             )}
@@ -333,7 +363,7 @@ export default function VideoProjectsPage() {
           <div style={{ background: '#fff', borderRadius: 16, padding: '28px 28px 24px', width: '100%', maxWidth: 380, boxShadow: '0 16px 48px rgba(0,0,0,0.18)' }}>
             <div style={{ font: '700 18px/1.3 Satoshi', marginBottom: 8 }}>Delete project?</div>
             <div style={{ font: '400 14px/1.55 Satoshi', color: '#5E5E65', marginBottom: 24 }}>
-              This will permanently delete the project and all its scenes, generations, and compilations. This cannot be undone.
+              This removes the project from your list. Its scenes and videos are kept, and it can be restored from the admin dashboard (Show archived).
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button

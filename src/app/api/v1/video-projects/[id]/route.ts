@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { videoProjects, videoScreens, screenPromptVersions, videoGenerations, generationFeedback, videoCompilations, compilationSceneSelections, promptGenerationTasks, claudeConversations, analyticsEvents, projectTesters } from '@/db/schema.pg';
+import { isDeletedProject, softDeleteProject } from '@/lib/project-deletion';
+import { videoProjects, videoScreens, screenPromptVersions, videoGenerations, promptGenerationTasks } from '@/db/schema.pg';
 import { getStorage } from '@/lib/object-store';
 import { locate } from '@/lib/object-store/registry';
 import { createClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/api-auth';
 import { and, eq, gt, inArray } from 'drizzle-orm';
 import { incompleteScenes } from '@/services/scene-management';
+
+// A read that has not answered in a minute will not answer: fail (the page offers Retry) instead of hanging to the platform's 300 s limit.
+export const maxDuration = 60;
 
 export async function GET(
   _req: NextRequest,
@@ -26,7 +30,7 @@ export async function GET(
   ]);
 
   const project = projectRows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const screens = allScreens.sort((a, b) => a.position - b.position);
   const screenIds = screens.map((s) => s.id);
@@ -155,41 +159,12 @@ export async function DELETE(
   const authResult = await requireUser();
   if (authResult instanceof NextResponse) return authResult;
 
-  const projectRows = await db.select({ id: videoProjects.id })
-    .from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
-  if (!projectRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  // Cascade delete manually in FK-safe order
-  const screenRows = await db.select({ id: videoScreens.id }).from(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
-  const screenIds = screenRows.map((s) => s.id);
-
-  const compilationRows = await db.select({ id: videoCompilations.id }).from(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
-  const compilationIds = compilationRows.map((c) => c.id);
-
-  // compilationSceneSelections must come before videoGenerations (FK: css.video_generation_id → video_generations.id)
-  if (compilationIds.length > 0) {
-    await db.delete(compilationSceneSelections).where(inArray(compilationSceneSelections.compilationId, compilationIds));
-    await db.delete(videoCompilations).where(eq(videoCompilations.videoProjectId, projectId));
+  // One transaction, nothing destroyed (see lib/project-deletion.ts). If any step fails the project is exactly as it was.
+  try {
+    if (!(await softDeleteProject(projectId))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  } catch (err) {
+    console.error(`[video-projects/${projectId}] delete failed, nothing was changed:`, err);
+    return NextResponse.json({ error: 'The project could not be deleted. Nothing was changed; please try again.' }, { status: 500 });
   }
-
-  if (screenIds.length > 0) {
-    // Null out approvedGenerationId before deleting generations (FK: video_screens_approved_gen_fk)
-    await db.update(videoScreens).set({ approvedGenerationId: null }).where(inArray(videoScreens.id, screenIds));
-    const genRows = await db.select({ id: videoGenerations.id }).from(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
-    const genIds = genRows.map((g) => g.id);
-    if (genIds.length > 0) await db.delete(generationFeedback).where(inArray(generationFeedback.videoGenerationId, genIds));
-    await db.delete(videoGenerations).where(inArray(videoGenerations.videoScreenId, screenIds));
-    await db.delete(screenPromptVersions).where(inArray(screenPromptVersions.videoScreenId, screenIds));
-  }
-
-  await db.delete(promptGenerationTasks).where(eq(promptGenerationTasks.videoProjectId, projectId));
-  await db.delete(claudeConversations).where(eq(claudeConversations.videoProjectId, projectId));
-  await db.delete(projectTesters).where(eq(projectTesters.videoProjectId, projectId));
-
-  if (screenIds.length > 0) await db.delete(videoScreens).where(eq(videoScreens.videoProjectId, projectId));
-
-  await db.update(analyticsEvents).set({ videoProjectId: null }).where(eq(analyticsEvents.videoProjectId, projectId));
-  await db.delete(videoProjects).where(eq(videoProjects.id, projectId));
-
   return NextResponse.json({ ok: true });
 }

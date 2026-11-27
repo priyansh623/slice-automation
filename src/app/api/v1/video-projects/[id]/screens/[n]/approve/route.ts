@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { videoProjects, videoScreens, videoGenerations } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
@@ -22,7 +23,7 @@ export async function POST(
 
   const projectRows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = projectRows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const screenRows = await db
     .select()

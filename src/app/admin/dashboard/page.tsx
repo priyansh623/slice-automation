@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { visibleInterval } from '@/lib/client/visible-interval';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { RefreshCw, AlertCircle, CheckCircle2, Clock, Circle, MessageSquare } from 'lucide-react';
@@ -16,6 +17,8 @@ interface SceneDetail {
 }
 
 interface ProjectRow {
+  /** Deleted by a user (restorable), as opposed to archived here. */
+  deletedByUser?: boolean;
   id: number;
   name: string;
   userId: string;
@@ -87,7 +90,6 @@ export default function AdminDashboardPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [archiving, setArchiving] = useState<Record<number, boolean>>({});
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function load(quiet = false, archived = showArchived) {
     if (!quiet) setLoading(true);
@@ -99,6 +101,8 @@ export default function AdminDashboardPage() {
       setRows(await res.json());
       setLastRefreshed(Date.now());
       setError('');
+    } catch {
+      setError('Failed to load dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -129,8 +133,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     void load(false, showArchived);
-    intervalRef.current = setInterval(() => load(true, showArchived), 30_000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    return visibleInterval(() => load(true, showArchived), 30_000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchived]);
 
@@ -345,10 +348,15 @@ export default function AdminDashboardPage() {
                           <Link
                             href={`/video-projects/${row.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ font: '600 13px/1.3 Satoshi', color: '#111113', textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            style={{ font: '600 13px/1.3 Satoshi', color: '#111113', textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', flexShrink: row.deletedByUser ? 0 : 1 }}
                           >
                             {row.name}
                           </Link>
+                          {row.deletedByUser && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', height: 18, padding: '0 6px', borderRadius: 999, background: '#FEF2F2', color: '#B91C1C', font: '500 10px/1 Satoshi', flexShrink: 0 }}>
+                              Deleted by a user
+                            </span>
+                          )}
                           {hasError && <AlertCircle size={13} color="#DC2626" style={{ flexShrink: 0 }} />}
                           {!hasError && hasInFlight && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#6C47FF', animation: 'pulse 2s ease-in-out infinite', flexShrink: 0 }} />}
                           {row.isStuck && (
@@ -551,7 +559,7 @@ export default function AdminDashboardPage() {
                               opacity: archiving[row.id] ? 0.5 : 1,
                             }}
                           >
-                            {archiving[row.id] ? '…' : showArchived ? 'Unarchive' : 'Archive'}
+                            {archiving[row.id] ? '…' : showArchived ? (row.deletedByUser ? 'Restore' : 'Unarchive') : 'Archive'}
                           </button>
                         </div>
                       </div>

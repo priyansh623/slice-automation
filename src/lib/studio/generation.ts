@@ -74,7 +74,7 @@ const EXT_OF_MIME: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 
 export async function claimQueuedJobs(limit: number, now = Date.now()): Promise<JobRow[]> {
   return db.update(studioJobs)
     .set({ status: 'submitting', claimedAt: now, startedAt: sql`coalesce(${studioJobs.startedAt}, ${now})`, submitAttempts: sql`${studioJobs.submitAttempts} + 1`, updatedAt: now })
-    .where(and(eq(studioJobs.status, 'queued'), sql`${studioJobs.id} = any(array(select id from studio_jobs where status = 'queued' and (next_poll_at is null or next_poll_at <= ${now}) order by id limit ${limit} for update skip locked))`))
+    .where(and(eq(studioJobs.status, 'queued'), sql`${studioJobs.id} = any(array(select id from studio_jobs j where status = 'queued' and (next_poll_at is null or next_poll_at <= ${now}) and not exists (select 1 from studio_projects sp join video_projects vp on vp.id = sp.video_project_id where sp.id = j.project_id and vp.archived_at < 0) order by id limit ${limit} for update skip locked))`))
     .returning();
 }
 

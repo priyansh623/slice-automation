@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { eq } from 'drizzle-orm';
+import { isDeletedProject } from '@/lib/project-deletion';
 
 export type AuthUser = { id: string; email?: string | null };
 
@@ -25,6 +26,6 @@ export async function requireProject(
     .where(eq(videoProjects.id, projectId))
     .limit(1);
   const project = rows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return { project };
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { videoProjects, videoScreens } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq, gt } from 'drizzle-orm';
@@ -25,7 +26,7 @@ export async function POST(
     .where(eq(videoProjects.id, projectId))
     .limit(1);
   const project = projectRows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // Prevent re-analysis after breakdown has been approved — screens would be destructively deleted
   if (project.breakdownApprovedAt) {

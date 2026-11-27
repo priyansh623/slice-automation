@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { db } from '@/db';
 import {
   videoProjects,
@@ -211,6 +212,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     const creatorFeedbackCount = scenesDetail.filter((s) => s.creatorFeedback).length;
 
     return {
+      deletedByUser: isDeletedProject(p),
       id: p.id,
       name: p.name,
       userId: p.userId,
