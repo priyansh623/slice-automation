@@ -30,6 +30,8 @@ import { processOverlayIngest } from './overlay-ingest';
 import { processCharacterClips } from './character-clips';
 
 const POLL_INTERVAL_MS = 5_000;
+const LOCK_RETRY_MS = 5_000;
+const LOCK_WAIT_MS = 10 * 60 * 1000;
 const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude call
 const VIDEO_GEN_LEASE_MS  = 2 * 60 * 60 * 1000; // 2 hr  — enough for a slow generation
 const HEARTBEAT_MS = 2 * 60 * 1000;              // renew lease every 2 min
@@ -37,10 +39,15 @@ const HEARTBEAT_MS = 2 * 60 * 1000;              // renew lease every 2 min
 export async function main(): Promise<void> {
   validateEnv();
 
-  const acquired = await acquireLock();
-  if (!acquired) {
-    console.log('[worker] Another worker holds the advisory lock. Exiting.');
-    process.exit(0);
+  // During a deploy the old worker still holds the lock, and the host only stops it once this one stays up: wait, do not exit.
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  while (!(await acquireLock())) {
+    if (Date.now() > deadline) {
+      console.log('[worker] Another worker still holds the advisory lock. Exiting.');
+      process.exit(0);
+    }
+    console.log('[worker] Another worker holds the advisory lock. Waiting for it to stop.');
+    await sleep(LOCK_RETRY_MS);
   }
 
   console.log('[worker] Lock acquired.');
