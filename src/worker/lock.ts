@@ -11,6 +11,10 @@ let _lockHeld = false;
 function getSql(): ReturnType<typeof postgres> {
   if (!_sql) {
     const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL!;
+    if (new URL(url).port === '6543') {
+      // A session-level advisory lock does not hold through a transaction pooler. Job claiming in the database still prevents double work.
+      console.warn('[worker] DATABASE_DIRECT_URL is not set to a direct connection: the single-worker lock is not reliable.');
+    }
     _sql = postgres(url, { max: 1, idle_timeout: 0 });
   }
   return _sql;

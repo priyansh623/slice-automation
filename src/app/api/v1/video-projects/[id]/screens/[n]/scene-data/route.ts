@@ -4,6 +4,9 @@ import { videoProjects, videoScreens, screenPromptVersions, videoGenerations } f
 import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 
+// A read that has not answered in a minute will not answer: fail (the page offers Retry) instead of hanging to the platform's 300 s limit.
+export const maxDuration = 60;
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; n: string }> },

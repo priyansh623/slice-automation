@@ -48,10 +48,15 @@ export class Storage {
 
   async signedReadUrl(bucket: BucketName, key: string, expiresInSeconds: number): Promise<string | null> {
     const order = await this.readOrder(bucket, key);
+    let lastResort: StorageProvider | null = null;
     for (const p of order) {
       try {
         // Presigning R2 does not look at the object, so while a fallback exists check it is really there first.
-        if (p.name === 'r2' && order.length > 1 && !(await p.head(bucket, key))) continue;
+        if (p.name === 'r2' && order.length > 1) {
+          const state = await this.r2State(p, bucket, key);
+          if (state === 'unknown') lastResort = p;
+          if (state !== 'present') continue;
+        }
         const url = await p.signedReadUrl(bucket, key, expiresInSeconds);
         if (url) return url;
       } catch (err) {
@@ -59,37 +64,70 @@ export class Storage {
         console.warn(`[storage] ${p.name} could not sign ${bucket}/${key}, trying the other provider:`, (err as Error).message.slice(0, 120));
       }
     }
-    return null;
+    return lastResort ? lastResort.signedReadUrl(bucket, key, expiresInSeconds).catch(() => null) : null;
   }
 
-  /** Signed URLs for many keys at once. Keys with no URL are left out of the result. */
-  async signedReadUrls(bucket: BucketName, keys: string[], expiresInSeconds: number): Promise<Map<string, string>> {
+  /**
+   * Whether an R2 object is really there, for choosing between the two providers. 'unknown' means R2 could not be asked (an error that is not "not
+   * found": an outage, or a bad credential). Then the OTHER provider's copy is preferred, and an R2 link is only given when there is nothing else,
+   * because a link signed with a credential R2 is refusing does not work either.
+   */
+  private async r2State(r2: StorageProvider, bucket: BucketName, key: string): Promise<'present' | 'missing' | 'unknown'> {
+    try {
+      return (await r2.head(bucket, key)) ? 'present' : 'missing';
+    } catch (err) {
+      console.warn(`[storage] could not check ${bucket}/${key} in R2, preferring the other copy:`, (err as Error).message.slice(0, 120));
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Signed URLs for many keys at once. Keys with no URL are left out of the result. ONE BAD FILE NEVER FAILS THE BATCH: every provider call is
+   * guarded, so a caller gets URLs for everything that could be signed.
+   * `check: false` skips the per-file existence request to R2, for callers that accept a link that may not work.
+   */
+  async signedReadUrls(bucket: BucketName, keys: string[], expiresInSeconds: number, opts: { check?: boolean } = {}): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (keys.length === 0) return out;
+    const check = opts.check !== false;
     const where = await this.d.locate(bucket, keys);
     const byProvider: Record<ProviderName, string[]> = { supabase: [], r2: [] };
     for (const key of keys) byProvider[where.get(key) ?? 'supabase'].push(key);
     if (byProvider.r2.length > 0 && !this.d.r2) { byProvider.supabase.push(...byProvider.r2); byProvider.r2 = []; }
 
     const needFallback: string[] = [];
-    const sup = await this.d.supabase.signedReadUrls(bucket, byProvider.supabase, expiresInSeconds);
-    for (const key of byProvider.supabase) { const u = sup.get(key); if (u) out.set(key, u); else needFallback.push(key); }
+    if (byProvider.supabase.length > 0) {
+      const sup = await this.d.supabase.signedReadUrls(bucket, byProvider.supabase, expiresInSeconds).catch((err) => {
+        console.warn(`[storage] supabase could not sign ${byProvider.supabase.length} file(s) in ${bucket}:`, (err as Error).message.slice(0, 120));
+        return new Map<string, string>();
+      });
+      for (const key of byProvider.supabase) { const u = sup.get(key); if (u) out.set(key, u); else needFallback.push(key); }
+    }
 
     if (this.d.r2 && byProvider.r2.length > 0) {
       const r2 = this.d.r2;
       const alt = this.d.failover();
       await Promise.all(byProvider.r2.map(async (key) => {
-        if (alt && !(await r2.head(bucket, key))) { needFallback.push(key); return; }
-        const u = await r2.signedReadUrl(bucket, key, expiresInSeconds);
-        if (u) out.set(key, u);
+        try {
+          if (alt && check && (await this.r2State(r2, bucket, key)) !== 'present') { needFallback.push(key); return; }
+          const u = await r2.signedReadUrl(bucket, key, expiresInSeconds);
+          if (u) out.set(key, u);
+        } catch (err) {
+          console.warn(`[storage] r2 could not sign ${bucket}/${key}:`, (err as Error).message.slice(0, 120));
+          needFallback.push(key);
+        }
       }));
     }
     if (this.d.failover()) {
       // Anything unresolved may be in the other provider (R2 file not registered yet, or R2 file missing).
-      for (const key of needFallback) {
-        const u = await this.signedReadUrl(bucket, key, expiresInSeconds);
-        if (u) out.set(key, u);
-      }
+      await Promise.all(needFallback.map(async (key) => {
+        try {
+          const u = await this.signedReadUrl(bucket, key, expiresInSeconds);
+          if (u) out.set(key, u);
+        } catch (err) {
+          console.warn(`[storage] no URL for ${bucket}/${key}:`, (err as Error).message.slice(0, 120));
+        }
+      }));
     }
     return out;
   }
@@ -133,7 +171,8 @@ export class Storage {
         return { provider: 'r2' };
       } catch (err) {
         if (err instanceof ObjectExistsError || !this.d.failover()) throw err;
-        console.warn(`[storage] R2 write of ${bucket}/${key} failed, storing in Supabase instead:`, (err as Error).message.slice(0, 120));
+        // An error, not a warning: new files going to the other provider is how an R2 outage or a bad credential stays invisible for days.
+        console.error(`[storage] R2_WRITE_FAILED ${bucket}/${key} (stored in Supabase instead): ${(err as Error).name}: ${(err as Error).message.slice(0, 200)}`);
       }
     }
     await this.d.supabase.put(bucket, key, body, opts);

@@ -7,6 +7,9 @@ import { getSelection, saveSelection } from '@/lib/overlays/selection';
 import { overlayErrorResponse, overlayGuard } from '@/lib/overlays/route-helpers';
 
 // The B-roll a person picked for this project (IDs only) and the Flow scenes it can be attached to. Reading this never selects, creates or generates anything.
+// A read that has not answered in a minute will not answer: fail (the page offers Retry) instead of hanging to the platform's 300 s limit.
+export const maxDuration = 60;
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const g = await overlayGuard(params);
   if (g instanceof NextResponse) return g;
