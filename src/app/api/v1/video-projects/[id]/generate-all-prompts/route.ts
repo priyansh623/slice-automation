@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { videoProjects, videoScreens, promptGenerationTasks } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
 import { and, eq, gt } from 'drizzle-orm';
@@ -19,7 +20,7 @@ export async function POST(
 
   const projectRows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = projectRows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const allScreens = await db.select().from(videoScreens).where(and(eq(videoScreens.videoProjectId, projectId), gt(videoScreens.screenNumber, 0)));
   const screen1 = allScreens.sort((a, b) => a.position - b.position)[0];

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDeletedProject } from '@/lib/project-deletion';
 import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
 import { createClient } from '@/lib/supabase/server';
@@ -20,7 +21,7 @@ export async function GET(
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return NextResponse.json(parseBrief(project.creativeBrief));
 }
@@ -39,7 +40,7 @@ export async function PUT(
 
   const rows = await db.select().from(videoProjects).where(eq(videoProjects.id, projectId)).limit(1);
   const project = rows[0];
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project || isDeletedProject(project)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const raw = (await req.json()) as Record<string, unknown>;
   const incoming: Partial<CreativeBrief> = {};

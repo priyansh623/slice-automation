@@ -1,4 +1,5 @@
 /** Character B-roll Studio projects: a name, ONE base character image (V1) and the complete video script. */
+import { isStudioProjectOfDeletedVideo } from '@/lib/project-deletion';
 import * as crypto from 'node:crypto';
 import { desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
@@ -27,7 +28,7 @@ export async function createProject(input: { name: unknown }, userId: string): P
 
 export async function getProject(id: number): Promise<ProjectRow> {
   const row = (await db.select().from(studioProjects).where(eq(studioProjects.id, id)).limit(1))[0];
-  if (!row) throw new StudioError('Project not found.', 404, 'project_not_found');
+  if (!row || await isStudioProjectOfDeletedVideo(id)) throw new StudioError('Project not found.', 404, 'project_not_found');
   return row;
 }
 

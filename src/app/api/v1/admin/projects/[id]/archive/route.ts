@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api-auth';
 import { db } from '@/db';
 import { videoProjects } from '@/db/schema.pg';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { notDeleted } from '@/lib/project-deletion';
 
 export async function POST(
   _req: Request,
@@ -19,7 +20,8 @@ export async function POST(
   await db
     .update(videoProjects)
     .set({ archivedAt: now, updatedAt: now })
-    .where(eq(videoProjects.id, projectId));
+    // Archiving never turns a user-deleted project (negative archived_at) back into a visible, merely archived one. Restore (DELETE here) does that.
+    .where(and(eq(videoProjects.id, projectId), notDeleted()));
 
   return NextResponse.json({ ok: true });
 }

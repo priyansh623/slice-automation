@@ -3,6 +3,7 @@
  * and output. Jobs are never edited into a new attempt; a retry is a NEW job row linked to the failed one, so history is kept
  * and retrying one image never touches the others.
  */
+import { isStudioProjectOfDeletedVideo } from '@/lib/project-deletion';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { studioAssets, studioBatches, studioJobs, studioOutputs, studioProjects, studioSelections } from '@/db/schema.pg';
@@ -70,7 +71,7 @@ export async function retryJob(jobId: number, userId: string, opts: { allowSucce
   const ready = await assertGenerationReady();
   return db.transaction(async (tx: Tx) => {
     const job = (await tx.select().from(studioJobs).where(eq(studioJobs.id, jobId)).for('update'))[0];
-    if (!job) throw new StudioError('Job not found.', 404, 'job_not_found');
+    if (!job || await isStudioProjectOfDeletedVideo(job.projectId, tx)) throw new StudioError('Job not found.', 404, 'job_not_found');
     // A job whose submission outcome is unknown may already be running at the provider. A new job for the same image can only be
     // created if the person explicitly accepts that it may be paid for twice; the unknown job is then closed (it is never deleted).
     if (job.status === 'submit_unknown' && !opts.allowSucceeded) {

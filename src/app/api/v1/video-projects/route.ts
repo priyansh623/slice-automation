@@ -6,6 +6,11 @@ import { getStorage } from '@/lib/object-store';
 import { locate } from '@/lib/object-store/registry';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { ensureThumbnail, thumbnailKeyFor } from '@/lib/project-thumbnail';
+import { notDeleted } from '@/lib/project-deletion';
+import { ownerEmails } from '@/lib/owner-emails';
+
+// A read that has not answered in a minute will not answer: fail (the page offers Retry) instead of hanging to the platform's 300 s limit.
+export const maxDuration = 60;
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
@@ -15,6 +20,7 @@ export async function GET(): Promise<NextResponse> {
   const rows = await db
     .select()
     .from(videoProjects)
+    .where(notDeleted())
     .orderBy(desc(videoProjects.createdAt));
 
   const projectIds = rows.map((p) => p.id);
@@ -66,7 +72,11 @@ export async function GET(): Promise<NextResponse> {
   const refreshedUrlMap = new Map<string, string>();
 
   if (refreshPaths.length > 0) {
-    const freshUrls = await storage.signedReadUrls('uploads', refreshPaths, URL_TTL_S);
+    // An image that cannot be signed is only a missing picture. It must never cost the person their project list.
+    const freshUrls = await storage.signedReadUrls('uploads', refreshPaths, URL_TTL_S).catch((err) => {
+      console.warn('[video-projects] image signing failed, listing projects without those images:', (err as Error).message.slice(0, 120));
+      return new Map<string, string>();
+    });
     const expiresAt = now + URL_TTL_S * 1000;
     const writeResults = await Promise.allSettled(
       [...freshUrls.entries()].map(([path, url]) => {
@@ -100,11 +110,13 @@ export async function GET(): Promise<NextResponse> {
     }),
   );
 
+  const emails = await ownerEmails(rows.map((p) => p.userId), user);
+
   return NextResponse.json(rows.map((p) => ({
     ...p,
     approvedSceneCount: screensByProject.get(p.id)?.approved ?? 0,
     totalSceneCount: screensByProject.get(p.id)?.total ?? 0,
-    ownerEmail: user.email ?? null,
+    ownerEmail: emails.get(p.userId) ?? null,
     baseImagePreviewUrl: thumbUrlById.get(p.id) ?? signedUrlById.get(p.id) ?? null,
     baseImageIsThumbnail: thumbUrlById.has(p.id),
   })));
