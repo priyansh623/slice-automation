@@ -5,7 +5,6 @@ import { videoProjects, videoScreens, videoGenerations, screenPromptVersions } f
 import { createClient } from '@/lib/supabase/server';
 import { and, eq } from 'drizzle-orm';
 import { submitVideoGeneration } from '@/services/video-workflow';
-import { AuthenticationError, ConfigurationError, UnexpectedProviderError } from '@/providers/useapi/errors';
 
 export async function POST(
   req: NextRequest,
@@ -54,36 +53,24 @@ export async function POST(
     );
   }
 
-  let result: { generationId: number };
+  if (pv.videoScreenId !== screen.id) return NextResponse.json({ error: 'Prompt version not found' }, { status: 404 });
+
+  // QUEUE ONLY. The request records the job and answers at once; the worker sends it to the provider and stores the video, so closing the tab or a
+  // slow provider changes nothing. One active job per scene and prompt version: a repeated request gets the existing one back (`deduped`).
+  let result: { generationId: number; deduped: boolean };
   try {
     result = await submitVideoGeneration(projectId, screen.id, body.promptVersionId, body.durationOverride);
   } catch (err) {
-    if (err instanceof AuthenticationError) {
-      console.error('[generate] Provider authentication failed:', err.message);
-      return NextResponse.json({ error: 'Video provider authentication failed. Check USEAPI_TOKEN.' }, { status: 401 });
-    }
-    if (err instanceof ConfigurationError) {
-      console.error('[generate] Provider configuration error:', err.message);
-      return NextResponse.json({ error: 'Google Flow is not configured or the Google session has expired.' }, { status: 502 });
-    }
-    if (err instanceof UnexpectedProviderError) {
-      console.error(`[generate] Unexpected provider error (HTTP ${err.httpStatus}):`, err.message);
-      if (err.httpStatus === 429) {
-        return NextResponse.json({ error: 'Google Flow is rate-limited right now. Wait 30–60 seconds and try again.' }, { status: 429 });
-      }
-      return NextResponse.json({ error: `Video provider returned an unexpected error (${err.httpStatus}).` }, { status: 502 });
-    }
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[generate] Unhandled error:', msg);
-    return NextResponse.json({ error: `Video generation failed: ${msg.slice(0, 300)}` }, { status: 500 });
+    console.error('[generate] Could not queue the generation:', err);
+    return NextResponse.json({ error: 'The video could not be queued. Please try again.' }, { status: 500 });
   }
 
-  if (body.creatorFeedback) {
+  if (body.creatorFeedback && !result.deduped) {
     await db
       .update(videoGenerations)
       .set({ creatorFeedback: body.creatorFeedback, updatedAt: Date.now() })
       .where(eq(videoGenerations.id, result.generationId));
   }
 
-  return NextResponse.json(result, { status: 201 });
+  return NextResponse.json({ generationId: result.generationId, status: 'queued', deduped: result.deduped }, { status: result.deduped ? 200 : 201 });
 }

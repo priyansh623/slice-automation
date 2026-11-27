@@ -44,6 +44,7 @@ export async function POST(
     .where(and(eq(videoGenerations.id, body.generationId), eq(videoGenerations.videoScreenId, screen.id)))
     .limit(1);
   if (!genRows[0]) return NextResponse.json({ error: 'Generation not found for this screen' }, { status: 404 });
+  if (genRows[0].status !== 'completed') return NextResponse.json({ error: 'Only a finished video can be approved.' }, { status: 409 });
 
   const now = Date.now();
   await db

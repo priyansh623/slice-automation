@@ -1,3 +1,6 @@
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { RULES } from '../../services/job-rules';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
@@ -32,6 +35,7 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': params.contentType },
       body: fileBuffer,
+      signal: AbortSignal.timeout(RULES.referenceUploadTimeoutMs),
     });
 
     if (res.status === 401) throw new AuthenticationError('USEAPI_TOKEN invalid or expired');
@@ -66,11 +70,15 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
       aspectRatio: params.aspectRatio,
     };
     if (params.seed !== undefined) body.seed = params.seed;
+    // Optional and OFF by default. With VIDEO_SUBMIT_ASYNC=true the provider answers at once with the job id (HTTP 201) instead of holding the request
+    // for the whole generation, so a worker restart can lose almost no in-flight submissions. Documented, but not yet tried against the real service.
+    if (process.env.VIDEO_SUBMIT_ASYNC === 'true') body.async = true;
 
     const res = await fetch(`${BASE_URL}/videos`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(RULES.submitTimeoutMs),
     });
 
     if (res.status === 401) throw new AuthenticationError('USEAPI_TOKEN invalid or expired');
@@ -86,7 +94,8 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
     }
 
     const json = (await res.json()) as Record<string, unknown>;
-    const jobId = (json.jobId ?? json.job_id ?? json.id ?? json.videoId) as string | undefined;
+    // The synchronous answer uses `jobId`; the asynchronous one (HTTP 201) uses `jobid` (both documented).
+    const jobId = (json.jobId ?? json.jobid ?? json.job_id ?? json.id ?? json.videoId) as string | undefined;
     if (!jobId) throw new UnexpectedProviderError(`submitGeneration: no job id in response: ${JSON.stringify(json)}`, res.status);
 
     // This API often returns a completed video synchronously — extract it if present
@@ -113,6 +122,7 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
   }> {
     const res = await fetch(`${BASE_URL}/jobs/${encodeURIComponent(jobId)}`, {
       headers: authHeaders(),
+      signal: AbortSignal.timeout(RULES.pollTimeoutMs),
     });
 
     if (res.status === 401) throw new AuthenticationError('USEAPI_TOKEN invalid or expired');
@@ -127,7 +137,8 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
 
     // API returns media[] array; status is derived from mediaGenerationStatus
     type MediaItem = { videoUrl?: string; thumbnailUrl?: string; mediaGenerationId?: string; mediaMetadata?: { mediaStatus?: { mediaGenerationStatus?: string } }; url?: string };
-    const media = (json.media ?? json.videos) as MediaItem[] | undefined;
+    // GET /jobs/{id} documents the clips under `response.media`; the synchronous submit answer has them at the top. Accept both.
+    const media = ((json.response as { media?: unknown } | undefined)?.media ?? json.media ?? json.videos) as MediaItem[] | undefined;
     const firstMedia = media?.[0];
 
     // Derive status: explicit json.status, or from mediaGenerationStatus
@@ -152,7 +163,7 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
       videoUrl,
       outputMediaGenerationId,
       remainingCredits: json.remainingCredits as number | undefined,
-      errorMessage: json.errorMessage as string | undefined,
+      errorMessage: (json.errorMessage as string | undefined) ?? (typeof json.error === 'string' ? json.error : json.error ? JSON.stringify(json.error).slice(0, 300) : undefined),
       errorCode: json.errorCode as string | undefined,
     };
   }
@@ -166,7 +177,7 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
     const url = params.signedUrl;
     if (!url) throw new OutputExpiredError('No video URL available for download');
 
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(RULES.downloadTimeoutMs) });
 
     if (res.status === 401) throw new AuthenticationError('Download URL auth failed');
     if (res.status === 403 || res.status === 404) {
@@ -188,8 +199,14 @@ export class UseapiGoogleFlowProvider implements VideoGenerationProvider {
     const tempName = `${params.jobId}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
     const tempPath = path.join(storageDir, tempName);
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    fs.writeFileSync(tempPath, buffer);
+    // Streamed to disk, so several downloads at once do not each hold a whole video in the worker's 512 MB.
+    if (!res.body) throw new UnexpectedProviderError('Download failed: empty answer', res.status);
+    try {
+      await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), fs.createWriteStream(tempPath));
+    } catch (err) {
+      fs.rmSync(tempPath, { force: true });
+      throw err;
+    }
 
     return { tempPath, contentType };
   }

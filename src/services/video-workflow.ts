@@ -12,13 +12,16 @@ import {
   promptGenerationTasks,
 } from '@/db/schema.pg';
 import { invalidateSceneApproval, incompleteScenes } from '@/services/scene-management';
-import { and, desc, eq, gt, inArray, max } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lte, max, or } from 'drizzle-orm';
 import { callClaude, encodeImageFromStorage, loadConversation } from './anthropic';
 import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 import { getSkillContent } from '@/lib/ugc-skill';
 import { useapiProvider } from '@/providers/useapi/provider';
 import type { VideoGenerationProvider } from '@/providers/useapi/interface';
-import { RateLimitError } from '@/providers/useapi/errors';
+import { AuthenticationError, ConfigurationError, RateLimitError, UnexpectedProviderError } from '@/providers/useapi/errors';
+import { isDeletedProject, PROJECT_DELETED_MESSAGE } from '@/lib/project-deletion';
+import { RULES, UNCONFIRMED_MESSAGE } from '@/services/job-rules';
+import { friendlyProviderFailure } from '@/services/generation-polling';
 import { getStorage, toLogicalBucket } from '../lib/object-store';
 
 function stripNotesSection(text: string): string {
@@ -663,134 +666,148 @@ export async function enqueueScreen1ApprovalTasks(
 
 // ── Queued Generation Submission ──────────────────────────────────────────────
 
+/**
+ * Sends ONE queued generation to the provider. The row is claimed first (compare-and-set), so it can be sent at most once however many passes or
+ * workers try. Outcomes:
+ *   refused as busy            -> back to queued, not before the provider's Retry-After (claimed_at holds that time while queued)
+ *   refused for good           -> failed, with a plain explanation
+ *   answer lost / timed out    -> failed as UNCONFIRMED and never re-sent: it may have been accepted and charged
+ *   accepted                   -> the provider job id is saved at once, before any download, so nothing can lose it
+ */
 export async function submitQueuedGeneration(
   generationId: number,
   provider: VideoGenerationProvider = useapiProvider,
 ): Promise<void> {
-  const genRows = await db
-    .select()
-    .from(videoGenerations)
-    .where(eq(videoGenerations.id, generationId))
-    .limit(1);
-  const gen = genRows[0];
-  if (!gen || gen.status !== 'queued') return;
-
-  const screenRows = await db
-    .select()
-    .from(videoScreens)
-    .where(eq(videoScreens.id, gen.videoScreenId))
-    .limit(1);
-  const screen = screenRows[0];
-
-  const [projectRows, pvRows] = await Promise.all([
-    screen ? db.select().from(videoProjects).where(eq(videoProjects.id, screen.videoProjectId)).limit(1) : Promise.resolve([]),
-    db.select().from(screenPromptVersions).where(eq(screenPromptVersions.id, gen.promptVersionId)).limit(1),
-  ]);
-  const project = (projectRows as typeof projectRows)[0];
-  const promptVersion = pvRows[0];
-
-  if (!screen || !project || !promptVersion) {
-    await db
-      .update(videoGenerations)
-      .set({ status: 'failed', errorMessage: 'Missing related records', updatedAt: Date.now() })
-      .where(eq(videoGenerations.id, generationId));
-    return;
-  }
-
-  const duration = gen.durationSeconds ?? screen.durationSeconds ?? DEFAULT_DURATION();
-  const now = Date.now();
-
-  await db
+  const claimTime = Date.now();
+  const [gen] = await db
     .update(videoGenerations)
-    .set({ status: 'processing', updatedAt: now })
-    .where(eq(videoGenerations.id, generationId));
+    .set({ status: 'processing', claimedAt: claimTime, updatedAt: claimTime })
+    .where(and(eq(videoGenerations.id, generationId), eq(videoGenerations.status, 'queued'), isNull(videoGenerations.jobId),
+      or(isNull(videoGenerations.claimedAt), lte(videoGenerations.claimedAt, claimTime))))
+    .returning();
+  if (!gen) return;
 
+  const mine = and(eq(videoGenerations.id, generationId), eq(videoGenerations.status, 'processing'), eq(videoGenerations.claimedAt, claimTime));
+  const fail = (message: string) => db.update(videoGenerations).set({ status: 'failed', errorMessage: message, claimedAt: null, updatedAt: Date.now() }).where(mine);
+  const requeue = (retryAfterMs: number, reason: string) => {
+    const now = Date.now();
+    if (now - gen.createdAt > RULES.busyGiveUpMs) return fail('Google Flow stayed busy for 30 minutes. Generate this scene again later.');
+    console.log(`[workflow] Gen ${generationId} not accepted (${reason}), will retry`);
+    return db.update(videoGenerations).set({ status: 'queued', claimedAt: now + Math.min(Math.max(retryAfterMs, 10_000), 5 * 60_000), updatedAt: now }).where(mine);
+  };
+
+  let sent = false;
   try {
-    let referenceImageMediaId = project.baseImageMediaId;
-    if (!referenceImageMediaId) {
-      if (process.env.MOCK_USEAPI === 'true') {
-        referenceImageMediaId = 'mock-media-id';
-      } else {
-        const tmpPath = await downloadImageToTmp(project.baseImagePath, UPLOADS_BUCKET());
-        try {
-          const uploaded = await provider.uploadReferenceImage({
-            imagePath: tmpPath,
-            contentType: guessContentType(project.baseImagePath),
-            email: process.env.GOOGLE_FLOW_EMAIL!,
-          });
-          referenceImageMediaId = uploaded.mediaGenerationId ?? null;
-        } finally {
-          fs.unlink(tmpPath, () => {});
-        }
-        if (referenceImageMediaId) {
-          await db
-            .update(videoProjects)
-            .set({ baseImageMediaId: referenceImageMediaId, updatedAt: now })
-            .where(eq(videoProjects.id, project.id));
-        }
-      }
-    }
+    const [screen] = await db.select().from(videoScreens).where(eq(videoScreens.id, gen.videoScreenId)).limit(1);
+    const [projectRows, pvRows] = await Promise.all([
+      screen ? db.select().from(videoProjects).where(eq(videoProjects.id, screen.videoProjectId)).limit(1) : Promise.resolve([]),
+      db.select().from(screenPromptVersions).where(eq(screenPromptVersions.id, gen.promptVersionId)).limit(1),
+    ]);
+    const project = (projectRows as typeof projectRows)[0];
+    const promptVersion = pvRows[0];
+    if (!screen || !project || !promptVersion) { await fail('Missing related records'); return; }
+    if (isDeletedProject(project)) { await fail(PROJECT_DELETED_MESSAGE); return; }
 
     if (process.env.MOCK_USEAPI === 'true') {
-      await db
-        .update(videoGenerations)
-        .set({ jobId: `mock-job-${now}`, status: 'completed', updatedAt: now })
-        .where(eq(videoGenerations.id, generationId));
+      await db.update(videoGenerations).set({ jobId: `mock-job-${claimTime}`, status: 'completed', claimedAt: null, updatedAt: claimTime }).where(mine);
       return;
     }
 
+    let referenceImageMediaId = project.baseImageMediaId;
+    if (!referenceImageMediaId) {
+      const tmpPath = await downloadImageToTmp(project.baseImagePath, UPLOADS_BUCKET());
+      try {
+        const uploaded = await provider.uploadReferenceImage({
+          imagePath: tmpPath,
+          contentType: guessContentType(project.baseImagePath),
+          email: process.env.GOOGLE_FLOW_EMAIL!,
+        });
+        referenceImageMediaId = uploaded.mediaGenerationId ?? null;
+      } finally {
+        fs.unlink(tmpPath, () => {});
+      }
+      if (referenceImageMediaId) {
+        await db.update(videoProjects).set({ baseImageMediaId: referenceImageMediaId, updatedAt: Date.now() }).where(eq(videoProjects.id, project.id));
+      }
+    }
+
+    sent = true;
     const result = await provider.submitGeneration({
       prompt: promptVersion.promptText,
       model: DEFAULT_MODEL(),
       referenceImageMediaId: referenceImageMediaId!,
-      duration,
+      duration: gen.durationSeconds ?? screen.durationSeconds ?? DEFAULT_DURATION(),
       aspectRatio: 'portrait',
-      correlationId: `screen-${gen.videoScreenId}-v${gen.promptVersionId}-q`,
+      correlationId: `screen-${gen.videoScreenId}-v${gen.promptVersionId}-g${gen.id}`,
     });
 
-    if (result.videoUrl) {
-      const downloaded = await provider.downloadVideo({
-        jobId: result.jobId,
-        signedUrl: result.videoUrl,
-        outputMediaGenerationId: result.mediaGenerationId ?? null,
-        jobCompletedAt: now,
-      });
+    // Logged before anything else: if the database write below fails, the job can still be found.
+    console.log(`[workflow] Gen ${generationId} accepted by the provider as job ${result.jobId}`);
+    // Accepted (and charged): record the job id first. claimed_at stays set while this call downloads, so the poller leaves the row alone.
+    await db.update(videoGenerations)
+      .set({ jobId: result.jobId, mediaGenerationId: result.mediaGenerationId ?? null, status: result.videoUrl ? 'processing' : 'pending', claimedAt: result.videoUrl ? claimTime : null, updatedAt: Date.now() })
+      .where(mine);
+    if (!result.videoUrl) return;
+
+    try {
+      const downloaded = await provider.downloadVideo({ jobId: result.jobId, signedUrl: result.videoUrl, outputMediaGenerationId: result.mediaGenerationId ?? null, jobCompletedAt: Date.now() });
       let storagePath: string;
       try {
         storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, generationId);
-      } catch (uploadErr: unknown) {
+      } catch (uploadErr) {
         fs.unlink(downloaded.tempPath, () => {});
         throw uploadErr;
       }
-      await db
-        .update(videoGenerations)
-        .set({ jobId: result.jobId, status: 'completed', videoStoragePath: storagePath, mediaGenerationId: result.mediaGenerationId ?? null, updatedAt: now })
-        .where(eq(videoGenerations.id, generationId));
-    } else {
-      await db
-        .update(videoGenerations)
-        .set({ jobId: result.jobId, status: 'pending', updatedAt: now })
-        .where(eq(videoGenerations.id, generationId));
+      await db.update(videoGenerations)
+        .set({ status: 'completed', videoStoragePath: storagePath, errorMessage: null, claimedAt: null, updatedAt: Date.now() })
+        .where(and(eq(videoGenerations.id, generationId), eq(videoGenerations.jobId, result.jobId)));
+    } catch (err) {
+      // The video exists at the provider. Keep the job: the poller fetches it again.
+      console.error(`[workflow] Gen ${generationId} was generated but could not be saved yet (will retry): ${(err as Error).message}`);
+      await db.update(videoGenerations).set({ status: 'pending', claimedAt: null, updatedAt: Date.now() })
+        .where(and(eq(videoGenerations.id, generationId), eq(videoGenerations.jobId, result.jobId), isNull(videoGenerations.videoStoragePath)));
     }
   } catch (err: unknown) {
-    if (err instanceof RateLimitError) {
-      // All accounts busy — reset to queued so the worker retries on the next tick
-      await db
-        .update(videoGenerations)
-        .set({ status: 'queued', updatedAt: Date.now() })
-        .where(eq(videoGenerations.id, generationId));
-      console.log(`[workflow] Gen ${generationId} rate-limited, reset to queued (retry next tick)`);
+    const raw = err instanceof Error ? err.message : String(err);
+    console.error(`[workflow] Gen ${generationId} submit error: ${raw}`);
+    if (err instanceof RateLimitError) { await requeue(err.retryAfterMs, 'busy'); return; }
+    if (err instanceof ConfigurationError) { await requeue(60_000, 'Google Flow session is being re-verified'); return; }   // 596, documented: retry in about a minute
+    if (err instanceof UnexpectedProviderError && err.httpStatus === 503) { await requeue(30_000, 'temporarily unavailable'); return; }
+    if (err instanceof AuthenticationError) { await fail('Video provider authentication failed. Ask an admin to check the provider token.'); return; }
+    if (err instanceof UnexpectedProviderError && err.httpStatus >= 400 && err.httpStatus < 500 && err.httpStatus !== 408) {
+      await fail(err.httpStatus === 402 ? 'The video provider subscription or credits need attention.' : friendlyProviderFailure(raw));
       return;
     }
-    await db
-      .update(videoGenerations)
-      .set({ status: 'failed', errorMessage: (err instanceof Error ? err.message : String(err)), updatedAt: Date.now() })
-      .where(eq(videoGenerations.id, generationId));
-    throw err;
+    // Before anything was sent nothing can have been charged; after that, only a definite refusal (above) is safe to call a plain failure.
+    await fail(sent ? UNCONFIRMED_MESSAGE : 'The video request could not be prepared. Please generate again.');
   }
 }
 
-// ── Generate All Scenes ───────────────────────────────────────────────────────
+/**
+ * Queues one generation of a scene, at most one ACTIVE job per scene and prompt version: the scene row is locked, so simultaneous requests (a double
+ * click, two people, Generate with Generate All) take turns and the later ones get the existing job back. After it finishes, the same prompt can be
+ * generated again (an intentional extra take).
+ */
+export async function queueGeneration(
+  videoScreenId: number,
+  promptVersionId: number,
+  durationSeconds: number,
+  opts: { skipIfSceneBusy?: boolean } = {},
+): Promise<{ generationId: number; deduped: boolean }> {
+  return db.transaction(async (tx) => {
+    await tx.select({ id: videoScreens.id }).from(videoScreens).where(eq(videoScreens.id, videoScreenId)).for('update');
+    const [active] = await tx.select({ id: videoGenerations.id }).from(videoGenerations)
+      .where(and(eq(videoGenerations.videoScreenId, videoScreenId), inArray(videoGenerations.status, ['queued', 'pending', 'processing']),
+        opts.skipIfSceneBusy ? undefined : eq(videoGenerations.promptVersionId, promptVersionId)))
+      .limit(1);
+    if (active) return { generationId: active.id, deduped: true };
+    const now = Date.now();
+    const [row] = await tx.insert(videoGenerations)
+      .values({ videoScreenId, promptVersionId, jobId: null, status: 'queued', videoStoragePath: null, durationSeconds, createdAt: now, updatedAt: now })
+      .returning({ id: videoGenerations.id });
+    return { generationId: row.id, deduped: false };
+  });
+}
 
 export async function enqueueAllSceneGenerations(
   videoProjectId: number,
@@ -803,18 +820,10 @@ export async function enqueueAllSceneGenerations(
     .filter((s) => !s.approvedGenerationId)
     .sort((a, b) => a.position - b.position);
 
-  const now = Date.now();
   const generationIds: number[] = [];
   let skipped = 0;
 
   for (const screen of screens) {
-    const allGens = await db
-      .select()
-      .from(videoGenerations)
-      .where(eq(videoGenerations.videoScreenId, screen.id));
-    const existingActive = allGens.find((g) => ['queued', 'pending', 'processing'].includes(g.status));
-    if (existingActive) { skipped++; continue; }
-
     const allVersions = await db
       .select()
       .from(screenPromptVersions)
@@ -822,20 +831,9 @@ export async function enqueueAllSceneGenerations(
     const latestPrompt = allVersions.sort((a, b) => b.version - a.version)[0];
     if (!latestPrompt) { skipped++; continue; }
 
-    const inserted = await db
-      .insert(videoGenerations)
-      .values({
-        videoScreenId: screen.id,
-        promptVersionId: latestPrompt.id,
-        jobId: null,
-        status: 'queued',
-        videoStoragePath: null,
-        durationSeconds: screen.durationSeconds ?? DEFAULT_DURATION(),
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: videoGenerations.id });
-    generationIds.push(inserted[0].id);
+    // Same lock and rule as a single Generate, and here any active job of the scene counts.
+    const q = await queueGeneration(screen.id, latestPrompt.id, screen.durationSeconds ?? DEFAULT_DURATION(), { skipIfSceneBusy: true });
+    if (q.deduped) skipped++; else generationIds.push(q.generationId);
   }
 
   return { enqueued: generationIds.length, skipped, generationIds };
@@ -875,137 +873,24 @@ export async function saveManualPromptEdit(
 
 // ── Video Generation ─────────────────────────────────────────────────────────
 
+/**
+ * The Generate button: records the job and returns at once. The WORKER sends it to the provider, so a closed tab, a request time limit or a crashed
+ * web function can no longer lose a paid job. See submitQueuedGeneration.
+ */
 export async function submitVideoGeneration(
   videoProjectId: number,
   videoScreenId: number,
   promptVersionId: number,
   durationOverride?: number,
-  provider: VideoGenerationProvider = useapiProvider,
-): Promise<{ generationId: number }> {
+): Promise<{ generationId: number; deduped: boolean }> {
   const [projectRows, pvRows, screenRows] = await Promise.all([
     db.select().from(videoProjects).where(eq(videoProjects.id, videoProjectId)).limit(1),
     db.select().from(screenPromptVersions).where(eq(screenPromptVersions.id, promptVersionId)).limit(1),
     db.select().from(videoScreens).where(eq(videoScreens.id, videoScreenId)).limit(1),
   ]);
-  const project = projectRows[0];
-  const promptVersion = pvRows[0];
-  const screen = screenRows[0];
-  if (!project) throw new Error(`Video project ${videoProjectId} not found`);
-  if (!promptVersion) throw new Error(`Prompt version ${promptVersionId} not found`);
-
-  const duration = durationOverride ?? screen?.durationSeconds ?? DEFAULT_DURATION();
-
-  let referenceImageMediaId = project.baseImageMediaId;
-  if (!referenceImageMediaId) {
-    if (process.env.MOCK_USEAPI === 'true') {
-      referenceImageMediaId = 'mock-media-id';
-    } else {
-      const tmpPath = await downloadImageToTmp(project.baseImagePath, UPLOADS_BUCKET());
-      try {
-        const uploaded = await provider.uploadReferenceImage({
-          imagePath: tmpPath,
-          contentType: guessContentType(project.baseImagePath),
-          email: process.env.GOOGLE_FLOW_EMAIL!,
-        });
-        referenceImageMediaId = uploaded.mediaGenerationId ?? null;
-      } finally {
-        fs.unlink(tmpPath, () => {});
-      }
-      if (referenceImageMediaId) {
-        await db
-          .update(videoProjects)
-          .set({ baseImageMediaId: referenceImageMediaId, updatedAt: Date.now() })
-          .where(eq(videoProjects.id, videoProjectId));
-      }
-    }
-  }
-
-  const now = Date.now();
-
-  if (process.env.MOCK_USEAPI === 'true') {
-    const inserted = await db
-      .insert(videoGenerations)
-      .values({
-        videoScreenId,
-        promptVersionId,
-        jobId: `mock-job-${now}`,
-        status: 'completed',
-        videoStoragePath: null,
-        durationSeconds: duration,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: videoGenerations.id });
-    return { generationId: inserted[0].id };
-  }
-
-  const result = await provider.submitGeneration({
-    prompt: promptVersion.promptText,
-    model: DEFAULT_MODEL(),
-    referenceImageMediaId,
-    duration,
-    aspectRatio: 'portrait',
-    correlationId: `screen-${videoScreenId}-v${promptVersionId}`,
-  });
-
-  if (result.videoUrl) {
-    const downloaded = await provider.downloadVideo({
-      jobId: result.jobId,
-      signedUrl: result.videoUrl,
-      outputMediaGenerationId: result.mediaGenerationId ?? null,
-      jobCompletedAt: now,
-    });
-    // Insert the row first so we have the real generation ID for the storage path.
-    // Also saves mediaGenerationId here — previously this was omitted, causing
-    // compilation to fail with "clip is missing its media ID".
-    const inserted = await db
-      .insert(videoGenerations)
-      .values({
-        videoScreenId,
-        promptVersionId,
-        jobId: result.jobId ?? null,
-        status: 'processing',
-        videoStoragePath: null,
-        mediaGenerationId: result.mediaGenerationId ?? null,
-        durationSeconds: duration,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: videoGenerations.id });
-    const generationId = inserted[0].id;
-    let storagePath: string;
-    try {
-      storagePath = await uploadVideoToStorage(downloaded.tempPath, videoScreenId, generationId);
-    } catch (uploadErr: unknown) {
-      fs.unlink(downloaded.tempPath, () => {});
-      await db
-        .update(videoGenerations)
-        .set({ status: 'failed', errorMessage: (uploadErr instanceof Error ? uploadErr.message : String(uploadErr)), updatedAt: Date.now() })
-        .where(eq(videoGenerations.id, generationId));
-      throw uploadErr;
-    }
-    await db
-      .update(videoGenerations)
-      .set({ status: 'completed', videoStoragePath: storagePath, updatedAt: Date.now() })
-      .where(eq(videoGenerations.id, generationId));
-    return { generationId };
-  }
-
-  const inserted = await db
-    .insert(videoGenerations)
-    .values({
-      videoScreenId,
-      promptVersionId,
-      jobId: result.jobId ?? null,
-      status: 'pending',
-      videoStoragePath: null,
-      durationSeconds: duration,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning({ id: videoGenerations.id });
-
-  return { generationId: inserted[0].id };
+  if (!projectRows[0]) throw new Error(`Video project ${videoProjectId} not found`);
+  if (!pvRows[0] || pvRows[0].videoScreenId !== videoScreenId) throw new Error(`Prompt version ${promptVersionId} not found`);
+  return queueGeneration(videoScreenId, promptVersionId, durationOverride ?? screenRows[0]?.durationSeconds ?? DEFAULT_DURATION());
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

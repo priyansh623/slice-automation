@@ -1,11 +1,12 @@
 import * as path from 'node:path';
+import { isVideoProjectDeleted, PROJECT_DELETED_MESSAGE } from '../lib/project-deletion';
 import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 // provider.ts uses STORAGE_DIR ?? './storage'; Vercel/GH Actions cwd is read-only so we default to /tmp
 process.env.STORAGE_DIR ??= '/tmp';
 
 import { acquireLock, releaseLock, closeLockConnection } from './lock';
-import { processPendingCompilation, recoverStaleCompilations } from './compilation';
+import { activeCompilationId, processPendingCompilation, recoverStaleCompilations } from './compilation';
 import { logStartupMemory, safely } from './container-memory';
 import { validateEnv } from '../lib/startup-checks';
 import { db } from '../db';
@@ -18,21 +19,21 @@ import {
 } from '../db/schema.pg';
 import { eq, inArray, isNull, lt, and } from 'drizzle-orm';
 import { useapiProvider } from '../providers/useapi/provider';
-import { PermanentDownloadError, OutputExpiredError, AuthenticationError } from '../providers/useapi/errors';
+import { pollInFlightGenerations, recoverAbandonedGenerations } from '../services/generation-polling';
+import { mapLimit, roundRobin, RULES } from '../services/job-rules';
 import {
   extractAndStoreCreativeBrief,
   generateInitialScreenPrompt,
   submitQueuedGeneration,
 } from '../services/video-workflow';
-import { storeGeneratedVideo as uploadVideoToStorage } from '../lib/object-store/generated-video';
 import { startStudioWorker, stopStudioWorker, withTimeout } from './studio';
 import { processOverlayIngest } from './overlay-ingest';
 import { processCharacterClips } from './character-clips';
 
 const POLL_INTERVAL_MS = 5_000;
 const PROMPT_TASK_LEASE_MS = 10 * 60 * 1000;   // 10 min — enough for a Claude call
-const VIDEO_GEN_LEASE_MS  = 2 * 60 * 60 * 1000; // 2 hr  — enough for a slow generation
 const HEARTBEAT_MS = 2 * 60 * 1000;              // renew lease every 2 min
+const HEARTBEAT_LOG_MS = 5 * 60 * 1000;           // one status line every 5 min
 
 export async function main(): Promise<void> {
   validateEnv();
@@ -48,6 +49,7 @@ export async function main(): Promise<void> {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT',  () => shutdown('SIGINT'));
+  installCrashLogging();
 
   await recoverStaleTasks();
   await recoverStaleCompilations();
@@ -73,34 +75,69 @@ async function recoverStaleTasks(): Promise<void> {
       ),
     );
 
-  // Video generations stuck in processing past lease
-  const staleVideoThreshold = now - VIDEO_GEN_LEASE_MS;
-  await db
-    .update(videoGenerations)
-    .set({ status: 'queued', updatedAt: now })
-    .where(
-      and(
-        eq(videoGenerations.status, 'processing'),
-        lt(videoGenerations.claimedAt, staleVideoThreshold),
-      ),
-    );
+  // Video generations: a job the provider accepted is simply followed again; one that may or may not have been sent is never sent again.
+  await recoverAbandonedGenerations();
 
   console.log('[worker] Stale task recovery complete.');
 }
 
-let tickStep = 'idle';
-const inStep = async <T,>(name: string, fn: () => Promise<T>): Promise<T> => { tickStep = name; return fn(); };
+// ── Independent loops ───────────────────────────────────────────────────────────
+// Each kind of work has its own loop, so a slow compilation or a slow provider call holds up only itself. Job claiming in the database
+// (compare-and-set) is what makes this, and a second worker process, safe.
 
-async function runLoop(): Promise<void> {
-  console.log('[worker] Polling loop started.');
+const lastPass = new Map<string, number>();
+
+async function runLoopOf(name: string, pass: () => Promise<unknown>): Promise<void> {
+  console.log(`[worker] ${name} loop started.`);
   while (true) {
-    // Say which step a slow pass is on, so a step that stops answering is named in the log instead of freezing the loop silently.
-    const watchdog = setInterval(() => console.warn(`[worker] tick still running after 20 s, at step: ${tickStep}`), 20_000);
-    try { await tick(); }
-    catch (err) { console.error('[worker] tick error (continuing):', (err as Error).message); }
-    finally { clearInterval(watchdog); tickStep = 'idle'; }
+    // Say which loop is slow, so work that stops answering is named in the log instead of freezing silently.
+    const watchdog = setInterval(() => console.warn(`[worker] ${name} pass still running after 60 s`), 60_000);
+    try { await pass(); lastPass.set(name, Date.now()); }
+    catch (err) { console.error(`[worker] ${name} loop error (continuing):`, (err as Error).message); }
+    finally { clearInterval(watchdog); }
     await sleep(POLL_INTERVAL_MS);
   }
+}
+
+/** Nothing should wait long unnoticed: queued for 10 minutes, or unfinished for an hour, is written to the log as a warning. */
+export async function reportStuckWork(now = Date.now()): Promise<{ queued: number[]; unfinished: number[] }> {
+  try {
+    const rows = await db.select({ id: videoGenerations.id, status: videoGenerations.status, createdAt: videoGenerations.createdAt }).from(videoGenerations).where(inArray(videoGenerations.status, ['queued', 'pending', 'processing']));
+    const queued = rows.filter((r) => r.status === 'queued' && now - r.createdAt > 10 * 60_000).map((r) => r.id);
+    const unfinished = rows.filter((r) => r.status !== 'queued' && now - r.createdAt > 60 * 60_000).map((r) => r.id);
+    if (queued.length || unfinished.length) console.warn(`[worker] STUCK_WORK queued>10m=[${queued.join(',')}] unfinished>1h=[${unfinished.join(',')}]`);
+    return { queued, unfinished };
+  } catch (err) {
+    console.warn('[worker] could not check for stuck work:', (err as Error).message);
+    return { queued: [], unfinished: [] };
+  }
+}
+
+function startHeartbeat(): void {
+  setInterval(() => {
+    const ages = [...lastPass].map(([name, at]) => `${name}=${Math.round((Date.now() - at) / 1000)}s`).join(' ');
+    void reportStuckWork();
+    console.log(`[worker] heartbeat rss=${Math.round(process.memoryUsage().rss / 1048576)}MB submitting=${submitting.size} last-completed-pass: ${ages}`);
+  }, HEARTBEAT_LOG_MS).unref();
+}
+
+let lastRecovery = 0;
+async function submissionPass(): Promise<void> {
+  if (Date.now() - lastRecovery > 60_000) { lastRecovery = Date.now(); await recoverAbandonedGenerations(); }
+  await startQueuedSubmissions();
+}
+
+async function runLoop(): Promise<void> {
+  startHeartbeat();
+  const mock = process.env.MOCK_USEAPI === 'true';
+  await Promise.all([
+    runLoopOf('prompt', () => processPromptTasks()),
+    runLoopOf('submit', submissionPass),
+    ...(mock ? [] : [
+      runLoopOf('poll', () => pollInFlightGenerations()),
+      runLoopOf('compile', () => processPendingCompilation()),
+    ]),
+  ]);
 }
 
 /**
@@ -125,17 +162,6 @@ async function runBrollLoop(): Promise<void> {
     if (reason !== lastLogged || t - lastLoggedAt >= 60_000) { console.log(`[worker] B-roll loop: ${reason}`); lastLogged = reason; lastLoggedAt = t; }
     await sleep(POLL_INTERVAL_MS);
   }
-}
-
-async function tick(): Promise<void> {
-  await inStep('prompt tasks', () => processPromptTasks());
-  await inStep('queued generations', () => processQueuedGenerations());
-
-  if (process.env.MOCK_USEAPI === 'true') return;
-
-  await inStep('in-flight generations', () => pollInFlightGenerations());
-  // Library clips and Character videos run on their own loop (runBrollLoop), not here.
-  await inStep('pending compilations', () => processPendingCompilation());
 }
 
 export async function processPromptTasks(): Promise<void> {
@@ -182,17 +208,26 @@ export async function processPromptTasks(): Promise<void> {
     }
 
     const now = Date.now();
-    await db
+    const claimed = await db
       .update(promptGenerationTasks)
       .set({ status: 'processing', claimedAt: now, updatedAt: now })
-      .where(eq(promptGenerationTasks.id, task.id));
+      .where(and(eq(promptGenerationTasks.id, task.id), eq(promptGenerationTasks.status, 'pending')))
+      .returning({ id: promptGenerationTasks.id });
+    if (claimed.length === 0) continue;
+
+    // Never spend an AI call on a deleted project (a request that was already on its way can queue a task just after the delete).
+    if (await isVideoProjectDeleted(task.videoProjectId)) {
+      await db.update(promptGenerationTasks).set({ status: 'failed', claimedAt: null, errorMessage: PROJECT_DELETED_MESSAGE, updatedAt: Date.now() }).where(eq(promptGenerationTasks.id, task.id));
+      continue;
+    }
 
     // Heartbeat interval: renew claimedAt while Claude is running
     const heartbeat = setInterval(async () => {
       await db
         .update(promptGenerationTasks)
         .set({ claimedAt: Date.now(), updatedAt: Date.now() })
-        .where(eq(promptGenerationTasks.id, task.id));
+        .where(eq(promptGenerationTasks.id, task.id))
+        .catch((err) => console.warn(`[worker] prompt task ${task.id} lease renewal failed:`, (err as Error).message));
     }, HEARTBEAT_MS);
 
     try {
@@ -253,123 +288,80 @@ export async function processPromptTasks(): Promise<void> {
   }
 }
 
-export async function processQueuedGenerations(): Promise<void> {
+/** Queued jobs that may be sent now (not waiting out a "busy" delay), oldest first, projects taking turns. */
+async function readyToSubmit(): Promise<number[]> {
   const queued = await db
     .select()
     .from(videoGenerations)
     .where(eq(videoGenerations.status, 'queued'));
-
-  if (queued.length === 0) return;
-  console.log(`[worker] Submitting ${queued.length} queued generation(s)…`);
-
-  for (const gen of queued) {
-    try {
-      await submitQueuedGeneration(gen.id, useapiProvider);
-      console.log(`[worker] Queued gen ${gen.id} submitted`);
-    } catch (err: unknown) {
-      console.error(`[worker] Error submitting queued gen ${gen.id}:`, err);
-    }
-  }
+  const now = Date.now();
+  const ready = queued.filter((g) => !g.jobId && (!g.claimedAt || g.claimedAt <= now)).sort((a, b) => a.createdAt - b.createdAt || a.id - b.id);
+  if (ready.length === 0) return [];
+  const screens = await db.select({ id: videoScreens.id, projectId: videoScreens.videoProjectId }).from(videoScreens).where(inArray(videoScreens.id, ready.map((g) => g.videoScreenId)));
+  const projectOf = new Map(screens.map((sc) => [sc.id, sc.projectId]));
+  return roundRobin(ready, (g) => projectOf.get(g.videoScreenId) ?? 0).map((g) => g.id);
 }
 
-async function pollInFlightGenerations(): Promise<void> {
-  const pending = await db
-    .select()
-    .from(videoGenerations)
-    .where(inArray(videoGenerations.status, ['pending', 'processing']));
+const submitOne = async (id: number) => {
+  try { await submitQueuedGeneration(id, useapiProvider); }
+  catch (err: unknown) { console.error(`[worker] Error submitting queued gen ${id}:`, err); }
+};
 
-  if (pending.length === 0) return;
-  console.log(`[worker] Polling ${pending.length} job(s)…`);
+const submitting = new Set<number>();
+/** Fills the free submission slots without waiting for them: a submission can take minutes and must not hold up the ones behind it. */
+export async function startQueuedSubmissions(): Promise<Promise<void>[]> {
+  const free = RULES.submitConcurrency() - submitting.size;
+  if (stopping || free <= 0) return [];
+  const ids = (await readyToSubmit()).filter((id) => !submitting.has(id)).slice(0, free);
+  return ids.map((id) => {
+    submitting.add(id);
+    console.log(`[worker] Submitting gen ${id}`);
+    const run = submitOne(id).finally(() => { submitting.delete(id); inFlightSubmissions.delete(run); });
+    inFlightSubmissions.add(run);
+    return run;
+  });
+}
 
-  for (const gen of pending) {
-    if (!gen.jobId) continue;
-    try {
-      const result = await useapiProvider.pollJob(gen.jobId);
-      const now = Date.now();
-
-      if (typeof result.remainingCredits === 'number') {
-        db.update(adminSettings)
-          .set({ lastSeenCredits: result.remainingCredits, lastSeenCreditsAt: now })
-          .where(eq(adminSettings.id, 1))
-          .catch(() => {});
-      }
-
-      if (result.status === 'completed' && result.videoUrl) {
-        try {
-          const downloaded = await useapiProvider.downloadVideo({
-            jobId: gen.jobId,
-            signedUrl: result.videoUrl,
-            outputMediaGenerationId: result.outputMediaGenerationId ?? null,
-            jobCompletedAt: now,
-          });
-          let storagePath: string;
-          try {
-            storagePath = await uploadVideoToStorage(downloaded.tempPath, gen.videoScreenId, gen.id);
-          } catch (uploadErr: unknown) {
-            const fsP = await import('node:fs/promises');
-            await fsP.unlink(downloaded.tempPath).catch(() => {});
-            throw uploadErr;
-          }
-          await db
-            .update(videoGenerations)
-            .set({ status: 'completed', videoStoragePath: storagePath, mediaGenerationId: result.outputMediaGenerationId ?? null, claimedAt: null, updatedAt: now })
-            .where(eq(videoGenerations.id, gen.id));
-          console.log(`[worker] Gen ${gen.id} completed → ${storagePath}`);
-        } catch (dlErr: unknown) {
-          if (
-            dlErr instanceof PermanentDownloadError ||
-            dlErr instanceof OutputExpiredError ||
-            dlErr instanceof AuthenticationError
-          ) {
-            await db
-              .update(videoGenerations)
-              .set({ status: 'failed', errorMessage: (dlErr as Error).message, claimedAt: null, updatedAt: now })
-              .where(eq(videoGenerations.id, gen.id));
-            console.error(`[worker] Gen ${gen.id} download permanently failed: ${(dlErr as Error).message}`);
-          } else {
-            console.error(`[worker] Gen ${gen.id} download transient error (will retry):`, dlErr);
-          }
-        }
-      } else if (result.status === 'completed' && !result.videoUrl) {
-        if (gen.videoStoragePath) {
-          // The synchronous submit path already downloaded and stored the video.
-          // The poll saw 'completed' but no URL because the signed URL expired.
-          // Trust the stored path and mark it done.
-          await db
-            .update(videoGenerations)
-            .set({ status: 'completed', errorMessage: null, claimedAt: null, updatedAt: now })
-            .where(eq(videoGenerations.id, gen.id));
-          console.log(`[worker] Gen ${gen.id} already stored at ${gen.videoStoragePath}, marking completed`);
-        } else {
-          await db
-            .update(videoGenerations)
-            .set({ status: 'failed', errorMessage: 'Video completed but URL was not returned by provider', claimedAt: null, updatedAt: now })
-            .where(eq(videoGenerations.id, gen.id));
-        }
-      } else if (result.status === 'failed') {
-        await db
-          .update(videoGenerations)
-          .set({ status: 'failed', errorMessage: result.errorMessage ?? 'Provider reported failure', claimedAt: null, updatedAt: now })
-          .where(eq(videoGenerations.id, gen.id));
-        console.log(`[worker] Gen ${gen.id} failed: ${result.errorMessage}`);
-      } else if (result.status === 'started' && gen.status === 'pending') {
-        await db
-          .update(videoGenerations)
-          .set({ status: 'processing', claimedAt: now, updatedAt: now })
-          .where(eq(videoGenerations.id, gen.id));
-      }
-    } catch (err: unknown) {
-      console.error(`[worker] Error polling gen ${gen.id}:`, err);
-    }
-  }
+/** One complete pass over the queue (used by tests and for a single run). */
+export async function processQueuedGenerations(): Promise<void> {
+  await mapLimit(await readyToSubmit(), RULES.submitConcurrency(), submitOne);
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A crash still ends the process (the host restarts it), but never silently: what was running and how much memory it held are written first. */
+function installCrashLogging(): void {
+  const report = (kind: string, err: unknown) => {
+    const loops = [...lastPass].map(([name, at]) => `${name}=${Math.round((Date.now() - at) / 1000)}s`).join(' ');
+    console.error(`[worker] FATAL ${kind}: ${(err as Error)?.stack ?? String(err)}\n[worker] at crash: rss=${Math.round(process.memoryUsage().rss / 1048576)}MB submitting=[${[...submitting].join(',')}] compiling=${activeCompilationId ?? 'none'} ${loops}`);
+    process.exit(1);
+  };
+  process.on('uncaughtException', (err) => report('uncaughtException', err));
+  process.on('unhandledRejection', (reason) => report('unhandledRejection', reason));
+}
+
+let stopping = false;
+/** How long a shutdown waits for submissions already with the provider, so their job ids get saved. Render allows 30 s after SIGTERM. */
+const SHUTDOWN_DRAIN_MS = 25_000;
+const inFlightSubmissions = new Set<Promise<void>>();
+
+/** Stops taking new submissions and waits (bounded) for the ones already sent. Returns how many were still unanswered. */
+export async function drainSubmissions(limitMs = SHUTDOWN_DRAIN_MS): Promise<number> {
+  stopping = true;
+  await Promise.race([Promise.allSettled([...inFlightSubmissions]), new Promise((r) => setTimeout(r, limitMs).unref?.())]);
+  return inFlightSubmissions.size;
+}
+export const resumeSubmissionsForTests = () => { stopping = false; };
+
+let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
-  console.log(`[worker] ${signal} received. Releasing lock and exiting.`);
+  if (shuttingDown) return;                                  // a second signal must not cut the wait short
+  shuttingDown = true;
+  console.log(`[worker] ${signal} received. Finishing in-flight submissions, then exiting.`);
+  const left = await drainSubmissions();
+  if (left > 0) console.warn(`[worker] ${left} submission(s) had no answer yet (gens ${[...submitting].join(',')}). They will be marked "could not confirm" and not re-sent.`);
   // Hand back claimed Studio images before the process ends, but never let that hold up the shutdown (at most 5 s).
   await Promise.race([stopStudioWorker().catch(() => {}), sleep(5_000)]);
   await releaseLock();
