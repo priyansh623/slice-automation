@@ -4,6 +4,7 @@
  * Studio > Repository, as supplied: the pack overview (cards), the pack detail (pack list, image grid, image panel), the bulk upload
  * progress card and the New Scene Pack dialog. Markup and styles come from the prototype; data comes from the real Studio APIs.
  */
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -71,12 +72,11 @@ export default function RepositoryView() {
   const waitingKey = waiting.join(',');
   useEffect(() => {
     if (!waiting.length) return;
-    const t = setInterval(async () => {
+    return visibleInterval(async () => {
       const fresh = await Promise.all(waiting.slice(0, 20).map((id) => api<{ asset: StudioAsset }>(`/api/v1/studio/assets/${id}`).then((r) => r.asset).catch(() => null)));
       setAssets((cur) => cur.map((a) => fresh.find((f) => f && f.id === a.id) ?? a));
       void loadPacks().catch(() => {});
     }, 5000);
-    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingKey, loadPacks]);
 

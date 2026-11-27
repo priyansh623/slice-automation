@@ -30,6 +30,8 @@ export class ApiError extends Error {
 
 export async function api<T>(url: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(url, {
+    // Reads give up after 30 s so a screen cannot wait for ever. Writes are left to finish: abandoning one does not undo it.
+    ...((init?.method ?? 'GET') === 'GET' ? { signal: AbortSignal.timeout(30_000) } : {}),
     method: init?.method ?? 'GET',
     ...(init?.body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(init.body) } : {}),
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, type CompItem, type Composition } from '@/components/composition/types';
 
@@ -50,7 +51,7 @@ export function useCharacterProduction(projectId: string) {
   useEffect(() => { void load(); }, [load]);
 
   const active = rows.some((r) => starting.has(r.key) || r.item?.imageStatus === 'generating' || ['queued', 'submitting', 'processing'].includes(r.item?.clipStatus ?? ''));
-  useEffect(() => { if (!active) return; const t = setInterval(() => void load(), 4000); return () => clearInterval(t); }, [active, load]);
+  useEffect(() => { if (!active) return; return visibleInterval(() => load(), 4000); }, [active, load]);
 
   const run = useCallback(async (key: string, fn: () => Promise<{ ok: boolean; data: { error?: string } }>) => {
     setBusy(key); setError('');

@@ -1,5 +1,6 @@
 'use client';
 
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { workflowSteps } from '@/lib/steps';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -132,7 +133,6 @@ export default function ScreenPage() {
   const [displayGenId, setDisplayGenId] = useState<number | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingFetchesRef = useRef<Set<number>>(new Set());
 
   function isProjectScopeFeedback(text: string): boolean {
@@ -185,7 +185,7 @@ export default function ScreenPage() {
       (g) => g.generation.status === 'pending' || g.generation.status === 'processing' || g.generation.status === 'queued',
     );
     if (hasPending) {
-      pollRef.current = setInterval(async () => {
+      const stop = visibleInterval(async () => {
         const res = await fetch(`/api/v1/video-projects/${id}/screens/${n}/scene-data`);
         if (!res.ok) return;
         const { promptHistory: hist, generations: gens } = await res.json() as {
@@ -197,14 +197,13 @@ export default function ScreenPage() {
         const stillPending = gens.some(
           (g) => g.generation.status === 'pending' || g.generation.status === 'processing' || g.generation.status === 'queued',
         );
-        if (!stillPending && pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
+        if (!stillPending) {
+          stop();
           void refreshProject();
         }
       }, 5000);
+      return stop;
     }
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [generations.map((g) => `${g.generation.id}:${g.generation.status}`).join(',')]);
 
   // Auto-fetch signed URL for display generation
@@ -337,8 +336,7 @@ export default function ScreenPage() {
   const anyWriting = project?.screens.some((s) => s.creationState === 'generating') ?? false;
   useEffect(() => {
     if (!anyWriting) return;
-    const timer = setInterval(() => { void refreshProject(); }, 4000);
-    return () => clearInterval(timer);
+    return visibleInterval(() => refreshProject(), 4000);
   }, [anyWriting, refreshProject]);
 
   // Retry on a failed or interrupted scene: finishes that same scene from its saved text, never adds another.

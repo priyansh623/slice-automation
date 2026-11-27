@@ -440,14 +440,14 @@ export default function BrollLibraryPage() {
 
   const fetchCategories = useCallback(() => {
     fetch('/api/v1/broll/categories')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error('categories'); return r.json(); })
       .then((data: CategoryNode[]) => setCategories(data))
       .catch(() => {});
   }, []);
 
   const fetchFeedback = useCallback(() => {
     fetch('/api/v1/broll/feedback')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error('feedback'); return r.json(); })
       .then((data: BrollFeedbackItem[]) => setFeedback(data))
       .catch(() => {});
   }, []);

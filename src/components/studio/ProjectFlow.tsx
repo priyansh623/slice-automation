@@ -4,6 +4,7 @@
  * Character B-roll Studio project flow, as supplied: Setup, Script, Select, Generate, Review. Markup and styles are copied from the
  * prototype (Character B-roll Studio.dc.html); the prototype's mock data is replaced by the real Studio APIs.
  */
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -101,7 +102,7 @@ export default function ProjectFlow({ projectId: initialId }: { projectId: numbe
   // Whether generation can run changes when a worker starts, stops or is reconfigured, so it is checked again every 30 seconds.
   useEffect(() => {
     const load = () => { api<{ generation: GenerationConfig }>('/api/v1/studio/config').then((r) => setGeneration(r.generation)).catch(() => {}); };
-    load(); const t = setInterval(load, 30_000); return () => clearInterval(t);
+    load(); return visibleInterval(load, 30_000);
   }, []);
 
   // Every pack and every image of every pack (Select shows them all; none is hidden until a pack is chosen).
@@ -129,8 +130,7 @@ export default function ProjectFlow({ projectId: initialId }: { projectId: numbe
   const running = batches.some((b) => isActiveBatch(b.summary));
   useEffect(() => {
     if (!running || !projectId) return;
-    const t = setInterval(() => { void reloadBatches(projectId).catch(() => {}); }, 3000);
-    return () => clearInterval(t);
+    return visibleInterval(() => reloadBatches(projectId), 3000);
   }, [running, projectId, reloadBatches]);
   useEffect(() => { if ((step === 3 || step === 4) && projectId) void reloadBatches(projectId).catch((e) => setError((e as Error).message)); }, [step, projectId, reloadBatches]);
 
