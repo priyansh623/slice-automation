@@ -16,3 +16,14 @@ export function connectionOptions(connectionString: string) {
   } catch { transactionPooler = false; }
   return { max: 10, idle_timeout: 20, connect_timeout: 10, max_lifetime: 10 * 60, ...(transactionPooler ? { prepare: false } : {}) };
 }
+
+/**
+ * The web app uses DATABASE_URL (transaction pooler). The long-running worker uses DATABASE_DIRECT_URL (session mode) when it is set:
+ * through the transaction pooler its queries were answered by the server but never reached the worker, which stopped its loops.
+ * The session pooler allows few clients, so the worker keeps a smaller pool (the lock holds one more connection).
+ */
+export function databaseTarget(env: Record<string, string | undefined>, entry: string | undefined): { url: string; max?: number } {
+  const isWorker = /[\\/]worker[\\/]index\.[cm]?[jt]s$/.test(entry ?? '');
+  if (isWorker && env.DATABASE_DIRECT_URL) return { url: env.DATABASE_DIRECT_URL, max: 8 };
+  return { url: env.DATABASE_URL! };
+}

@@ -1,13 +1,13 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from './schema.pg';
-import { connectionOptions } from './options';
+import { connectionOptions, databaseTarget } from './options';
 
 // Uses the Supabase pooler URL (port 6543, transaction mode) for serverless/Next.js.
-// The Railway worker uses a separate direct connection (port 5432) for advisory locks.
-const connectionString = process.env.DATABASE_URL!;
+// The worker uses the session-mode connection (port 5432) for its queries and its advisory lock.
+const target = databaseTarget(process.env, process.argv[1]);
 
-const client = postgres(connectionString, connectionOptions(connectionString));
+const client = postgres(target.url, { ...connectionOptions(target.url), ...(target.max ? { max: target.max } : {}) });
 
 export const db = drizzle(client, { schema });
 
