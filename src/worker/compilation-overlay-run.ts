@@ -11,6 +11,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { CompilationError } from './compilation-error';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { videoCompilationOverlays } from '../db/schema.pg';
@@ -67,14 +68,14 @@ export async function applyOverlays(compilationId: number, scenes: readonly Comp
         try { ms = Math.round(probeClip(p).durationSec * 1000); } finally { await fs.rm(p, { force: true }); }
       }
       if (ms == null && s.nominalSeconds != null) ms = s.nominalSeconds * 1000;
-      if (ms == null) throw new Error(`Scene ${s.sceneNumber} has no known length, so B-roll cannot be placed on it.`);
+      if (ms == null) throw new CompilationError(`Scene ${s.sceneNumber} has no known length, so B-roll cannot be placed on it.`);
       clipMs.push({ screenId: s.screenId, durationMs: ms });
     }
     let spans = buildSceneSpans(clipMs);
     const sumMs = spans.reduce((t, s) => t + s.durationMs, 0);
     const baseMs = Math.round(baseInfo.durationSec * 1000);
     if (Math.abs(sumMs - baseMs) > MAX_LENGTH_MISMATCH_MS) {
-      throw new Error(`The Flow clips add up to ${(sumMs / 1000).toFixed(1)} s but the joined video is ${(baseMs / 1000).toFixed(1)} s, so B-roll positions cannot be trusted. Compile again; if it repeats, the clips differ from what was joined.`);
+      throw new CompilationError(`The Flow clips add up to ${(sumMs / 1000).toFixed(1)} s but the joined video is ${(baseMs / 1000).toFixed(1)} s, so B-roll positions cannot be trusted. Compile again; if it repeats, the clips differ from what was joined.`);
     }
     if (sumMs !== baseMs) {
       // Small mismatch (encoder padding): keep each scene's start, give the last scene the remainder, so overlay windows stay where they were set.
@@ -86,7 +87,7 @@ export async function applyOverlays(compilationId: number, scenes: readonly Comp
     if (problems.length > 0) {
       const sceneNo = new Map(scenes.map((s) => [s.screenId, s.sceneNumber]));
       const detail = problems.map((p) => { const r = rows.find((x) => x.id === p.overlayId); return `B-roll on Scene ${r ? sceneNo.get(r.anchorScreenId) ?? '?' : '?'}: ${p.message}`; }).join(' ');
-      throw new Error(`The B-roll could not be placed on the video. ${detail}`);
+      throw new CompilationError(`The B-roll could not be placed on the video. ${detail}`);
     }
 
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -103,7 +104,7 @@ export async function applyOverlays(compilationId: number, scenes: readonly Comp
     // The result must still be the same length as the Flow video: an overlay never shortens or lengthens it.
     const outMs = Math.round(result.durationSec * 1000);
     const frameMs = 1000 / Math.max(1, baseInfo.fps);
-    if (Math.abs(outMs - baseMs) > Math.ceil(frameMs * 2)) throw new Error(`Adding B-roll changed the video length from ${(baseMs / 1000).toFixed(2)} s to ${(outMs / 1000).toFixed(2)} s, so the result was discarded.`);
+    if (Math.abs(outMs - baseMs) > Math.ceil(frameMs * 2)) throw new CompilationError(`Adding B-roll changed the video length from ${(baseMs / 1000).toFixed(2)} s to ${(outMs / 1000).toFixed(2)} s, so the result was discarded.`);
 
     for (const r of resolved) {
       await db.update(videoCompilationOverlays).set({ resolvedStartMs: Math.round(r.startMs), resolvedEndMs: Math.round(r.endMs) }).where(eq(videoCompilationOverlays.id, byId.get(r.id)!.id));

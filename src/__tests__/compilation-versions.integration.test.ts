@@ -84,7 +84,7 @@ beforeEach(async () => {
   holder.failFfmpeg = false;
   holder.ffmpegInputs = [];
   holder.fetchCalls = [];
-  holder.concatenateFails = false;
+  holder.concatenateFails = false; holder.failFfmpeg = false;
   holder.onPut = null;
   holder.onConcatenate = null;
   holder.onFfmpeg = null;
@@ -211,13 +211,14 @@ describe('failure handling', () => {
   it('a failed recompilation leaves the previous version current, playable and downloadable, and uses no version number', async () => {
     const { projectId, scenes } = await makeProject();
     const first = await compile(projectId, allNew(scenes));
-    holder.concatenateFails = true;
+    holder.concatenateFails = true; holder.failFfmpeg = true;
     const failed = await compile(projectId, allNew(scenes));
 
     let rows = await list(projectId);
     const failedRow = rows.find((r) => r.id === failed.id)!;
     expect(failedRow).toMatchObject({ status: 'failed', version: null, isCurrent: false, outputStoragePath: null });
-    expect(failedRow.errorMessage).toMatch(/Concatenate API error 500/);
+    expect(failedRow.errorMessage).toMatch(/could not be compiled/);
+    expect(failedRow.errorMessage).not.toMatch(/Concatenate API|FFmpeg|500|boom/);
     expect(rows.find((r) => r.id === first.id)).toMatchObject({ status: 'completed', version: 1, isCurrent: true });
 
     expect((await getVideo(getReq(), ctxC(projectId, first.id!))).status).toBe(200);
@@ -226,7 +227,7 @@ describe('failure handling', () => {
     expect(Buffer.from(await (dl as Response).arrayBuffer()).toString()).toMatch(/^useapi-joined:/);
 
     // The next success is Version 2: the failure did not consume a number.
-    holder.concatenateFails = false;
+    holder.concatenateFails = false; holder.failFfmpeg = false;
     await compile(projectId, allNew(scenes));
     rows = await list(projectId);
     expect(rows.filter((r) => r.status === 'completed').map((r) => r.version)).toEqual([2, 1]);
@@ -245,9 +246,9 @@ describe('failure handling', () => {
 
   it('after a failure the project can be compiled again straight away', async () => {
     const { projectId, scenes } = await makeProject();
-    holder.concatenateFails = true;
+    holder.concatenateFails = true; holder.failFfmpeg = true;
     await compile(projectId, allNew(scenes));
-    holder.concatenateFails = false;
+    holder.concatenateFails = false; holder.failFfmpeg = false;
     const retry = await compile(projectId, allNew(scenes));
     expect(retry.status).toBe(201);
     expect((await list(projectId)).find((r) => r.id === retry.id)).toMatchObject({ status: 'completed', version: 1, isCurrent: true });
@@ -413,7 +414,7 @@ describe('completion guard: a finished or failed job can never be overwritten', 
 
   it('markCompleted cannot overwrite a failed job either, and the failed row keeps its error and has no version', async () => {
     const { projectId, scenes } = await makeProject();
-    holder.concatenateFails = true;
+    holder.concatenateFails = true; holder.failFfmpeg = true;
     const failed = await compile(projectId, allNew(scenes));
     const before = await rowOf(failed.id!);
     expect(before).toMatchObject({ status: 'failed', version: null, outputStoragePath: null });
@@ -425,9 +426,9 @@ describe('completion guard: a finished or failed job can never be overwritten', 
   it('failed, rejected and interrupted attempts never consume a version number', async () => {
     const { projectId, scenes } = await makeProject();
     const v1 = await compile(projectId, allNew(scenes));                                   // Version 1
-    holder.concatenateFails = true;
+    holder.concatenateFails = true; holder.failFfmpeg = true;
     const failed = await compile(projectId, allNew(scenes));                               // a failed attempt
-    holder.concatenateFails = false;
+    holder.concatenateFails = false; holder.failFfmpeg = false;
     const stuck = await compile(projectId, allNew(scenes), false);                         // an interrupted attempt
     await db.update(schema.videoCompilations).set({ status: 'processing', claimedAt: Date.now() }).where(eq(schema.videoCompilations.id, stuck.id!));
     await recoverStaleCompilations();
@@ -453,7 +454,7 @@ describe('completion guard: a finished or failed job can never be overwritten', 
   it('an old run that FAILS after startup recovery cannot overwrite the recovery message or the row', async () => {
     const { projectId, scenes } = await makeProject();
     const job = await compile(projectId, allNew(scenes), false);
-    holder.onConcatenate = async () => { holder.onConcatenate = null; await recoverStaleCompilations(); holder.concatenateFails = true; };
+    holder.onConcatenate = async () => { holder.onConcatenate = null; await recoverStaleCompilations(); holder.concatenateFails = true; holder.failFfmpeg = true; };
     await processPendingCompilation();
     expect(await rowOf(job.id!)).toMatchObject({ status: 'failed', version: null, errorMessage: INTERRUPTED_COMPILATION_MESSAGE, outputStoragePath: null });
   });
@@ -465,9 +466,9 @@ describe('memory measurement does not change what a compilation does', () => {
     const { projectId, scenes } = await makeProject();
     const done = await compile(projectId, allLegacy(scenes));
     const ok = (await list(projectId))[0];
-    holder.concatenateFails = true;
+    holder.concatenateFails = true; holder.failFfmpeg = true;
     await compile(projectId, allNew(scenes));
-    holder.concatenateFails = false;
+    holder.concatenateFails = false; holder.failFfmpeg = false;
     const bad = (await list(projectId))[0];
     return { done: done.status, ok: { status: ok.status, version: ok.version, method: ok.method, isCurrent: ok.isCurrent }, bad: { status: bad.status, version: bad.version } };
   };
@@ -758,5 +759,72 @@ describe('migration 0024 on existing data', () => {
     } finally {
       await old.close();
     }
+  });
+});
+
+describe('stabilisation: a join that hangs, is refused or fails does not hang the worker or lose earlier videos', () => {
+  const row = async (id: number) => (await db.select().from(schema.videoCompilations).where(eq(schema.videoCompilations.id, id)))[0];
+  const concatStub = (answers: Array<'hang' | number>) => {
+    const original = globalThis.fetch;
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (!String(url).includes('/videos/concatenate')) return original(url, init);
+      const a = answers[Math.min(calls++, answers.length - 1)];
+      if (a === 'hang') return new Promise<Response>((_r, reject) => init!.signal!.addEventListener('abort', () => reject(new DOMException('timed out', 'TimeoutError'))));
+      return a === 200 ? new Response(JSON.stringify({ encodedVideo: Buffer.from('joined-on-retry').toString('base64') })) : new Response('internal-provider-detail', { status: a });
+    }));
+    return () => calls;
+  };
+
+  it('a hung concatenate call times out and the stored clips are joined locally instead', async () => {
+    const { projectId, scenes } = await makeProject();
+    const job = await compile(projectId, allNew(scenes), false);
+    concatStub(['hang']);
+    await processPendingCompilation({ concatTimeoutMs: 30 });
+    expect(await row(job.id!)).toMatchObject({ status: 'completed', method: 'ffmpeg' });
+  });
+
+  it('a busy answer (503) is retried exactly once and then succeeds', async () => {
+    const { projectId, scenes } = await makeProject();
+    const job = await compile(projectId, allNew(scenes), false);
+    const calls = concatStub([503, 200]);
+    await processPendingCompilation({ retryDelayMs: 1 });
+    expect(calls()).toBe(2);
+    expect(await row(job.id!)).toMatchObject({ status: 'completed', method: 'useapi' });
+  });
+
+  it('a timeout is never retried against the provider (it may have run)', async () => {
+    const { projectId, scenes } = await makeProject();
+    await compile(projectId, allNew(scenes), false);
+    const calls = concatStub(['hang']);
+    await processPendingCompilation({ concatTimeoutMs: 30, retryDelayMs: 1 });
+    expect(calls()).toBe(1);
+  });
+
+  it('beyond the 6-clip local limit there is no fallback: it fails with a plain message and no provider detail', async () => {
+    const { projectId, scenes } = await makeProject(7);
+    const job = await compile(projectId, allNew(scenes), false);
+    concatStub([500]);
+    await processPendingCompilation();
+    const r = await row(job.id!);
+    expect(r.status).toBe('failed');
+    expect(r.errorMessage).toMatch(/could not be compiled/);
+    expect(r.errorMessage).not.toMatch(/internal-provider-detail|500/);
+    expect(holder.ffmpegInputs).toHaveLength(0);
+  });
+});
+
+describe('stabilisation: a storage write that never finishes fails the compilation instead of holding the worker', () => {
+  it('times out, marks only this job failed, and leaves the earlier version current', async () => {
+    const { projectId, scenes } = await makeProject();
+    const first = await compile(projectId, allNew(scenes));
+    const job = await compile(projectId, allNew(scenes), false);
+    let release!: () => void;
+    holder.onPut = () => new Promise<void>((r) => { release = r; });
+    await processPendingCompilation({ uploadTimeoutMs: 30 });
+    holder.onPut = null; release?.();
+    const rows = await list(projectId);
+    expect(rows.find((r) => r.id === job.id)).toMatchObject({ status: 'failed', version: null });
+    expect(rows.find((r) => r.id === first.id)).toMatchObject({ status: 'completed', isCurrent: true });
   });
 });
