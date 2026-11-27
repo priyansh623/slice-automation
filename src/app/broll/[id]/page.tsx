@@ -141,9 +141,9 @@ export default function BrollClipDetailPage({ params }: { params: Promise<{ id: 
       })
       .catch(() => { setLoading(false); router.push('/broll'); });
     fetch('/api/v1/broll/categories')
-      .then((r) => r.json()).then((data: CategoryNode[]) => setAllCategories(data)).catch(() => {});
+      .then((r) => { if (!r.ok) throw new Error('categories'); return r.json(); }).then((data: CategoryNode[]) => setAllCategories(data)).catch(() => {});
     fetch(`/api/v1/broll/${id}/categories`)
-      .then((r) => r.json()).then((ids: number[]) => setClipCategoryIds(ids)).catch(() => {});
+      .then((r) => { if (!r.ok) throw new Error('clip categories'); return r.json(); }).then((ids: number[]) => setClipCategoryIds(ids)).catch(() => {});
   }, [id, router]);
 
   async function toggleCategory(catId: number) {

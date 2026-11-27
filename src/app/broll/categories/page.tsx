@@ -121,7 +121,7 @@ export default function CategoryManagementPage() {
 
   const fetchCategories = useCallback(() => {
     fetch('/api/v1/broll/categories')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error('categories'); return r.json(); })
       .then((data: CategoryNode[]) => { setCategories(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);

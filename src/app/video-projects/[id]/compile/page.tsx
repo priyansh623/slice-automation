@@ -1,7 +1,10 @@
 'use client';
 
+import LoadError from '@/components/LoadError';
+import { fetchJson } from '@/lib/client/fetch-json';
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { workflowSteps } from '@/lib/steps';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
@@ -50,17 +53,19 @@ export default function CompilePage() {
   const [error, setError] = useState('');
   // B-roll overlays (feature flag): null when the feature is off, so nothing about this page changes.
   const [overlayCount, setOverlayCount] = useState<number | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [loadError, setLoadError] = useState('');
   async function loadData() {
-    const [projRes, compsRes] = await Promise.all([
-      fetch(`/api/v1/video-projects/${id}`),
-      fetch(`/api/v1/video-projects/${id}/compilations`),
-    ]);
-    if (projRes.ok) setProject(await projRes.json());
-    if (compsRes.ok) {
-      const comps = await compsRes.json();
+    setLoadError('');
+    try {
+      const [proj, comps] = await Promise.all([
+        fetchJson<VideoProject>(`/api/v1/video-projects/${id}`),
+        fetchJson<Compilation[]>(`/api/v1/video-projects/${id}/compilations`),
+      ]);
+      setProject(proj);
       setCompilations(Array.isArray(comps) ? comps : []);
+    } catch (err) {
+      setLoadError((err as Error).message);
     }
   }
 
@@ -78,20 +83,11 @@ export default function CompilePage() {
   const hasVersions = view.versions.length > 0;
 
   useEffect(() => {
-    if (!isRunning) {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-      return;
-    }
-    pollRef.current = setInterval(async () => {
-      const res = await fetch(`/api/v1/video-projects/${id}/compilations`);
-      if (res.ok) {
-        const comps = await res.json();
-        setCompilations(Array.isArray(comps) ? comps : []);
-      }
+    if (!isRunning) return;
+    return visibleInterval(async () => {
+      const comps = await fetchJson<Compilation[]>(`/api/v1/video-projects/${id}/compilations`);
+      setCompilations(Array.isArray(comps) ? comps : []);
     }, 5000);
-    return () => {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    };
   }, [isRunning, id]);
 
   async function handleCompile() {
@@ -127,6 +123,14 @@ export default function CompilePage() {
     const newComp: Compilation = await res.json();
     setCompilations((prev) => [newComp, ...prev]);
     setSubmitting(false);
+  }
+
+  if (!project && loadError) {
+    return (
+      <AppShell>
+        <LoadError message={loadError} onRetry={() => void loadData()} />
+      </AppShell>
+    );
   }
 
   if (!project) {

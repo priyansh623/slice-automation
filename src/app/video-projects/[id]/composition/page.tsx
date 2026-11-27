@@ -1,5 +1,6 @@
 'use client';
 
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { workflowSteps } from '@/lib/steps';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -57,7 +58,16 @@ export default function CompositionPage() {
 
   // Keep fresh while something is being prepared or generated.
   const busy = !!data && (data.overlays.some((o) => o.status === 'preparing') || data.items.some((i) => i.imageStatus === 'generating' || ['queued', 'submitting', 'submit_unknown', 'processing'].includes(i.clipStatus)));
-  useEffect(() => { if (!busy) return; const t = setInterval(() => void load(true), 4000); return () => clearInterval(t); }, [busy, load]);
+  // The refresh only READS. Placing a clip on the timeline (populate, which writes) runs on open and once whenever something has just become ready.
+  useEffect(() => { if (!busy) return; return visibleInterval(() => load(false), 4000); }, [busy, load]);
+  const readyKey = data ? [...data.items.filter((i) => i.clipStatus === 'ready').map((i) => `c${i.id}`), ...data.overlays.filter((o) => o.status === 'ready').map((o) => `o${o.id}`)].sort().join(',') : null;
+  const seenReady = useRef<string | null>(null);
+  useEffect(() => {
+    if (readyKey === null) return;
+    const before = seenReady.current;
+    seenReady.current = readyKey;
+    if (before !== null && readyKey.split(',').some((k) => k && !before.split(',').includes(k))) void load(true);
+  }, [readyKey, load]);
 
   const run = async (fn: () => Promise<{ ok: boolean; data: { error?: string } }>): Promise<string | null> => {
     setMessage('');

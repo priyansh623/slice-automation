@@ -1,5 +1,7 @@
 'use client';
 
+import LoadError from '@/components/LoadError';
+import { READ_TIMEOUT_MS } from '@/lib/client/fetch-json';
 import { workflowSteps } from '@/lib/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -161,12 +163,18 @@ export default function VideoProjectPage() {
   const [showReanalyzeConfirm, setShowReanalyzeConfirm] = useState(false);
   const [infoMsg, setInfoMsg] = useState('');
 
+  const [loadError, setLoadError] = useState('');
   async function load() {
-    const [res, tasksRes] = await Promise.all([
-      fetch(`/api/v1/video-projects/${id}`),
-      fetch(`/api/v1/video-projects/${id}/prompt-tasks`),
-    ]);
-    if (!res.ok) { setLoading(false); return; }
+    setLoadError('');
+    let res: Response; let tasksRes: Response;
+    try {
+      [res, tasksRes] = await Promise.all([
+        fetch(`/api/v1/video-projects/${id}`, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) }),
+        fetch(`/api/v1/video-projects/${id}/prompt-tasks`, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) }),
+      ]);
+    } catch { setLoadError('Could not reach the server.'); setLoading(false); return; }
+    // 404 keeps the page's own "not found"; anything else is a failure to load, which is not the same thing.
+    if (!res.ok) { if (res.status !== 404) setLoadError(`The server answered ${res.status}.`); setLoading(false); return; }
     const data = await res.json();
     setProject(data);
     setEditedScreens(data.screens ?? []);
@@ -221,7 +229,9 @@ export default function VideoProjectPage() {
     });
     if (!hasActiveTasks && !hasActiveGens) return;
 
-    const timer = setTimeout(async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      if (document.hidden) { timer = setTimeout(tick, 4000); return; }       // nothing is being looked at; the worker carries on regardless
       if (hasActiveGens) {
         // Full refresh: gen status lives on the project response.
         const [tasksRes, projectRes] = await Promise.all([
@@ -268,7 +278,8 @@ export default function VideoProjectPage() {
           }
         }
       }
-    }, 4000);
+    };
+    timer = setTimeout(tick, 4000);
     return () => clearTimeout(timer);
   }, [promptTasks, project, id]);
 
@@ -434,6 +445,14 @@ export default function VideoProjectPage() {
           <div className="skeleton" style={{ height: 120, marginBottom: 16 }} />
           <div className="skeleton" style={{ height: 120 }} />
         </div>
+      </AppShell>
+    );
+  }
+
+  if (!project && loadError) {
+    return (
+      <AppShell>
+        <LoadError message={loadError} onRetry={() => { setLoading(true); void load(); }} />
       </AppShell>
     );
   }

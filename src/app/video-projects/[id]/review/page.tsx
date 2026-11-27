@@ -1,5 +1,8 @@
 'use client';
 
+import LoadError from '@/components/LoadError';
+import { fetchJson } from '@/lib/client/fetch-json';
+import { visibleInterval } from '@/lib/client/visible-interval';
 import { workflowSteps } from '@/lib/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -53,7 +56,8 @@ export default function ReviewPage() {
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
   async function fetchSignedUrl(compilationId: string) {
     const res = await fetch(`/api/v1/video-projects/${id}/compilations/${compilationId}/video`);
@@ -80,23 +84,18 @@ export default function ReviewPage() {
     setSignedUrl(null);
     setCurrentTime(0);
     setIsPlaying(false);
-    fetch(`/api/v1/video-projects/${id}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setProject(d); })
-      .catch(() => {});
-    loadCompilation();
-  }, [id, cid]);
+    setLoadError('');
+    fetchJson<NonNullable<typeof project>>(`/api/v1/video-projects/${id}`)
+      .then((d) => setProject(d))
+      .catch((err) => setLoadError((err as Error).message));
+    loadCompilation().catch((err) => setLoadError((err as Error).message));
+  }, [id, cid, attempt]);
 
   useEffect(() => {
     if (!compilation) return;
     if (compilation.status === 'pending' || compilation.status === 'processing') {
-      pollRef.current = setInterval(async () => {
-        await loadCompilation();
-      }, 5000);
+      return visibleInterval(() => loadCompilation(), 5000);
     }
-    return () => {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    };
   }, [compilation?.status]);
 
   const tones = ['#E8E3D8', '#D8E3E8', '#E3D8E8', '#D8E8E3', '#E8DDD8', '#E3E8D8'];
@@ -114,6 +113,14 @@ export default function ReviewPage() {
     if (!v) return;
     if (v.paused) { v.play(); setIsPlaying(true); }
     else { v.pause(); setIsPlaying(false); }
+  }
+
+  if (!project && cid && loadError) {
+    return (
+      <AppShell>
+        <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
+      </AppShell>
+    );
   }
 
   if (!project || !cid) {
