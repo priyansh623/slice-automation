@@ -49,10 +49,26 @@ describe('worker startup', () => {
     expect(calls.order).toEqual(['validateEnv', 'acquireLock', 'recoverStaleCompilations']);
   });
 
-  it('does not recover anything, and exits, when another worker holds the lock', async () => {
+  it('waits for the lock without recovering anything, then carries on once the old worker lets go', async () => {
+    vi.useFakeTimers();
     calls.lock = false;
-    await expect(main()).rejects.toBeInstanceOf(ExitCalled);
-    expect(calls.order).toEqual(['validateEnv', 'acquireLock']);
+    const run = expect(main()).rejects.toThrow('stop after recovery');
+    await vi.advanceTimersByTimeAsync(12_000);
     expect(calls.order).not.toContain('recoverStaleCompilations');
+    calls.lock = true;
+    await vi.advanceTimersByTimeAsync(5_000);
+    await run;
+    expect(calls.order.at(-1)).toBe('recoverStaleCompilations');
+    vi.useRealTimers();
+  });
+
+  it('gives up and exits, having recovered nothing, if the lock is never released', async () => {
+    vi.useFakeTimers();
+    calls.lock = false;
+    const run = expect(main()).rejects.toBeInstanceOf(ExitCalled);
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    await run;
+    expect(calls.order).not.toContain('recoverStaleCompilations');
+    vi.useRealTimers();
   });
 });
